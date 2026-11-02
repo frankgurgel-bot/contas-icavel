@@ -1,0 +1,2870 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Icavel · Contas a Receber de Veículos</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#171e2e; --panel2:#1e2740; --line:#2a3550;
+    --txt:#e8edf7; --mut:#8fa0bf; --acc:#3b82f6; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --vio:#a78bfa;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  body{background:var(--bg); color:var(--txt); min-height:100vh}
+  #app{display:none; min-height:100vh}
+  nav{width:216px; background:var(--panel); border-right:1px solid var(--line); padding:18px 0; flex-shrink:0; display:flex; flex-direction:column}
+  .logo{font-weight:800; font-size:17px; padding:0 20px 6px; letter-spacing:.5px}
+  .logo span{color:var(--acc)}
+  .logo-sub{font-size:10.5px; color:var(--mut); padding:0 20px 16px; letter-spacing:.6px; text-transform:uppercase}
+  nav button{display:block; width:100%; text-align:left; background:none; border:none; color:var(--mut);
+    padding:12px 20px; font-size:14.5px; cursor:pointer; border-left:3px solid transparent; font-family:inherit}
+  nav button:hover{color:var(--txt); background:var(--panel2)}
+  nav button.on{color:var(--txt); background:var(--panel2); border-left-color:var(--acc); font-weight:600}
+  .navfoot{margin-top:auto; padding:14px 10px 0; border-top:1px solid var(--line)}
+  main{flex:1; padding:22px; max-width:1240px; overflow-x:auto}
+  h1{font-size:21px; margin-bottom:4px}
+  .sub{color:var(--mut); font-size:13px; margin-bottom:18px; max-width:900px; line-height:1.45}
+  .cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); gap:12px; margin-bottom:18px}
+  .kpi{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px}
+  .kpi .l{color:var(--mut); font-size:11.5px; text-transform:uppercase; letter-spacing:.5px}
+  .kpi .v{font-size:20px; font-weight:700; margin-top:5px}
+  .kpi .s{font-size:11.5px; margin-top:3px; color:var(--mut)}
+  .pos{color:var(--ok)} .neg{color:var(--bad)} .amb{color:var(--warn)} .inf{color:#7db4f5}
+  section.view{display:none} section.view.on{display:block}
+  .bar{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; align-items:center}
+  button.b{background:var(--acc); color:#fff; border:none; border-radius:8px; padding:9px 16px; font-size:13.5px; cursor:pointer; font-weight:600; font-family:inherit}
+  button.b:hover{filter:brightness(1.1)}
+  button.b.sec{background:var(--panel2); color:var(--txt); border:1px solid var(--line)}
+  button.b.dang{background:transparent; color:var(--bad); border:1px solid var(--bad)}
+  button.b.ok{background:var(--ok)}
+  button.b.sm{padding:5px 10px; font-size:12px}
+  input,select,textarea{background:var(--panel2); border:1px solid var(--line); color:var(--txt);
+    border-radius:8px; padding:8px 10px; font-size:13.5px; font-family:inherit}
+  input:focus,select:focus,textarea:focus{outline:1px solid var(--acc)}
+  input:disabled,select:disabled{opacity:.7}
+  .tbl{width:100%; border-collapse:collapse; background:var(--panel); border-radius:12px; overflow:hidden; font-size:13.5px}
+  .tbl th{background:var(--panel2); text-align:left; padding:10px 12px; color:var(--mut); font-size:11.5px; text-transform:uppercase; letter-spacing:.4px; white-space:nowrap}
+  .tbl td{padding:10px 12px; border-top:1px solid var(--line); white-space:nowrap}
+  .tbl tr:hover td{background:#202a44}
+  .tbl .num{text-align:right; font-variant-numeric:tabular-nums}
+  .tag{display:inline-block; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:700; letter-spacing:.2px}
+  .t-quitado{background:#14401f; color:#5fd97a}
+  .t-parcial{background:#4a3a12; color:#f5c15e}
+  .t-aberto{background:#1e3a5f; color:#7db4f5}
+  .t-vencido{background:#4a1414; color:#f58e8e}
+  .t-recebido{background:#14401f; color:#5fd97a}
+  .t-div{background:#3b1d4a; color:#c99bf5}
+  .modal-bg{position:fixed; inset:0; background:rgba(0,0,0,.62); display:none; align-items:flex-start; justify-content:center; z-index:50; padding:26px 16px; overflow:auto}
+  .modal-bg.on{display:flex}
+  .modal{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:22px; width:100%; max-width:680px}
+  .modal.wide{max-width:900px}
+  .modal h2{font-size:17px; margin-bottom:14px}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  .grid .full{grid-column:1/-1}
+  .fld label{display:block; font-size:11.5px; color:var(--mut); margin-bottom:4px}
+  .fld input,.fld select,.fld textarea{width:100%}
+  .mfoot{display:flex; justify-content:flex-end; gap:8px; margin-top:18px; flex-wrap:wrap}
+  .empty{color:var(--mut); text-align:center; padding:34px; background:var(--panel); border-radius:12px; font-size:14px}
+  .hint{font-size:12px; color:var(--mut); margin-top:6px; line-height:1.4}
+  .sect{grid-column:1/-1; font-size:10.5px; color:var(--acc); text-transform:uppercase; letter-spacing:.7px; margin-top:6px; border-top:1px solid var(--line); padding-top:12px; font-weight:700}
+  .charts{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px}
+  .card h3{font-size:12.5px; color:var(--mut); text-transform:uppercase; letter-spacing:.5px; margin-bottom:14px; font-weight:700}
+  .hbar{display:flex; align-items:center; gap:10px; margin-bottom:9px; font-size:12.5px}
+  .hbar .nm{width:132px; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .hbar .tr{flex:1; background:var(--panel2); border-radius:5px; height:16px; overflow:hidden}
+  .hbar .fl{height:100%; border-radius:5px; min-width:2px}
+  .hbar .vl{width:96px; text-align:right; font-variant-numeric:tabular-nums; color:var(--mut)}
+  .vbars{display:flex; align-items:flex-end; gap:10px; height:150px}
+  .vbars .col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:5px}
+  .vbars .b2{width:62%; background:linear-gradient(180deg,#3b82f6,#2563eb); border-radius:5px 5px 0 0; min-height:2px}
+  .vbars .lb{font-size:10.5px; color:var(--mut)} .vbars .vl{font-size:10.5px; font-weight:600}
+  .prog{background:var(--panel2); height:7px; border-radius:4px; overflow:hidden; min-width:90px}
+  .prog i{display:block; height:100%; background:var(--ok); border-radius:4px}
+  .prog i.p{background:var(--warn)}
+  .list-line{display:flex; justify-content:space-between; gap:12px; padding:9px 0; border-top:1px solid var(--line); font-size:13px}
+  .list-line:first-of-type{border-top:none}
+  .flag{display:inline-block; font-size:10.5px; padding:1px 7px; border-radius:7px; background:#3b1d4a; color:#c99bf5; margin-left:6px}
+  .ctabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px}
+  .ctabs button{background:var(--panel2); border:1px solid var(--line); color:var(--mut); border-radius:8px; padding:8px 14px; font-size:13px; cursor:pointer; font-family:inherit}
+  .ctabs button.on{color:#fff; background:var(--acc); border-color:var(--acc); font-weight:600}
+  .ctab{display:none} .ctab.on{display:block}
+  .rep-opt{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-bottom:16px}
+  .rep-opt button{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; text-align:left; color:var(--txt); cursor:pointer; font-size:13.5px; font-family:inherit}
+  .rep-opt button:hover{border-color:var(--acc)}
+  .rep-opt b{display:block; font-size:14px; margin-bottom:4px}
+  .rep-opt span{color:var(--mut); font-size:12px}
+  .rep-head{display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px}
+  .rep-head h2{font-size:17px}
+  .rep-head .hint{margin:0}
+  #topbar{display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid var(--line)}
+  #topo-user{font-size:13px; color:var(--mut)}
+  #topo-user b{color:var(--txt)}
+  #login{position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:20px; background:radial-gradient(circle at 30% 20%, #1b2540, #0b0f18 70%); z-index:100}
+  #login.on{display:flex}
+  #login-card{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:26px; width:100%; max-width:400px; box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .swatch{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:middle}
+  @media(max-width:820px){
+    #topbar{gap:6px; margin-bottom:10px; padding-bottom:8px}
+    #topo-user{font-size:11.5px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+    #topbar .b.sm{padding:6px 9px; font-size:11.5px}
+    #topbar .lbl-txt{display:none}
+    main{padding:12px}
+    h1{font-size:18px}
+    .sub{font-size:12px}
+    .kpi .v{font-size:17px}
+    .cards{grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px}
+    .bar{gap:6px}
+    .bar input, .bar select{flex:1 1 100%; min-width:0}
+    .tbl{font-size:12.5px}
+    .tbl th, .tbl td{padding:8px 9px}
+    .modal{padding:16px; border-radius:12px}
+    .modal-bg{padding:10px 8px}
+    .rep-opt{grid-template-columns:1fr}
+    #app{display:none} #app.on{display:flex}
+    #app{flex-direction:column}
+    nav{width:100%; display:flex; overflow-x:auto; padding:0; border-right:none; border-bottom:1px solid var(--line); align-items:center; flex-direction:row}
+    .logo{padding:14px 16px 6px} .logo-sub{display:none} .navfoot{display:none}
+    nav button{white-space:nowrap; border-left:none; border-bottom:3px solid transparent; padding:12px 14px}
+    nav button.on{border-bottom-color:var(--acc)}
+    .grid{grid-template-columns:1fr}
+    .charts{grid-template-columns:1fr}
+  }
+  @media print{
+    nav,#topbar,.bar,.no-print,#login,.navfoot{display:none !important}
+    body{background:#fff; color:#000; display:block}
+    main{padding:0; max-width:none}
+    .card,.kpi,.tbl{background:#fff; border-color:#ccc; color:#000}
+    .tbl th{background:#eee; color:#000} .tbl td{border-color:#ddd}
+    section.view{display:none} section.view.on{display:block}
+  }
+</style>
+</head>
+<body>
+
+<div id="login"><div id="login-card"></div></div>
+
+<div id="app">
+<nav>
+  <div class="logo">ICAVEL<span>.</span></div>
+  <div class="logo-sub">Contas a Receber</div>
+  <button data-v="dash">📊 Dashboard</button>
+  <button data-v="vendas">🚗 Carros vendidos</button>
+  <button data-v="titulos">🧾 Títulos a receber</button>
+  <button data-v="pagar">🏭 Pagamento à fábrica</button>
+  <button data-v="conciliacao">✅ Conciliação</button>
+  <button data-v="relatorios">📈 Relatórios</button>
+  <button data-v="cadastros">📋 Cadastros</button>
+  <button data-v="usuarios">👤 Usuários</button>
+  <button data-v="dados">💾 Dados</button>
+  <div class="navfoot">
+    <button onclick="trocarSenha()" style="padding:8px 10px">🔑 Minha senha</button>
+    <button onclick="sair()" style="padding:8px 10px">↩ Sair</button>
+  </div>
+</nav>
+<main>
+  <div id="topbar">
+    <span id="topo-user"></span>
+    <button class="b sec sm" onclick="trocarSenha()" title="Trocar senha">🔑 <span class="lbl-txt">Senha</span></button>
+    <button class="b sec sm" onclick="sair()" title="Sair">↩ <span class="lbl-txt">Sair</span></button>
+  </div>
+
+  <div class="empty" id="sem-acesso" style="display:none;margin-bottom:16px">Seu usuário não tem acesso a nenhum módulo. Peça ao master para liberar as permissões.</div>
+
+  <section class="view" id="v-dash">
+    <h1>Dashboard · Contas a Receber</h1>
+    <p class="sub">Carteira de veículos vendidos. Cada valor da venda é um título com seu tipo de recebimento; a baixa pode ser total ou parcial.</p>
+    <div class="cards" id="dash-kpis"></div>
+    <div class="charts">
+      <div class="card"><h3>Carteira em aberto por tipo de recebimento</h3><div id="ch-tipo"></div></div>
+      <div class="card"><h3>Aging da carteira (por vencimento)</h3><div id="ch-aging"></div></div>
+    </div>
+    <div class="charts">
+      <div class="card"><h3>Recebimentos nos últimos 6 meses</h3><div id="ch-mensal"></div></div>
+      <div class="card"><h3>Próximos vencimentos · 7 dias</h3><div id="lista-prox"></div></div>
+    </div>
+    <div class="card" style="margin-bottom:18px"><h3>Posição por veículo · pago à fábrica × recebido do cliente</h3><div id="dash-posicao"></div></div>
+    <div class="charts">
+      <div class="card"><h3>Situação dos carros vendidos</h3><div id="dash-situacao"></div></div>
+      <div class="card"><h3>Maiores saldos por cliente</h3><div id="lista-devedores"></div></div>
+    </div>
+  </section>
+
+  <section class="view" id="v-vendas">
+    <h1>Carros vendidos</h1>
+    <p class="sub">Status por chassi: <b>quitado</b> (nada a receber), <b>parcialmente quitado</b> (recebeu parte), <b>em aberto</b> (nada recebido). Clique no chassi ou em 📄 para abrir o dossiê com todos os títulos da venda.</p>
+    <div class="bar">
+      <button class="b" data-perm="vendas:edit" onclick="formVenda()">＋ Nova venda</button>
+      <input id="f-busca-v" placeholder="Buscar chassi, carro, cliente, vendedor…" oninput="renderVendas()" style="flex:1;min-width:170px">
+      <select id="f-status-v" onchange="renderVendas()">
+        <option value="">Todos os status</option>
+        <option value="quitado">Quitados</option>
+        <option value="parcial">Parcialmente quitados</option>
+        <option value="aberto">Em aberto</option>
+        <option value="div">Com divergência</option>
+      </select>
+      <select id="f-tipo-v" onchange="renderVendas()"><option value="">Todos os tipos</option></select>
+      <button class="b sec" onclick="exportarVendas()">📤 CSV</button>
+      <button class="b sec" onclick="window.print()">🖨 PDF</button>
+    </div>
+    <div id="tbl-vendas"></div>
+  </section>
+
+  <section class="view" id="v-titulos">
+    <h1>Títulos a receber</h1>
+    <p class="sub">Cada título é um valor a receber, com tipo, pagador, vencimento e histórico de baixas. Saldo = valor do título − baixas.</p>
+    <div class="bar">
+      <button class="b" data-perm="titulos:edit" onclick="formTitulo()">＋ Novo título</button>
+      <input id="f-busca-t" placeholder="Buscar chassi, cliente, documento, pagador…" oninput="renderTitulos()" style="flex:1;min-width:170px">
+      <select id="f-status-t" onchange="renderTitulos()">
+        <option value="aberto">Em aberto (inclui vencidos e parciais)</option>
+        <option value="vencido">Somente vencidos</option>
+        <option value="parcial">Somente parciais</option>
+        <option value="recebido">Recebidos</option>
+        <option value="">Todos</option>
+      </select>
+      <select id="f-tipo-t" onchange="renderTitulos()"><option value="">Todos os tipos</option></select>
+      <button class="b sec" onclick="exportarTitulos()">📤 CSV</button>
+      <button class="b sec" onclick="window.print()">🖨 PDF</button>
+    </div>
+    <div id="tbl-titulos"></div>
+  </section>
+
+  <section class="view" id="v-pagar">
+    <h1>Pagamento à fábrica</h1>
+    <p class="sub">Situação de pagamento de cada veículo ao fornecedor: custo (pé da NF + desconto) + juros pela condição (FDIC 1 dia · Floor Plan 30 dias · À vista sem juros), menos os pagamentos feitos.</p>
+    <div class="bar">
+      <button class="b" onclick="formCusto()">＋ Custo / condição do veículo</button>
+      <button class="b ok" onclick="formPagamento()">💸 Registrar pagamento</button>
+      <input id="f-busca-p" placeholder="Buscar chassi, carro, fornecedor…" oninput="renderPagar()" style="flex:1;min-width:170px">
+      <select id="f-status-p" onchange="renderPagar()">
+        <option value="">Todos os status</option>
+        <option value="pago">Pagos</option>
+        <option value="parcial">Parcialmente pagos</option>
+        <option value="aberto">Em aberto</option>
+        <option value="vencido">Com vencido</option>
+      </select>
+      <button class="b sec" onclick="exportarPagamentos()">📤 CSV</button>
+      <button class="b sec" onclick="window.print()">🖨 PDF</button>
+    </div>
+    <div id="tbl-pagar"></div>
+  </section>
+
+  <section class="view" id="v-conciliacao">
+    <h1>Conciliação de movimentações</h1>
+    <p class="sub">Todo recebimento e todo pagamento lançado pelo financeiro entra aqui como <b>aguardando conciliação</b>. O master confere e confirma — só depois do "ok" a movimentação passa a contar nos saldos. Cada decisão fica registrada com data, hora e autor.</p>
+    <div class="cards" id="conc-kpis"></div>
+    <div class="bar">
+      <select id="f-conc-status" onchange="renderConciliacao()">
+        <option value="pendente">Aguardando conciliação</option>
+        <option value="conciliado">Conciliados</option>
+        <option value="rejeitado">Rejeitados</option>
+        <option value="todos">Todos</option>
+      </select>
+      <select id="f-conc-tipo" onchange="renderConciliacao()">
+        <option value="">Recebimentos e pagamentos</option>
+        <option value="recebimento">Somente recebimentos</option>
+        <option value="pagamento">Somente pagamentos à fábrica</option>
+      </select>
+      <button class="b sec" onclick="renderConciliacao()">↻ Atualizar</button>
+      <button class="b sec" onclick="relConciliacoes();document.querySelector('nav button[data-v=relatorios]').click()">📈 Relatório</button>
+    </div>
+    <div id="conc-tabela"></div>
+    <h1 style="font-size:16px;margin:26px 0 4px">Histórico de conciliações</h1>
+    <p class="sub">Quem conciliou, quando e o que foi devolvido ao financeiro.</p>
+    <div id="conc-historico"></div>
+  </section>
+
+  <section class="view" id="v-relatorios">
+    <h1>Relatórios</h1>
+    <p class="sub">Escolha o relatório, ajuste o período e imprima em PDF ou exporte em CSV.</p>
+    <div class="bar">
+      <label class="hint" style="margin:0">De</label><input id="rep-ini" type="date">
+      <label class="hint" style="margin:0">até</label><input id="rep-fim" type="date">
+      <button class="b sec" onclick="periodoPadrao()">Mês atual</button>
+      <span id="rep-periodo-hint" class="hint" style="margin:0"></span>
+    </div>
+    <div class="rep-opt no-print">
+      <button onclick="relCarteira()"><b>1 · Carteira por situação</b><span>Carros quitados, parcialmente quitados e em aberto, com saldo e composição</span></button>
+      <button onclick="relTipo()"><b>2 · Por tipo de recebimento</b><span>Quanto está em aberto e quanto já entrou em cada tipo</span></button>
+      <button onclick="relExtrato()"><b>3 · Extrato de recebimentos</b><span>Todas as baixas do período, título por título</span></button>
+      <button onclick="relAging()"><b>4 · Inadimplência / aging</b><span>Vencidos por faixa e por pagador</span></button>
+      <button onclick="relCliente()"><b>5 · Por cliente</b><span>Posição de cada cliente: comprado, recebido e saldo</span></button>
+      <button onclick="relTitulosAbertos()"><b>6 · Títulos em aberto</b><span>Carteira detalhada com vencimento e dias de atraso</span></button>
+      <button onclick="relPagamentos()"><b>7 · Pagamentos à fábrica</b><span>Extrato de pagamentos por veículo e posição de custo</span></button>
+      <button onclick="relAgingPagar()"><b>8 · Vencidos à fábrica</b><span>Saldo a pagar por faixa de atraso e por fornecedor</span></button>
+      <button onclick="relConciliacoes()"><b>9 · Conciliações</b><span>Movimentos pendentes, confirmados e rejeitados, com autor e data</span></button>
+    </div>
+    <div id="rep-out"><div class="empty">Escolha um relatório acima.</div></div>
+  </section>
+
+  <section class="view" id="v-cadastros">
+    <h1>Cadastros</h1>
+    <p class="sub">Tipos de recebimento classificam cada título (entrada, financiamento, bônus de fábrica, troca…). Pagadores são bancos, financeiras, fábrica e clientes que efetivamente pagam.</p>
+    <div class="ctabs">
+      <button data-c="tipos" class="on">🏷 Tipos de recebimento</button>
+      <button data-c="pagadores">🏦 Pagadores / Financeiras</button>
+      <button data-c="clientes">👥 Clientes</button>
+      <button data-c="vendedores">🧑‍💼 Vendedores</button>
+      <button data-c="juros">％ Juros Floor Plan / FDIC</button>
+    </div>
+    <div class="ctab on" id="c-tipos">
+      <div class="bar"><button class="b" data-perm="cadastros:edit" onclick="formTipo()">＋ Novo tipo</button></div>
+      <div id="tbl-tipos"></div>
+    </div>
+    <div class="ctab" id="c-pagadores">
+      <div class="bar"><button class="b" data-perm="cadastros:edit" onclick="formPagador()">＋ Novo pagador</button></div>
+      <div id="tbl-pagadores"></div>
+    </div>
+    <div class="ctab" id="c-clientes">
+      <div class="bar"><button class="b" data-perm="cadastros:edit" onclick="formCliente()">＋ Novo cliente</button></div>
+      <div id="tbl-clientes"></div>
+    </div>
+    <div class="ctab" id="c-vendedores">
+      <div class="bar"><button class="b" data-perm="cadastros:edit" onclick="formVendedor()">＋ Novo vendedor</button></div>
+      <div id="tbl-vendedores"></div>
+    </div>
+    <div class="ctab" id="c-juros">
+      <div class="bar"><button class="b" data-perm="cadastros:edit" onclick="formJuros()">✏️ Editar taxas</button></div>
+      <div id="tbl-juros"></div>
+    </div>
+  </section>
+
+  <section class="view" id="v-usuarios">
+    <h1>Usuários e permissões</h1>
+    <p class="sub">Somente o master vê esta tela. Cada usuário recebe acesso por módulo: ver, criar/editar e excluir. O master tem acesso total e não pode ser bloqueado.</p>
+    <div class="bar">
+      <button class="b sec" onclick="renderUsuarios()">↻ Atualizar lista</button>
+      <span class="hint" style="margin:0">Novos usuários criam a conta em “Primeiro acesso / criar usuário” na tela de login e entram bloqueados até você liberar.</span>
+    </div>
+    <div id="tbl-usuarios"></div>
+    <h1 style="font-size:16px;margin:26px 0 4px">Trilha de auditoria</h1>
+    <p class="sub">Quem entrou, quem lançou, quem alterou permissões.</p>
+    <div id="tbl-log"></div>
+  </section>
+
+  <section class="view" id="v-dados">
+    <h1>Dados</h1>
+    <p class="sub">Os dados ficam no seu navegador (localStorage). Use backup JSON para não perder e CSV para integrar com planilhas.</p>
+    <div class="bar">
+      <button class="b" data-perm="dados:ver" onclick="backup()">⬇️ Baixar backup JSON</button>
+      <button class="b sec" data-perm="dados:edit" onclick="document.getElementById('f-backup').click()">⬆️ Restaurar backup</button>
+      <input id="f-backup" type="file" accept=".json" style="display:none" onchange="restaurar(this)">
+      <button class="b sec" data-perm="dados:edit" onclick="importarEstoque()">🚗 Importar vendas do Controle de Estoque</button>
+      <input id="f-estoque" type="file" accept=".json" style="display:none" onchange="importarEstoqueArquivo(this)">
+    </div>
+    <div class="card" id="dados-resumo"></div>
+    <div class="bar" style="margin-top:18px">
+      <button class="b dang" data-perm="dados:del" onclick="zerar()">🗑️ Zerar todos os dados</button>
+    </div>
+  </section>
+
+</main>
+</div>
+
+<div class="modal-bg" id="mbox"><div class="modal" id="mbox-in"><div id="mbox-body"></div></div></div>
+<script>
+/* ============================================================
+   USUÁRIOS, LOGIN E PERMISSÕES
+   ============================================================ */
+const PERMS = [
+  {k:'dash',       l:'Dashboard',              d:'Indicadores da carteira, aging e situação dos carros'},
+  {k:'vendas',     l:'Carros vendidos',         d:'Cadastro de vendas, dossiê e situação de cada carro'},
+  {k:'titulos',    l:'Títulos a receber',       d:'Criar títulos, lançar recebimentos, editar e excluir'},
+  {k:'pagamentos', l:'Pagamento à fábrica',     d:'Custo do veículo, condição, juros e pagamentos ao fornecedor'},
+  {k:'conciliacao',l:'Conciliação',             d:'Confirmar ou devolver os recebimentos e pagamentos lançados'},
+  {k:'relatorios', l:'Relatórios',              d:'Carteira, tipo de recebimento, extrato, aging, cliente'},
+  {k:'cadastros',  l:'Cadastros',               d:'Tipos de recebimento, pagadores, clientes, vendedores'},
+  {k:'dados',      l:'Dados / backup',          d:'Backup, restauração, importação e zerar base'}
+];
+const ACOES = [{k:'ver', l:'Ver'}, {k:'edit', l:'Criar/Editar'}, {k:'del', l:'Excluir'}];
+
+
+
+
+
+/* ============================================================
+   CAMADA NUVEM (Supabase) — substitui o localStorage
+   - login por e-mail e senha (Supabase Auth)
+   - leitura/gravação em public.registros (uma linha por registro)
+   - gravação por diferença: o app continua trabalhando com DB em
+     memória do mesmo jeito; save() descobre o que mudou e envia
+   - sincronização periódica para ver o que os outros usuários fizeram
+   ============================================================ */
+
+const SUPA_URL = 'https://ukwfouwxhpxotrwwxxre.supabase.co';
+const SUPA_KEY = 'sb_publishable_c-e_CeLKkPbZ0UzLfXNbug_fhwqjjGt';
+const COLS = ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog'];
+
+const CLOUD = {
+  sessao: null,        // {access_token, refresh_token, expires_at}
+  usuarioId: null,     // auth uid
+  ultimaSync: null,
+  enviando: false,
+  fila: false,
+  pronto: false
+};
+
+/* ---------- utilidades HTTP ---------- */
+async function apiAuth(path, body){
+  const r = await fetch(`${SUPA_URL}/auth/v1/${path}`, {
+    method:'POST',
+    headers:{'apikey':SUPA_KEY,'Content-Type':'application/json'},
+    body: JSON.stringify(body||{})
+  });
+  const txt = await r.text();
+  let j = {}; try{ j = JSON.parse(txt||'{}'); }catch(e){}
+  if(!r.ok) throw new Error(traduzErroAuth(j, r.status));
+  return j;
+}
+function traduzErroAuth(j, status){
+  const c = (j && (j.error_code || j.code)) || '';
+  const m = {
+    invalid_credentials:'E-mail ou senha incorretos.',
+    email_not_confirmed:'Este e-mail ainda não foi confirmado. Verifique sua caixa de entrada.',
+    user_already_exists:'Já existe uma conta com este e-mail.',
+    email_exists:'Já existe uma conta com este e-mail.',
+    weak_password:'A senha é muito curta. Use ao menos 8 caracteres.',
+    over_email_send_rate_limit:'Muitos e-mails enviados em pouco tempo. Aguarde alguns minutos.'
+  };
+  return m[c] || (j && (j.msg || j.message)) || ('Falha na autenticação ('+status+').');
+}
+async function apiRest(path, opts){
+  opts = opts || {};
+  const h = {
+    'apikey': SUPA_KEY,
+    'Content-Type': 'application/json',
+    'Prefer': opts.prefer || 'return=minimal'
+  };
+  if(CLOUD.sessao && CLOUD.sessao.access_token) h['Authorization'] = 'Bearer ' + CLOUD.sessao.access_token;
+  const r = await fetch(`${SUPA_URL}/rest/v1/${path}`, {
+    method: opts.method || 'GET', headers: h, body: opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  if(r.status === 401 && CLOUD.sessao && CLOUD.sessao.refresh_token){
+    const ok = await renovarToken();
+    if(ok) return apiRest(path, opts);
+  }
+  const txt = await r.text();
+  let j = null; try{ j = txt ? JSON.parse(txt) : null; }catch(e){ j = txt; }
+  if(!r.ok){
+    const msg = (j && (j.message || j.msg)) || ('Erro '+r.status);
+    throw new Error(msg);
+  }
+  return j;
+}
+
+/* ---------- sessão ---------- */
+function salvarSessao(s){
+  CLOUD.sessao = s;
+  try{ localStorage.setItem('icavel_cr_sessao', JSON.stringify(s)); }catch(e){}
+}
+function lerSessao(){
+  try{ const s = JSON.parse(localStorage.getItem('icavel_cr_sessao')||'null'); return s; }catch(e){ return null; }
+}
+function limparSessao(){
+  CLOUD.sessao = null; CLOUD.usuarioId = null;
+  try{ localStorage.removeItem('icavel_cr_sessao'); }catch(e){}
+}
+async function renovarToken(){
+  if(!CLOUD.sessao || !CLOUD.sessao.refresh_token) return false;
+  try{
+    const j = await apiAuth('token?grant_type=refresh_token', {refresh_token: CLOUD.sessao.refresh_token});
+    salvarSessao({access_token:j.access_token, refresh_token:j.refresh_token, expires_at: Date.now()+ (j.expires_in||3600)*1000, email: CLOUD.sessao.email, uid: j.user && j.user.id});
+    return true;
+  }catch(e){ return false; }
+}
+async function entrarNuvem(email, senha){
+  const j = await apiAuth('token?grant_type=password', {email, password: senha});
+  salvarSessao({access_token:j.access_token, refresh_token:j.refresh_token,
+    expires_at: Date.now() + (j.expires_in||3600)*1000, email, uid: j.user && j.user.id});
+  CLOUD.usuarioId = j.user.id;
+  return j.user;
+}
+async function sairNuvem(){
+  try{ await apiAuth('logout', {}); }catch(e){}
+  limparSessao();
+}
+
+/* ---------- perfil / permissões ---------- */
+async function carregarPerfil(){
+  const uid = CLOUD.usuarioId || (CLOUD.sessao && CLOUD.sessao.uid);
+  if(!uid) return null;
+  const rows = await apiRest(`usuarios?id=eq.${uid}&select=*`);
+  return (rows && rows[0]) || null;
+}
+async function criarPerfil(dados){
+  await apiRest('usuarios', {method:'POST', body: dados, prefer:'return=representation'});
+  return carregarPerfil();
+}
+async function atualizarPerfil(uid, dados){
+  await apiRest(`usuarios?id=eq.${uid}`, {method:'PATCH', body: dados});
+}
+
+/* ---------- carga e gravação ---------- */
+async function baixarTudo(){
+  const rows = await apiRest('registros?select=tabela,id,payload,atualizado_em&limit=20000');
+  DB = {vendas:[], titulos:[], recebimentos:[], veiculos:[], tipos:[], pagadores:[], clientes:[],
+        vendedores:[], usuarios:[], log:[], pagamentosFabrica:[], concLog:[], juros:{}};
+  (rows||[]).forEach(r=>{
+    if(r.tabela === 'juros'){ DB.juros = r.payload || {}; return; }
+    if(!DB[r.tabela]) DB[r.tabela] = [];
+    DB[r.tabela].push(r.payload);
+  });
+  CLOUD.ultimaSync = new Date().toISOString();
+  CLOUD.pronto = true;
+  normalize();
+  return DB;
+}
+async function baixarMudancas(){
+  if(!CLOUD.ultimaSync) return 0;
+  const since = encodeURIComponent(CLOUD.ultimaSync);
+  const rows = await apiRest(`registros?select=tabela,id,payload,atualizado_em&atualizado_em=gt.${since}&limit=5000`);
+  if(!rows || !rows.length) { CLOUD.ultimaSync = new Date().toISOString(); return 0; }
+  let n = 0;
+  rows.forEach(r=>{
+    if(r.tabela === 'juros'){ DB.juros = r.payload || {}; n++; return; }
+    if(!DB[r.tabela]) DB[r.tabela] = [];
+    const arr = DB[r.tabela];
+    const i = arr.findIndex(x=>x.id === r.id);
+    if(i >= 0){ if(JSON.stringify(arr[i]) !== JSON.stringify(r.payload)){ arr[i] = r.payload; n++; } }
+    else { arr.push(r.payload); n++; }
+  });
+  const maior = rows.reduce((m,r)=> r.atualizado_em > m ? r.atualizado_em : m, CLOUD.ultimaSync);
+  CLOUD.ultimaSync = maior;
+  return n;
+}
+
+/* fotografia da última gravação, para enviar somente o que mudou */
+let SNAP = {};
+function tiraSnapshot(){
+  SNAP = {};
+  COLS.forEach(c=>{ (DB[c]||[]).forEach(x=>{ SNAP[c+':'+x.id] = JSON.stringify(x); }); });
+  SNAP['juros:juros'] = JSON.stringify(DB.juros||{});
+}
+async function enviarMudancas(){
+  if(!CLOUD.pronto) return;
+  if(CLOUD.enviando){ CLOUD.fila = true; return; }
+  CLOUD.enviando = true;
+  try{
+    const upserts = [], deletes = [];
+    COLS.forEach(c=>{
+      (DB[c]||[]).forEach(x=>{
+        const k = c+':'+x.id, s = JSON.stringify(x);
+        if(SNAP[k] !== s) upserts.push({tabela:c, id:String(x.id), payload:x});
+      });
+    });
+    const j = JSON.stringify(DB.juros||{});
+    if(SNAP['juros:juros'] !== j) upserts.push({tabela:'juros', id:'juros', payload: DB.juros||{}});
+
+    // o que sumiu da memória, apaga no banco
+    const atuais = new Set(Object.keys(SNAP));
+    Object.keys(SNAP).forEach(k=>{
+      const [tab, id] = k.split(':');
+      if(tab === 'juros') return;
+      if(!(DB[tab]||[]).some(x=>String(x.id)===id)) deletes.push({tab, id});
+    });
+
+    if(upserts.length){
+      await apiRest('registros?on_conflict=tabela,id', {
+        method:'POST', body: upserts, prefer:'resolution=merge-duplicates,return=minimal'
+      });
+    }
+    for(const d of deletes){
+      await apiRest(`registros?tabela=eq.${d.tab}&id=eq.${encodeURIComponent(d.id)}`, {method:'DELETE'});
+    }
+    tiraSnapshot();
+  }catch(e){
+    console.warn('Falha ao enviar:', e.message);
+    mostrarFalhaSync(e.message);
+  }finally{
+    CLOUD.enviando = false;
+    if(CLOUD.fila){ CLOUD.fila = false; enviarMudancas(); }
+  }
+}
+function mostrarFalhaSync(msg){
+  let el = document.getElementById('sync-erro');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'sync-erro';
+    el.style.cssText = 'position:fixed;bottom:14px;left:14px;z-index:200;background:#4a1414;border:1px solid #ef4444;color:#f58e8e;padding:10px 14px;border-radius:10px;font-size:12.5px;max-width:380px';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '⚠ Não consegui salvar na nuvem: '+esc(msg)+' <a href="#" onclick="enviarMudancas();return false" style="color:#fff;text-decoration:underline">tentar de novo</a>';
+  setTimeout(()=>{ if(el && el.parentNode) el.style.opacity = '.85'; }, 4000);
+}
+
+/* ---------- ciclo automático ---------- */
+let TIMER_SYNC = null;
+function iniciarSyncAutomatico(){
+  if(TIMER_SYNC) clearInterval(TIMER_SYNC);
+  TIMER_SYNC = setInterval(async ()=>{
+    if(!CLOUD.pronto || !CLOUD.sessao) return;
+    try{
+      const n = await baixarMudancas();
+      if(n){ renderAll(); }
+    }catch(e){ /* silencioso: a próxima rodada tenta de novo */ }
+  }, 12000);
+}
+
+/* ============================================================
+   LOGIN EM NUVEM + TELA DE ENTRADA
+   Substitui o login local quando o app roda publicado.
+   ============================================================ */
+
+let PERFIL = null;   // linha de public.usuarios do usuário logado
+
+const usuarioAtual = () => PERFIL;
+const isMaster = () => !!(PERFIL && PERFIL.master);
+function pode(mod, acao){
+  if(!PERFIL) return false;
+  if(PERFIL.master) return true;
+  const p = (PERFIL.permissoes||{})[mod];
+  return !!(p && (p[acao] === true));
+}
+
+
+/* ---------- visibilidade conforme permissões ---------- */
+function aplicarPermissoes(){
+  document.querySelectorAll('nav button[data-v]').forEach(b=>{
+    const mod = b.dataset.v;
+    let ok = true;
+    if(mod === 'usuarios') ok = isMaster();
+    else if(PERMS.some(p=>p.k===mod)) ok = pode(mod,'ver');
+    b.style.display = ok ? '' : 'none';
+  });
+  const visiveis = [...document.querySelectorAll('nav button[data-v]')].filter(b=>b.style.display !== 'none');
+  const sem = document.getElementById('sem-acesso');
+  if(sem) sem.style.display = visiveis.length ? 'none' : 'block';
+  document.querySelectorAll('[data-perm]').forEach(el=>{
+    const [mod, acao] = el.dataset.perm.split(':');
+    el.style.display = pode(mod, acao) ? '' : 'none';
+  });
+}
+const precisaPermissao = (mod, acao) => {
+  if(pode(mod, acao)) return true;
+  aviso('Seu usuário não tem permissão para esta ação (' + mod + ' · ' + acao + '). Fale com o master.');
+  return false;
+};
+function aviso(msg){
+  modal('Acesso restrito', `<p class="hint" style="font-size:13px;margin-bottom:6px">${esc(msg)}</p>`, null);
+}
+
+/* ---------- telas ---------- */
+function telaLoginNuvem(){
+  const sess = lerSessao();
+  document.getElementById('login-card').innerHTML = `
+    <div class="logo" style="padding:0 0 4px">ICAVEL<span>.</span></div>
+    <div class="logo-sub" style="padding:0 0 18px">Contas a Receber · Acesso</div>
+    <div class="fld" style="margin-bottom:10px"><label>E-mail</label>
+      <input id="lg-email" type="email" autocomplete="username" placeholder="seu@email.com" ${sess&&sess.email?`value="${esc(sess.email)}"`:''}></div>
+    <div class="fld" style="margin-bottom:14px"><label>Senha</label>
+      <input id="lg-senha" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')entrarNuvemUI()"></div>
+    <button class="b" id="lg-btn" style="width:100%" onclick="entrarNuvemUI()">Entrar</button>
+    <div id="lg-erro" class="hint neg" style="margin-top:10px;min-height:16px"></div>
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+      <button class="b sec sm" style="width:100%" onclick="telaPrimeiroAcesso()">Primeiro acesso / criar usuário</button>
+    </div>
+    <p class="hint" style="margin-top:12px">O primeiro usuário criado é o master (acesso total). Os demais entram bloqueados até o master liberar.</p>`;
+  document.getElementById('login').classList.add('on');
+  document.getElementById('app').style.display = 'none';
+}
+
+function telaPrimeiroAcesso(){
+  document.getElementById('login-card').innerHTML = `
+    <div class="logo" style="padding:0 0 4px">ICAVEL<span>.</span></div>
+    <div class="logo-sub" style="padding:0 0 18px">Criar acesso</div>
+    <div class="fld" style="margin-bottom:10px"><label>Seu nome</label><input id="lg-nome" placeholder="Nome completo"></div>
+    <div class="fld" style="margin-bottom:10px"><label>E-mail</label><input id="lg-email" type="email" placeholder="seu@email.com" autocomplete="username"></div>
+    <div class="fld" style="margin-bottom:10px"><label>Senha (mín. 8 caracteres)</label><input id="lg-senha" type="password" autocomplete="new-password"></div>
+    <div class="fld" style="margin-bottom:14px"><label>Repetir senha</label><input id="lg-senha2" type="password" autocomplete="new-password"></div>
+    <button class="b" id="lg-btn" style="width:100%" onclick="criarContaNuvem()">Criar acesso</button>
+    <div id="lg-erro" class="hint neg" style="margin-top:10px;min-height:16px"></div>
+    <div style="margin-top:14px"><button class="b sec sm" style="width:100%" onclick="telaLoginNuvem()">← Voltar para o login</button></div>`;
+}
+
+async function entrarNuvemUI(){
+  const email = (val('lg-email')||'').trim().toLowerCase();
+  const senha = val('lg-senha');
+  const erro = document.getElementById('lg-erro');
+  const btn = document.getElementById('lg-btn');
+  if(!email || !senha) { erro.textContent = 'Informe e-mail e senha.'; return; }
+  btn.disabled = true; btn.textContent = 'Entrando…'; erro.textContent = '';
+  try{
+    await entrarNuvem(email, senha);
+    const perfil = await carregarPerfil();
+    if(!perfil){
+      btn.disabled = false; btn.textContent = 'Entrar';
+      erro.textContent = 'Login feito, mas o perfil não foi encontrado. Fale com o master.';
+      return;
+    }
+    if(!perfil.ativo){
+      await sairNuvem();
+      btn.disabled = false; btn.textContent = 'Entrar';
+      erro.textContent = 'Seu acesso ainda não foi liberado pelo master.';
+      return;
+    }
+    PERFIL = perfil;
+    await iniciarAppNuvem();
+  }catch(e){
+    btn.disabled = false; btn.textContent = 'Entrar';
+    erro.textContent = e.message;
+  }
+}
+
+async function criarContaNuvem(){
+  const nome = (val('lg-nome')||'').trim();
+  const email = (val('lg-email')||'').trim().toLowerCase();
+  const s1 = val('lg-senha'), s2 = val('lg-senha2');
+  const erro = document.getElementById('lg-erro');
+  const btn = document.getElementById('lg-btn');
+  if(!nome) { erro.textContent = 'Informe seu nome.'; return; }
+  if(!email) { erro.textContent = 'Informe o e-mail.'; return; }
+  if(s1.length < 8) { erro.textContent = 'A senha precisa ter ao menos 8 caracteres.'; return; }
+  if(s1 !== s2) { erro.textContent = 'As senhas não conferem.'; return; }
+  btn.disabled = true; btn.textContent = 'Criando…'; erro.textContent = '';
+  try{
+    let j;
+    try{
+      j = await apiAuth('signup', {email, password: s1, data:{nome}});
+    }catch(e){
+      // conta já existe no login mas pode não ter perfil (ex.: criada antes) — tenta entrar
+      if(/já existe|already/i.test(e.message)){
+        const t = await apiAuth('token?grant_type=password', {email, password: s1});
+        salvarSessao({access_token:t.access_token, refresh_token:t.refresh_token,
+          expires_at: Date.now()+3600*1000, email, uid:t.user.id});
+        CLOUD.usuarioId = t.user.id;
+        let existente = await carregarPerfil();
+        if(!existente){
+          existente = await criarPerfil({id:t.user.id, nome, login: email.split('@')[0], email,
+            master:false, ativo:false, permissoes:{}});
+        }
+        // sem master ativo no sistema? esta conta assume (primeiro acesso real)
+        if(existente && !existente.ativo){
+          try{
+            const todos = await apiRest('usuarios?select=id,master,ativo') || [];
+            if(!todos.some(u=>u.master && u.ativo)){
+              await atualizarPerfil(existente.id, {master:true, ativo:true});
+              existente = await carregarPerfil();
+            }
+          }catch(e){}
+        }
+        if(existente && existente.ativo){ PERFIL = existente; await iniciarAppNuvem(); return; }
+        alert('Esta conta já existe, mas ainda não foi liberada pelo master. Faça login com ela.');
+        telaLoginNuvem();
+        return;
+      }
+      throw e;
+    }
+    let token = j.access_token, uid = (j.user && j.user.id) || j.id;
+    if(!token){
+      // projeto exige confirmação por e-mail: tenta entrar logo após o cadastro
+      const t = await apiAuth('token?grant_type=password', {email, password: s1});
+      token = t.access_token; uid = t.user.id;
+    }
+    salvarSessao({access_token: token, refresh_token: j.refresh_token, expires_at: Date.now()+3600*1000, email, uid});
+    CLOUD.usuarioId = uid;
+    const login = email.split('@')[0];
+    let perfil;
+    try{
+      perfil = await criarPerfil({id:uid, nome, login, email, master:false, ativo:false, permissoes:{}});
+    }catch(e){
+      perfil = await carregarPerfil();
+    }
+    if(!perfil){ throw new Error('Conta criada, mas o perfil não pôde ser gravado.'); }
+    // sem master ativo no sistema? este primeiro acesso assume como master
+    if(!perfil.ativo){
+      try{
+        const todos = await apiRest('usuarios?select=id,master,ativo') || [];
+        const temMaster = todos.some(u=>u.master && u.ativo);
+        if(!temMaster){
+          await atualizarPerfil(perfil.id, {master:true, ativo:true});
+          perfil = await carregarPerfil();
+        }
+      }catch(e){ /* segue o fluxo normal */ }
+    }
+    if(!perfil.ativo){
+      await sairNuvem();
+      document.getElementById('login-card').innerHTML = `
+        <div class="logo" style="padding:0 0 4px">ICAVEL<span>.</span></div>
+        <div class="logo-sub" style="padding:0 0 18px">Acesso criado</div>
+        <p class="hint" style="font-size:13px;line-height:1.5">Sua conta foi criada com sucesso, mas o acesso está <b>bloqueado até o master liberar</b>.</p>
+        <p class="hint">Se você é o primeiro usuário do sistema, houve um problema de configuração — me avise.</p>
+        <button class="b" style="width:100%;margin-top:14px" onclick="telaLoginNuvem()">Voltar ao login</button>`;
+      return;
+    }
+    PERFIL = perfil;
+    await iniciarAppNuvem();
+  }catch(e){
+    btn.disabled = false; btn.textContent = 'Criar acesso';
+    erro.textContent = e.message;
+  }
+}
+
+async function iniciarAppNuvem(){
+  document.getElementById('login').classList.remove('on');
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('app').classList.add('on');
+  document.getElementById('topo-user').innerHTML =
+    `<b>${esc(PERFIL.nome)}</b> ${PERFIL.master?'<span class="tag t-div">master</span>':''}`;
+  await baixarTudo();
+  tiraSnapshot();
+  aplicarPermissoes();
+  periodoPadrao();
+  renderAll();
+  iniciarSyncAutomatico();
+  const primeira = [...document.querySelectorAll('nav button[data-v]')].find(b=>b.style.display !== 'none');
+  if(primeira) primeira.click();
+  salvarLog('Login', 'sessao', '');
+  concluirConciliacaoAtrasada?.();
+}
+
+async function iniciarSessao(){
+  const s = lerSessao();
+  if(!s || !s.access_token){ telaLoginNuvem(); return; }
+  CLOUD.sessao = s;
+  CLOUD.usuarioId = s.uid;
+  if(s.expires_at && s.expires_at < Date.now() + 60000){
+    const ok = await renovarToken();
+    if(!ok){ limparSessao(); telaLoginNuvem(); return; }
+  }
+  try{
+    const perfil = await carregarPerfil();
+    if(perfil && perfil.ativo){ PERFIL = perfil; await iniciarAppNuvem(); return; }
+  }catch(e){ /* cai para a tela de login */ }
+  telaLoginNuvem();
+}
+
+async function sair(){
+  salvarLog('Logout', 'sessao', '');
+  await enviarMudancas();
+  await sairNuvem();
+  PERFIL = null;
+  location.reload();
+}
+
+/* ---------- alterar senha ---------- */
+function trocarSenha(){
+  modal('Trocar minha senha', `<div class="grid">
+    <div class="fld full"><label>Senha atual</label><input id="m-a" type="password"></div>
+    <div class="fld"><label>Nova senha</label><input id="m-n" type="password"></div>
+    <div class="fld"><label>Repetir nova senha</label><input id="m-n2" type="password"></div>
+  </div>`, async ()=>{
+    const atual = val('m-a'), nova = val('m-n');
+    if(nova.length < 8) return alert('A nova senha precisa ter ao menos 8 caracteres.');
+    if(nova !== val('m-n2')) return alert('As senhas não conferem.');
+    try{
+      await apiAuth('token?grant_type=password', {email: PERFIL.email, password: atual});
+      const r = await fetch(SUPA_URL+'/auth/v1/user', {
+        method:'PUT',
+        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+CLOUD.sessao.access_token,'Content-Type':'application/json'},
+        body: JSON.stringify({password: nova})
+      });
+      if(!r.ok){ const j = await r.json().catch(()=>({})); throw new Error(j.msg || j.message || 'Não foi possível alterar a senha.'); }
+      salvarLog('Alterou a própria senha','usuarios', PERFIL.nome);
+      fechar(); alert('Senha alterada.');
+    }catch(e){ alert(e.message); }
+  });
+}
+
+/* ---------- log de auditoria na nuvem ---------- */
+async function salvarLog(acao, entidade, detalhe){
+  try{
+    await apiRest('auditoria', {method:'POST', body:{
+      usuario_id: PERFIL ? PERFIL.id : null,
+      usuario_nome: PERFIL ? PERFIL.nome : '',
+      acao, entidade: entidade||'', detalhe: detalhe||''
+    }});
+  }catch(e){ /* não bloqueia a operação */ }
+}
+function logAcao(acao, entidade, detalhe){
+  DB.log = DB.log || [];
+  DB.log.unshift({id:uid(), ts:new Date().toISOString(), userId: PERFIL?PERFIL.id:'', userNome: PERFIL?PERFIL.nome:'—', acao, entidade:entidade||'', detalhe:detalhe||''});
+  if(DB.log.length > 800) DB.log.length = 800;
+  salvarLog(acao, entidade, detalhe);
+}
+
+/* ---------- gestão de usuários (master) ---------- */
+async function renderUsuarios(){
+  const el = document.getElementById('tbl-usuarios'); if(!el) return;
+  let lista = [];
+  try{ lista = await apiRest('usuarios?select=*&order=nome.asc') || []; }catch(e){ el.innerHTML = '<div class="empty">Não foi possível carregar os usuários: '+esc(e.message)+'</div>'; return; }
+  el.innerHTML = `<table class="tbl"><thead><tr><th>Usuário</th><th>E-mail</th><th>Perfil</th><th>Situação</th><th></th></tr></thead><tbody>
+    ${lista.map(u=>`<tr>
+      <td><b>${esc(u.nome)}</b>${u.id===PERFIL.id?' <span class="hint">(você)</span>':''}</td>
+      <td>${esc(u.email||'—')}</td>
+      <td>${u.master?'<span class="tag t-div">Master · acesso total</span>':resumoPerm(u)}</td>
+      <td>${u.ativo?'<span class="tag t-quitado">Ativo</span>':'<span class="tag t-vencido">Bloqueado</span>'}</td>
+      <td>
+        <button class="b sm sec" onclick="formUsuario('${u.id}')">✏️ Permissões</button>
+        ${u.id!==PERFIL.id?`<button class="b sm ${u.ativo?'dang':'sec'}" onclick="bloquearUsuario('${u.id}',${!u.ativo})">${u.ativo?'🚫 Bloquear':'✅ Ativar'}</button>`:''}
+      </td></tr>`).join('')}</tbody></table>
+    <div class="hint">Quem cria a conta pelo login entra bloqueado; libere aqui marcando as permissões.</div>`;
+  renderLogNuvem();
+}
+function resumoPerm(u){
+  const p = u.permissoes || {};
+  const ver = PERMS.filter(x=>(p[x.k]||{}).ver).map(x=>x.l);
+  return ver.length? `<span class="hint">${esc(ver.join(' · '))}</span>` : '<span class="tag t-vencido">Sem acesso</span>';
+}
+async function renderLogNuvem(){
+  const el = document.getElementById('tbl-log'); if(!el) return;
+  let lista = [];
+  try{ lista = await apiRest('auditoria?select=*&order=ts.desc&limit=60') || []; }catch(e){ return; }
+  el.innerHTML = lista.length ? `<table class="tbl"><thead><tr><th>Quando</th><th>Usuário</th><th>Ação</th><th>Onde</th><th>Detalhe</th></tr></thead><tbody>
+    ${lista.map(l=>`<tr><td>${new Date(l.ts).toLocaleString('pt-BR')}</td><td>${esc(l.usuario_nome||'—')}</td>
+      <td>${esc(l.acao||'')}</td><td>${esc(l.entidade||'')}</td><td>${esc(l.detalhe||'')}</td></tr>`).join('')}
+    </tbody></table><div class="hint">Últimos ${lista.length} registros.</div>`
+    : '<div class="empty">Nenhuma atividade registrada.</div>';
+}
+async function bloquearUsuario(id, ativo){
+  try{
+    await atualizarPerfil(id, {ativo});
+    salvarLog(ativo?'Ativou usuário':'Bloqueou usuário','usuarios',id);
+    renderUsuarios();
+  }catch(e){ alert(e.message); }
+}
+function formUsuario(id){
+  const el = document.getElementById('m-perm-body');
+  apiRest(`usuarios?id=eq.${id}&select=*`).then(rows=>{
+    const u = rows && rows[0]; if(!u) return;
+    const permHtml = PERMS.map(p=>{
+      const atual = (u.permissoes||{})[p.k] || {};
+      return `<tr><td><b>${p.l}</b><div class="hint" style="margin:0">${p.d}</div></td>
+        ${ACOES.map(a=>`<td style="text-align:center"><input type="checkbox" id="pm-${p.k}-${a.k}" ${u.master||atual[a.k]?'checked':''} ${u.master?'disabled':''} style="width:17px;height:17px"></td>`).join('')}
+      </tr>`;
+    }).join('');
+    modal('Permissões · '+esc(u.nome), `<div class="grid">
+      <div class="fld full"><label>Nome</label><input id="m-nome" value="${esc(u.nome||'')}"></div>
+      <div class="fld full"><label>E-mail</label><input value="${esc(u.email||'')}" disabled></div>
+      <div class="fld full"><label>Situação</label>
+        <select id="m-ativo"><option value="1" ${u.ativo?'selected':''}>Ativo</option><option value="0" ${!u.ativo?'selected':''}>Bloqueado</option></select></div>
+      <div class="fld full sect">Permissões por módulo</div>
+      <div class="fld full">
+        <table class="tbl"><thead><tr><th>Módulo</th>${ACOES.map(a=>`<th style="text-align:center">${a.l}</th>`).join('')}</tr></thead>
+        <tbody>${permHtml}</tbody></table>
+        <div class="hint">“Ver” libera a consulta · “Criar/Editar” libera lançamentos · “Excluir” libera apagar.</div>
+      </div>
+    </div>`, async ()=>{
+      const perm = {};
+      PERMS.forEach(p=>{ perm[p.k] = {}; ACOES.forEach(a=>{ perm[p.k][a.k] = !!document.getElementById(`pm-${p.k}-${a.k}`).checked; }); });
+      try{
+        await atualizarPerfil(id, {nome: val('m-nome').trim(), ativo: val('m-ativo')==='1', permissoes: perm});
+        salvarLog('Alterou permissões','usuarios', u.nome);
+        fechar(); renderUsuarios(); aplicarPermissoes();
+      }catch(e){ alert(e.message); }
+    }, true);
+  }).catch(e=>alert(e.message));
+}
+
+/* ============================================================
+   PAGAMENTO À FÁBRICA (contas a pagar do veículo)
+   Custo = pé da NF + desconto em NF + juros
+   Juros = taxa (FDIC/Floor Plan) sobre o pé da NF, do início dos
+   juros até o pagamento (ou até hoje, se ainda não pagou).
+   ============================================================ */
+
+const COND_PAG = {
+  fdic:      {rotulo:'FDIC',       tipo:'fdic',      dias:1,   cor:'#a78bfa'},
+  floorPlan: {rotulo:'Floor Plan', tipo:'floorPlan', dias:30,  cor:'#3b82f6'},
+  avista:    {rotulo:'À vista',    tipo:'',          dias:null,cor:'#22c55e'}
+};
+
+function cfgJuros(){
+  DB.juros = DB.juros || {};
+  DB.juros.fdic = Object.assign({pct:0, periodo:'mes'}, DB.juros.fdic||{});
+  DB.juros.floorPlan = Object.assign({pct:0, periodo:'mes'}, DB.juros.floorPlan||{});
+  return DB.juros;
+}
+function somarDiasData(data, n){
+  if(!data || n == null) return '';
+  const d = new Date(data+'T12:00');
+  if(isNaN(d.getTime())) return '';
+  d.setDate(d.getDate()+n);
+  return d.toISOString().slice(0,10);
+}
+function diasCorridos(de, ate){
+  if(!de) return 0;
+  const a = new Date(de+'T12:00'), b = new Date((ate||hoje())+'T12:00');
+  return Math.max(0, Math.round((b-a)/86400000));
+}
+// início dos juros conforme a condição
+function inicioJurosCond(cond, faturamento){
+  const c = COND_PAG[cond];
+  if(!c || c.dias == null) return '';
+  return somarDiasData(faturamento, c.dias);
+}
+/* Juros do veículo: manual (v.jurosCusto) prevalece; senão calcula pela taxa
+   da condição, do início dos juros até a data de pagamento ou hoje. */
+function jurosFabrica(v){
+  if(!v) return 0;
+  if(+v.jurosCusto > 0) return +v.jurosCusto;
+  const cond = v.condicao || (v.tipoJuros === 'floorPlan' ? 'floorPlan' : v.tipoJuros === 'fdic' ? 'fdic' : '');
+  const c = COND_PAG[cond];
+  const cfg = cfgJuros();
+  const taxa = c && c.tipo ? cfg[c.tipo] : null;
+  if(!taxa || !+taxa.pct) return 0;
+  const ini = v.inicioJuros || inicioJurosCond(cond, v.dataFaturamento||v.dataCompra);
+  if(!ini) return 0;
+  const fim = v.dataPagamentoFabrica || hoje();
+  const d = diasCorridos(ini, fim);
+  const fator = taxa.periodo === 'dia' ? d : d/30;
+  return (+v.peNF||0) * (+taxa.pct)/100 * fator;
+}
+function custoFabrica(v){
+  if(!v) return 0;
+  return (+v.peNF||0) + (+v.descontoNF||0) + jurosFabrica(v);
+}
+function pagoFabrica(chassi){
+  return (DB.pagamentosFabrica||[]).filter(p=>p.chassi===chassi && concOk(p)).reduce((s,p)=>s+ +p.valor, 0);
+}
+/* total pago incluindo o que ainda aguarda conciliação (para conferência) */
+function pagoFabricaBruto(chassi){
+  return (DB.pagamentosFabrica||[]).filter(p=>p.chassi===chassi).reduce((s,p)=>s+ +p.valor, 0);
+}
+function saldoFabrica(v){
+  return Math.max(0, custoFabrica(v) - pagoFabrica(v.chassi));
+}
+/* Vencimento real do pagamento à fábrica.
+   Só existe se informado pelo usuário — não presumimos, para não acusar
+   atraso em carro cujo prazo ainda não foi cadastrado. */
+function vencFabrica(v){
+  if(v.dataPagamentoFabrica) return '';           // já pago
+  return v.vencPagamento || '';
+}
+/* Data indicativa sugerida para o vencimento (fim da carência da condição) */
+function vencSugerido(v){
+  const c = COND_PAG[v.condicao||''];
+  if(c && c.dias != null) return somarDiasData(v.dataFaturamento||v.dataCompra, c.dias);
+  return '';
+}
+function atrasoFabrica(v){
+  const venc = vencFabrica(v), saldo = saldoFabrica(v);
+  if(!venc || saldo <= 0.005) return 0;
+  const d = diasCorridos(venc, hoje());
+  return d > 0 ? d : 0;
+}
+function statusPagamento(v){
+  const custo = custoFabrica(v), pago = pagoFabrica(v.chassi), saldo = saldoFabrica(v);
+  if(custo <= 0.005) return {k:'div', l:'Sem custo'};
+  if(saldo <= 0.005) return {k:'quitado', l:'Pago'};
+  if(atrasoFabrica(v) > 0) return {k:'vencido', l:'Vencido há '+atrasoFabrica(v)+'d'};
+  if(pago > 0.005) return {k:'parcial', l:'Parcialmente pago'};
+  return {k:'aberto', l:'Em aberto'};
+}
+const badgePag = s => `<span class="tag t-${s.k}">${s.l}</span>`;
+
+/* ---------------- tela: pagamento à fábrica ---------------- */
+function renderPagar(){
+  const el = document.getElementById('tbl-pagar');
+  if(!el) return;
+  const busca = (val('f-busca-p')||'').toLowerCase();
+  const st = val('f-status-p');
+  let lista = DB.veiculos.slice();
+  if(busca) lista = lista.filter(v=>[v.chassi, v.veiculo, v.fornecedor, v.condicaoPagamento].join(' ').toLowerCase().includes(busca));
+  if(st === 'vencido') lista = lista.filter(v=>atrasoFabrica(v)>0);
+  else if(st) lista = lista.filter(v=>{
+    const s = statusPagamento(v);
+    if(st === 'pago') return s.k === 'quitado';
+    if(st === 'parcial') return s.k === 'parcial';
+    if(st === 'aberto') return s.k === 'aberto' || s.k === 'vencido' || s.k === 'div';
+    return true;
+  });
+  lista.sort((a,b)=> atrasoFabrica(b) - atrasoFabrica(a) || (a.chassi||'').localeCompare(b.chassi||''));
+
+  if(!DB.veiculos.length){
+    el.innerHTML = '<div class="empty">Nenhum veículo no estoque. Importe o faturamento da fábrica ou cadastre o veículo.</div>';
+    return;
+  }
+  if(!lista.length){ el.innerHTML = '<div class="empty">Nenhum veículo com esse filtro.</div>'; return; }
+
+  const totCusto = lista.reduce((s,v)=>s+custoFabrica(v),0);
+  const totPago  = lista.reduce((s,v)=>s+pagoFabrica(v.chassi),0);
+  const totSaldo = lista.reduce((s,v)=>s+saldoFabrica(v),0);
+  const totVenc  = lista.filter(v=>atrasoFabrica(v)>0).reduce((s,v)=>s+saldoFabrica(v),0);
+
+  el.innerHTML = `
+    <div class="cards">
+      <div class="kpi"><div class="l">Custo total</div><div class="v inf">${brl0(totCusto)}</div><div class="s">pé da NF + desconto + juros</div></div>
+      <div class="kpi"><div class="l">Pago à fábrica</div><div class="v pos">${brl0(totPago)}</div><div class="s">${pct(totPago,totCusto).toFixed(0)}% do custo</div></div>
+      <div class="kpi"><div class="l">Saldo a pagar</div><div class="v amb">${brl0(totSaldo)}</div><div class="s">${lista.filter(v=>saldoFabrica(v)>0.005).length} veículo(s)</div></div>
+      <div class="kpi"><div class="l">Vencido</div><div class="v neg">${brl0(totVenc)}</div><div class="s">${lista.filter(v=>atrasoFabrica(v)>0).length} veículo(s) em atraso</div></div>
+    </div>
+    <table class="tbl"><thead><tr>
+      <th>Chassi</th><th>Veículo</th><th>Condição</th><th>Faturamento</th><th>Início juros</th>
+      <th class="num">Pé da NF</th><th class="num">Juros</th><th class="num">Custo</th>
+      <th class="num">Pago</th><th class="num">Saldo</th><th>Vencimento</th><th>Situação</th><th></th>
+    </tr></thead><tbody>
+    ${lista.map(v=>{
+      const c = COND_PAG[v.condicao||''] || null;
+      const s = statusPagamento(v), at = atrasoFabrica(v);
+      const ini = v.inicioJuros || (c? inicioJurosCond(v.condicao, v.dataFaturamento||v.dataCompra):'');
+      return `<tr>
+        <td><b>${esc(v.chassi||'—')}</b></td>
+        <td>${esc(v.veiculo||'—')}</td>
+        <td>${c? `<span style="color:${c.cor};font-weight:700">${c.rotulo}</span>`:'<span class="hint">manual</span>'}</td>
+        <td>${fmt(v.dataFaturamento||v.dataCompra)}</td>
+        <td>${ini? fmt(ini):'<span class="hint">—</span>'}</td>
+        <td class="num">${brl(v.peNF)}${(+v.descontoNF)?`<div class="hint" style="margin:0">+${brl(v.descontoNF)} desc.</div>`:''}</td>
+        <td class="num">${brl(jurosFabrica(v))}</td>
+        <td class="num"><b>${brl(custoFabrica(v))}</b></td>
+        <td class="num pos">${brl(pagoFabrica(v.chassi))}${
+          (DB.pagamentosFabrica||[]).some(p=>p.chassi===v.chassi && estaPendente(p))
+            ? '<div class="hint amb" style="margin:0">+'+brl(pagoFabricaBruto(v.chassi)-pagoFabrica(v.chassi))+' aguard. conciliação</div>' : ''}</td>
+        <td class="num ${saldoFabrica(v)>0.005?'amb':'pos'}"><b>${brl(saldoFabrica(v))}</b></td>
+        <td>${vencFabrica(v)? fmt(vencFabrica(v)) : (saldoFabrica(v)>0.005
+              ? `<button class="b sm sec" style="font-size:11px;padding:3px 8px" onclick="formCusto('${esc(v.chassi)}')" title="Informar vencimento">definir</button>`
+              : '—')}
+            ${at?`<div class="hint neg" style="margin:0">${at}d atraso</div>`:''}</td>
+        <td>${badgePag(s)}</td>
+        <td>
+          ${pode('pagamentos','edit')?`<button class="b sm ok" onclick="formPagamento('${esc(v.chassi)}')" title="Registrar pagamento">💸</button>`:''}
+          ${pode('pagamentos','edit')?`<button class="b sm sec" onclick="formCusto('${esc(v.chassi)}')" title="Custo e condição">✏️</button>`:''}
+          <button class="b sm sec" onclick="gerirPagamentosFab('${esc(v.chassi)}')" title="Ver pagamentos">📄 ${(DB.pagamentosFabrica||[]).filter(p=>p.chassi===v.chassi).length||''}</button>
+        </td></tr>`;
+    }).join('')}
+    </tbody></table>
+    <div class="hint">${lista.length} veículo(s) · custo ${brl(totCusto)} · pago ${brl(totPago)} · <b>saldo ${brl(totSaldo)}</b> · vencido ${brl(totVenc)}</div>`;
+}
+
+/* ---------------- custo / condição do veículo ---------------- */
+function formCusto(chassi){
+  if(!precisaPermissao('pagamentos','edit')) return;
+  if(!DB.veiculos.length) return alert('Nenhum veículo no estoque.');
+  const v = chassi ? (DB.veiculos.find(x=>x.chassi===chassi)||{}) : {};
+  const opcoes = chassi ? '' : DB.veiculos.map(x=>`<option value="${esc(x.chassi)}">${esc(x.chassi)} — ${esc(x.veiculo||'')}</option>`).join('');
+  modal(chassi? 'Custo e condição · '+esc(chassi) : 'Custo / condição do veículo', `<div class="grid">
+    ${chassi? '' : `<div class="fld full"><label>Veículo *</label><select id="m-vchassi" onchange="formCusto(this.value)">${opcoes}</select></div>`}
+    <div class="fld"><label>Pé da NF (R$)</label><input id="m-penf" type="number" step="0.01" value="${v.peNF||''}"></div>
+    <div class="fld"><label>Desconto em NF (R$)</label><input id="m-desc" type="number" step="0.01" value="${v.descontoNF||''}"></div>
+    <div class="fld"><label>Data do faturamento</label><input id="m-fat" type="date" value="${v.dataFaturamento||v.dataCompra||''}"></div>
+    <div class="fld"><label>Condição de pagamento</label>
+      <select id="m-cond" onchange="calcCustoPreview()">
+        <option value="" ${!v.condicao?'selected':''}>— manual —</option>
+        ${Object.entries(COND_PAG).map(([k,c])=>`<option value="${k}" ${v.condicao===k?'selected':''}>${c.rotulo}${c.dias!=null?' ('+c.dias+' dia'+(c.dias>1?'s':'')+' após faturamento)':''}</option>`).join('')}
+      </select></div>
+    <div class="fld"><label>Início dos juros (auto)</label><input id="m-ini" type="date" value="${v.inicioJuros||''}" onchange="calcCustoPreview()">
+      <div class="hint">FDIC = 1 dia após o faturamento · Floor Plan = 30 dias · À vista = sem juros</div></div>
+    <div class="fld"><label>Vencimento do pagamento</label><input id="m-venc" type="date" value="${v.vencPagamento||''}" onchange="calcCustoPreview()">
+      <div class="hint">Sem esta data o veículo não é marcado como atrasado.</div></div>
+    <div class="fld"><label>Data em que foi pago</label><input id="m-dtpag" type="date" value="${v.dataPagamentoFabrica||''}" onchange="calcCustoPreview()">
+      <div class="hint">Preenchida = veículo quitado com a fábrica</div></div>
+    <div class="fld"><label>Juros manual (R$)</label><input id="m-juros" type="number" step="0.01" value="${v.jurosCusto||''}" placeholder="vazio = calcula pela taxa" oninput="calcCustoPreview()"></div>
+    <div class="fld full"><div id="m-preview-custo" class="hint"></div></div>
+  </div>`, ()=>{
+    const alvo = chassi ? DB.veiculos.find(x=>x.chassi===chassi) : DB.veiculos.find(x=>x.chassi===val('m-vchassi'));
+    if(!alvo) return alert('Escolha o veículo.');
+    const cond = val('m-cond');
+    alvo.peNF = +val('m-penf')||0;
+    alvo.descontoNF = +val('m-desc')||0;
+    alvo.dataFaturamento = val('m-fat') || alvo.dataFaturamento || '';
+    alvo.condicao = cond;
+    const c = COND_PAG[cond];
+    alvo.tipoJuros = c ? c.tipo : '';
+    alvo.inicioJuros = val('m-ini') || (c && c.dias!=null ? inicioJurosCond(cond, alvo.dataFaturamento) : '');
+    alvo.vencPagamento = val('m-venc');
+    alvo.dataPagamentoFabrica = val('m-dtpag');
+    alvo.jurosCusto = +val('m-juros')||0;
+    save(); fechar(); renderAll();
+  });
+  calcCustoPreview();
+}
+function calcCustoPreview(){
+  const el = document.getElementById('m-preview-custo'); if(!el) return;
+  const cond = (document.getElementById('m-cond')||{}).value || '';
+  const fat = (document.getElementById('m-fat')||{}).value || '';
+  const ini = document.getElementById('m-ini');
+  const c = COND_PAG[cond];
+  if(ini && c && c.dias != null && fat) ini.value = inicioJurosCond(cond, fat);
+  if(ini && c && c.dias == null) ini.value = '';
+  const vencEl = document.getElementById('m-venc');
+  if(vencEl && !vencEl.value && c && c.dias != null && fat)
+    vencEl.placeholder = 'sugestão: ' + fmt(somarDiasData(fat, c.dias));
+  const temp = {
+    condicao: cond,
+    peNF: +((document.getElementById('m-penf')||{}).value)||0,
+    descontoNF: +((document.getElementById('m-desc')||{}).value)||0,
+    inicioJuros: (document.getElementById('m-ini')||{}).value || '',
+    dataPagamentoFabrica: (document.getElementById('m-dtpag')||{}).value || '',
+    jurosCusto: +((document.getElementById('m-juros')||{}).value)||0
+  };
+  const j = jurosFabrica(temp);
+  const custo = (+temp.peNF) + (+temp.descontoNF) + j;
+  const dias = temp.inicioJuros ? diasCorridos(temp.inicioJuros, temp.dataPagamentoFabrica||hoje()) : 0;
+  el.innerHTML = `${cond? `<b>${c.rotulo}</b> · `:''}juros até ${temp.dataPagamentoFabrica? 'o pagamento':'"hoje"'} (${dias} dia(s)) =
+    <b>${brl(j)}</b><br>Custo total = ${brl(temp.peNF)} + ${brl(temp.descontoNF)} + ${brl(j)} = <b style="font-size:14px">${brl(custo)}</b>`;
+}
+
+/* ---------------- pagamentos (baixas) ---------------- */
+function formPagamento(chassi){
+  if(!precisaPermissao('pagamentos','edit')) return;
+  const veics = DB.veiculos.slice();
+  if(!veics.length) return alert('Nenhum veículo no estoque.');
+  const alvo = chassi ? veics.find(x=>x.chassi===chassi) : veics[0];
+  if(!alvo) return;
+  const opts = veics.map(x=>{
+    const s = saldoFabrica(x);
+    return `<option value="${esc(x.chassi)}" ${x.chassi===alvo.chassi?'selected':''}>${esc(x.chassi)} — ${esc(x.veiculo||'')} — saldo ${brl(s)}</option>`;
+  }).join('');
+  modal('Registrar pagamento à fábrica', `<div class="grid">
+    <div class="fld full"><label>Veículo *</label><select id="m-pv" onchange="pagPreview()">${opts}</select></div>
+    <div class="fld"><label>Data do pagamento</label><input id="m-pdata" type="date" value="${hoje()}" onchange="pagPreview()"></div>
+    <div class="fld"><label>Valor pago (R$) *</label><input id="m-pvalor" type="number" step="0.01" oninput="pagPreview()"></div>
+    <div class="fld"><label>Forma</label><select id="m-pforma"><option>TED</option><option>Débito em conta</option><option>Boleto</option><option>FIDC</option><option>Cheque</option><option>Financiamento de fábrica</option><option>Outro</option></select></div>
+    <div class="fld"><label>Banco / conta</label><input id="m-pconta" placeholder="ex.: Banco Fiat · conta crédito"></div>
+    <div class="fld full"><label>Observação</label><input id="m-pobs" placeholder="referência, parcela, comprovante…"></div>
+    <div class="fld full"><div id="m-ppreview" class="hint"></div></div>
+  </div>`, ()=>{
+    const ch = val('m-pv'), valor = +val('m-pvalor');
+    if(!ch) return alert('Escolha o veículo.');
+    if(!valor || valor <= 0) return alert('Informe o valor pago.');
+    const v = DB.veiculos.find(x=>x.chassi===ch); if(!v) return;
+    if(valor > saldoFabrica(v) + 0.01)
+      return alert('O valor ('+brl(valor)+') é maior que o saldo a pagar ('+brl(saldoFabrica(v))+').');
+    DB.pagamentosFabrica = DB.pagamentosFabrica || [];
+    const novoPag = {id:uid(), chassi:ch, data:val('m-pdata'), valor,
+      forma:val('m-pforma'), conta:val('m-pconta').trim(), obs:val('m-pobs').trim(),
+      usuario: (usuarioAtual()||{}).nome || '', criadoPor: (usuarioAtual()||{}).nome || ''};
+    novoPag.conc = isMaster() ? 'conciliado' : 'pendente';
+    if(novoPag.conc === 'conciliado'){ novoPag.concPor = novoPag.criadoPor; novoPag.concEm = new Date().toISOString(); }
+    DB.pagamentosFabrica.push(novoPag);
+    // se quitou, marca a data de pagamento (para os juros pararem de correr)
+    recalcPagFab(ch);
+    logAcao('Pagamento à fábrica', 'veiculos', ch+' · '+brl(valor));
+    save(); fechar(); renderAll();
+    if(novoPag.conc === 'pendente') alert('Pagamento lançado.\n\nEle está AGUARDANDO CONCILIAÇÃO: o master precisa confirmar a movimentação antes de entrar nos saldos.');
+  });
+  document.getElementById('m-pvalor').value = saldoFabrica(alvo).toFixed(2);
+  pagPreview();
+}
+function pagPreview(){
+  const el = document.getElementById('m-ppreview'); if(!el) return;
+  const v = DB.veiculos.find(x=>x.chassi===val('m-pv')); if(!v) return;
+  const valor = +val('m-pvalor')||0;
+  const novo = Math.max(0, saldoFabrica(v) - valor);
+  const custo = custoFabrica(v), pago = pagoFabrica(v.chassi);
+  el.innerHTML = `Custo do veículo <b>${brl(custo)}</b> · já pago ${brl(pago)} · saldo <b>${brl(saldoFabrica(v))}</b>
+    (pé da NF ${brl(v.peNF)} + juros ${brl(jurosFabrica(v))})<br>
+    Após este pagamento: pago ${brl(pago+valor)} · <b>saldo ${brl(novo)}</b>${novo<=0.005?' <span class="pos">→ quitado com a fábrica</span>':''}`;
+}
+function gerirPagamentosFab(chassi){
+  const v = DB.veiculos.find(x=>x.chassi===chassi); if(!v) return;
+  const ps = (DB.pagamentosFabrica||[]).filter(p=>p.chassi===chassi).sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+  const corpo = `
+    <div class="cards" style="margin-bottom:14px">
+      <div class="kpi"><div class="l">Custo</div><div class="v" style="font-size:16px">${brl(custoFabrica(v))}</div><div class="s">pé NF ${brl(v.peNF)} + juros ${brl(jurosFabrica(v))}</div></div>
+      <div class="kpi"><div class="l">Pago</div><div class="v pos" style="font-size:16px">${brl(pagoFabrica(chassi))}</div><div class="s">${ps.length} pagamento(s)</div></div>
+      <div class="kpi"><div class="l">Saldo</div><div class="v ${saldoFabrica(v)>0.005?'amb':'pos'}" style="font-size:16px">${brl(saldoFabrica(v))}</div><div class="s">${pc_status}</div></div>
+    </div>
+    ${ps.length? `<table class="tbl"><thead><tr><th>Data</th><th class="num">Valor</th><th>Forma</th><th>Conta</th><th>Obs.</th><th></th></tr></thead><tbody>
+      ${ps.map(p=>`<tr><td>${fmt(p.data)}${seloConc(p)}</td><td class="num"><b>${brl(p.valor)}</b></td><td>${esc(p.forma||'—')}</td>
+      <td>${esc(p.conta||'—')}</td><td>${esc(p.obs||'—')}</td>
+      <td>${pode('pagamentos','edit')?`<button class="b sm sec" onclick="editarPagFab('${p.id}','${esc(chassi)}')">✏️</button>`:''}
+      ${pode('pagamentos','del')?`<button class="b sm dang" onclick="excluirPagFab('${p.id}','${esc(chassi)}')">🗑</button>`:''}</td></tr>`).join('')}
+    </tbody></table>` : '<div class="empty" style="padding:18px">Nenhum pagamento registrado.</div>'}
+    <div class="mfoot" style="justify-content:space-between">
+      ${saldoFabrica(v)>0.005 && pode('pagamentos','edit')?`<button class="b" onclick="formPagamento('${esc(chassi)}')">＋ Novo pagamento</button>`:'<span class="hint" style="margin:0">Veículo quitado com a fábrica.</span>'}
+      <button class="b sec" onclick="fechar()">Fechar</button>
+    </div>`;
+  const pc_status = saldoFabrica(v)<=0.005?'quitado':'em aberto';
+  document.getElementById('mbox-in').className = 'modal';
+  document.getElementById('mbox-body').innerHTML = `<h2>Pagamentos à fábrica · ${esc(chassi)}</h2>${corpo}`;
+  document.getElementById('mbox').classList.add('on');
+}
+function editarPagFab(id, chassi){
+  if(!precisaPermissao('pagamentos','edit')) return;
+  const p = (DB.pagamentosFabrica||[]).find(x=>x.id===id); if(!p) return;
+  modal('Editar pagamento à fábrica', `<div class="grid">
+    <div class="fld"><label>Data</label><input id="m-data" type="date" value="${p.data||''}"></div>
+    <div class="fld"><label>Valor (R$)</label><input id="m-valor" type="number" step="0.01" value="${p.valor}"></div>
+    <div class="fld"><label>Forma</label><input id="m-forma" value="${esc(p.forma||'')}"></div>
+    <div class="fld"><label>Conta</label><input id="m-conta" value="${esc(p.conta||'')}"></div>
+    <div class="fld full"><label>Observação</label><input id="m-obs" value="${esc(p.obs||'')}"></div>
+  </div>`, ()=>{
+    const v = DB.veiculos.find(x=>x.chassi===chassi);
+    const outros = (DB.pagamentosFabrica||[]).filter(x=>x.chassi===chassi && x.id!==id).reduce((s,x)=>s+x.valor,0);
+    const novo = +val('m-valor')||0;
+    if(outros + novo > custoFabrica(v) + 0.01) return alert('A soma dos pagamentos passaria do custo do veículo.');
+    Object.assign(p, {data:val('m-data'), valor:novo, forma:val('m-forma'), conta:val('m-conta'), obs:val('m-obs')});
+    if(!isMaster()){ p.conc = 'pendente'; p.concPor=''; p.concEm=''; p.concObs='Editado pelo financeiro — aguarda nova conciliação'; }
+    recalcPagFab(chassi);
+    save(); fechar(); renderAll(); gerirPagamentosFab(chassi);
+  });
+}
+function excluirPagFab(id, chassi){
+  if(!precisaPermissao('pagamentos','del')) return;
+  const p = (DB.pagamentosFabrica||[]).find(x=>x.id===id); if(!p) return;
+  if(!confirm('Excluir o pagamento de '+brl(p.valor)+' de '+fmt(p.data)+'?')) return;
+  DB.pagamentosFabrica = (DB.pagamentosFabrica||[]).filter(x=>x.id!==id);
+  recalcPagFab(chassi);
+  save(); renderAll(); gerirPagamentosFab(chassi);
+}
+
+/* Recalcula a quitação do veículo a partir dos pagamentos CONCILIADOS.
+   Se o total volta a ficar abaixo do custo, a data de pagamento é limpa
+   e os juros voltam a correr.                                          */
+function recalcPagFab(chassi){
+  const v = DB.veiculos.find(x=>x.chassi===chassi);
+  if(!v) return;
+  const quitado = saldoFabrica(v) <= 0.005;
+  if(quitado){
+    if(!v.dataPagamentoFabrica){
+      const pagos = (DB.pagamentosFabrica||[]).filter(p=>p.chassi===chassi && concOk(p))
+        .sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+      v.dataPagamentoFabrica = (pagos[0]||{}).data || hoje();
+    }
+  } else if(v.dataPagamentoFabrica){
+    v.dataPagamentoFabrica = '';
+  }
+}
+
+/* ---------------- taxas de juros ---------------- */
+function renderJuros(){
+  const el = document.getElementById('tbl-juros'); if(!el) return;
+  const j = cfgJuros();
+  const linhas = [
+    {k:'fdic', l:'FDIC', d:'Juros começam 1 dia após o faturamento'},
+    {k:'floorPlan', l:'Floor Plan', d:'Juros começam 30 dias após o faturamento'}
+  ];
+  el.innerHTML = `<table class="tbl"><thead><tr><th>Modalidade</th><th>Quando os juros começam</th><th class="num">Taxa (% ao período)</th><th>Período</th><th></th></tr></thead><tbody>
+    ${linhas.map(x=>{ const c = j[x.k];
+      return `<tr><td><b>${x.l}</b></td><td>${x.d}</td><td class="num"><b>${(+c.pct||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:4})}%</b></td>
+      <td>${c.periodo==='dia'?'ao dia':'ao mês'}</td>
+      <td>${pode('cadastros','edit')?`<button class="b sm sec" onclick="formJuros('${x.k}')">✏️</button>`:''}</td></tr>`;}).join('')}
+    </tbody></table>
+    <div class="hint">A taxa incide sobre o pé da NF, contando do início dos juros até o pagamento (ou até hoje, se ainda não pagou).
+    Sem taxa cadastrada, os juros ficam zerados e você pode lançar o valor manualmente no custo do veículo.</div>`;
+}
+function formJuros(qual){
+  if(!precisaPermissao('cadastros','edit')) return;
+  const j = cfgJuros();
+  const k = qual || 'fdic';
+  const c = j[k];
+  const nome = k==='fdic'?'FDIC':'Floor Plan';
+  modal('Taxa de juros · '+nome, `<div class="grid">
+    <div class="fld"><label>Taxa (%)</label><input id="m-pct" type="number" step="0.0001" value="${c.pct||''}" placeholder="ex.: 1,1"></div>
+    <div class="fld"><label>Período</label><select id="m-per">
+      <option value="mes" ${c.periodo==='mes'?'selected':''}>ao mês</option>
+      <option value="dia" ${c.periodo==='dia'?'selected':''}>ao dia</option></select></div>
+    <div class="fld full"><div class="hint">Ex.: 1,1% ao mês sobre o pé da NF. Em 30 dias, um carro de R$ 95.000 rende ${brl(95000*1.1/100)} de juros.</div></div>
+  </div>`, ()=>{
+    j[k].pct = +val('m-pct')||0;
+    j[k].periodo = val('m-per');
+    save(); fechar(); renderAll();
+  });
+}
+
+/* ---------------- exportações ---------------- */
+function exportarPagamentos(){
+  const linhas = [['Chassi','Veículo','Condição','Faturamento','Início juros','Vencimento','Pé da NF','Desconto','Juros','Custo','Pago','Saldo','Situação','Atraso (dias)']];
+  DB.veiculos.forEach(v=>{
+    const s = statusPagamento(v);
+    linhas.push([v.chassi, v.veiculo, (COND_PAG[v.condicao||'']||{}).rotulo||'manual',
+      v.dataFaturamento||v.dataCompra||'', v.inicioJuros||'',
+      vencFabrica(v), (+v.peNF||0).toFixed(2), (+v.descontoNF||0).toFixed(2),
+      jurosFabrica(v).toFixed(2), custoFabrica(v).toFixed(2),
+      pagoFabrica(v.chassi).toFixed(2), saldoFabrica(v).toFixed(2), s.l, atrasoFabrica(v)]);
+  });
+  baixarCSV('pagamentos-fabrica', linhas);
+}
+
+/* ---------------- relatórios ---------------- */
+function relPagamentos(){
+  const ini = val('rep-ini'), fim = val('rep-fim');
+  const ps = (DB.pagamentosFabrica||[]).filter(p=>noPeriodo(p.data, ini, fim)).sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+  repHeader('Pagamentos à fábrica', `${ps.length} pagamento(s) de ${fmt(ini)} a ${fmt(fim)}`);
+  const linhas = [['Data','Chassi','Veículo','Forma','Conta','Valor','Observação']];
+  let html = '';
+  if(!ps.length){ html = '<div class="empty">Nenhum pagamento no período.</div>'; }
+  else {
+    html = `<table class="tbl"><thead><tr><th>Data</th><th>Veículo</th><th>Forma</th><th>Conta</th><th class="num">Valor</th><th></th></tr></thead><tbody>
+    ${ps.map(p=>{ const v = DB.veiculos.find(x=>x.chassi===p.chassi)||{};
+      linhas.push([p.data, p.chassi, v.veiculo, p.forma, p.conta, (+p.valor).toFixed(2), p.obs]);
+      return `<tr><td>${fmt(p.data)}</td><td>${esc(p.chassi)}<div class="hint" style="margin:0">${esc(v.veiculo||'')}</div></td>
+      <td>${esc(p.forma||'—')}</td><td>${esc(p.conta||'—')}</td><td class="num"><b>${brl(p.valor)}</b>${seloConc(p)}</td>
+      <td>${pode('pagamentos','edit')?`<button class="b sm sec" onclick="editarPagFab('${p.id}','${esc(p.chassi)}')">✏️</button>`:''}</td></tr>`;}).join('')}
+    </tbody><tfoot><tr style="background:var(--panel2);font-weight:700"><td colspan="4">Total pago</td><td class="num">${brl(ps.reduce((s,p)=>s+p.valor,0))}</td><td></td></tr></tfoot></table>`;
+  }
+  // posição de custo dos veículos no período
+  const vs = DB.veiculos.filter(v=>noPeriodo(v.dataFaturamento||v.dataCompra, ini, fim));
+  if(vs.length){
+    html += `<h3 style="margin:20px 0 8px;font-size:13px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px">Posição de custo dos veículos faturados no período</h3>
+    <table class="tbl"><thead><tr><th>Chassi</th><th>Condição</th><th class="num">Custo</th><th class="num">Pago</th><th class="num">Saldo</th><th>Situação</th></tr></thead><tbody>
+    ${vs.map(v=>{ const s = statusPagamento(v);
+      return `<tr><td>${esc(v.chassi)}<div class="hint" style="margin:0">${esc(v.veiculo||'')}</div></td>
+      <td>${(COND_PAG[v.condicao||'']||{}).rotulo||'manual'}</td>
+      <td class="num">${brl(custoFabrica(v))}</td><td class="num pos">${brl(pagoFabrica(v.chassi))}</td>
+      <td class="num"><b>${brl(saldoFabrica(v))}</b></td><td>${badgePag(s)}</td></tr>`;}).join('')}
+    </tbody><tfoot><tr style="background:var(--panel2);font-weight:700"><td colspan="2">Total</td>
+      <td class="num">${brl(vs.reduce((s,v)=>s+custoFabrica(v),0))}</td>
+      <td class="num">${brl(vs.reduce((s,v)=>s+pagoFabrica(v.chassi),0))}</td>
+      <td class="num">${brl(vs.reduce((s,v)=>s+saldoFabrica(v),0))}</td><td></td></tr></tfoot></table>`;
+  }
+  REP_CSV = {nome:'pagamentos-fabrica', linhas};
+  document.getElementById('rep-body').innerHTML = html;
+}
+
+function relAgingPagar(){
+  const abertos = DB.veiculos.filter(v=>saldoFabrica(v)>0.005);
+  repHeader('Vencidos à fábrica', `Posição em ${fmt(hoje())} · ${abertos.length} veículo(s) com saldo`);
+  const faixas = [
+    {l:'A vencer', f:v=>atrasoFabrica(v)<=0},
+    {l:'1–30 dias', f:v=>atrasoFabrica(v)>=1 && atrasoFabrica(v)<=30},
+    {l:'31–60', f:v=>atrasoFabrica(v)>=31 && atrasoFabrica(v)<=60},
+    {l:'61–90', f:v=>atrasoFabrica(v)>=61 && atrasoFabrica(v)<=90},
+    {l:'> 90 dias', f:v=>atrasoFabrica(v)>90}
+  ];
+  const tot = abertos.reduce((s,v)=>s+saldoFabrica(v),0) || 1;
+  const linhas = [['Faixa','Veículos','Valor em aberto','% do total']];
+  faixas.forEach(f=>{
+    const arr = abertos.filter(f.f);
+    linhas.push([f.l, arr.length, arr.reduce((s,v)=>s+saldoFabrica(v),0).toFixed(2),
+      (arr.reduce((s,v)=>s+saldoFabrica(v),0)/tot*100).toFixed(1)]);
+  });
+  REP_CSV = {nome:'vencidos-fabrica', linhas};
+  document.getElementById('rep-body').innerHTML = `
+    <table class="tbl"><thead><tr><th>Faixa de atraso</th><th class="num">Veículos</th><th class="num">Valor em aberto</th><th class="num">% do total</th></tr></thead><tbody>
+    ${faixas.map(f=>{ const arr = abertos.filter(f.f); const v = arr.reduce((s,x)=>s+saldoFabrica(x),0);
+      return `<tr><td><b>${f.l}</b></td><td class="num">${arr.length}</td><td class="num">${brl(v)}</td><td class="num">${(v/tot*100).toFixed(1)}%</td></tr>`;}).join('')}
+    </tbody><tfoot><tr style="background:var(--panel2);font-weight:700"><td>Total</td><td class="num">${abertos.length}</td><td class="num">${brl(tot)}</td><td class="num">100%</td></tr></tfoot></table>
+    <h3 style="margin:20px 0 8px;font-size:13px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px">Detalhe por veículo</h3>
+    <table class="tbl"><thead><tr><th>Chassi</th><th>Condição</th><th>Vencimento</th><th class="num">Custo</th><th class="num">Pago</th><th class="num">Saldo</th><th class="num">Atraso</th></tr></thead><tbody>
+    ${abertos.sort((a,b)=>atrasoFabrica(b)-atrasoFabrica(a)).map(v=>{
+      const at = atrasoFabrica(v);
+      return `<tr><td>${esc(v.chassi)}<div class="hint" style="margin:0">${esc(v.veiculo||'')}</div></td>
+      <td>${(COND_PAG[v.condicao||'']||{}).rotulo||'manual'}</td><td>${fmt(vencFabrica(v))}</td>
+      <td class="num">${brl(custoFabrica(v))}</td><td class="num pos">${brl(pagoFabrica(v.chassi))}</td>
+      <td class="num"><b>${brl(saldoFabrica(v))}</b></td><td class="num ${at?'neg':''}">${at?at+'d':'—'}</td></tr>`;}).join('')}
+    </tbody></table>`;
+}
+
+/* ============================================================
+   CONCILIAÇÃO — controle apartado das movimentações
+   Todo recebimento e todo pagamento à fábrica lançado por um
+   usuário que NÃO é master nasce "pendente". O master confirma
+   (concilia) ou devolve (rejeita) com o motivo.
+   Só o que está conciliado entra nos saldos.
+   ============================================================ */
+
+
+/* ---------- regra central ----------
+   Registro sem o campo "conc" é histórico (anterior ao controle) e conta como
+   conciliado, para não quebrar dados já existentes.                     */
+const concOk = reg => !reg || reg.conc === undefined || reg.conc === 'conciliado';
+const estaPendente = reg => !!(reg && reg.conc === 'pendente');
+const estaRejeitado = reg => !!(reg && reg.conc === 'rejeitado');
+
+/* ---------- selo do lançamento ---------- */
+function seloConc(reg){
+  if(!reg) return '';
+  if(reg.conc === 'pendente')  return ' <span class="tag t-parcial" title="Aguardando conciliação do master">conciliar</span>';
+  if(reg.conc === 'rejeitado') return ' <span class="tag t-vencido" title="Devolvido pelo master">rejeitado</span>';
+  return '';
+}
+
+const CONC_ROTULO = {
+  pendente:   {l:'Aguardando conciliação', t:'parcial'},
+  conciliado: {l:'Conciliado',             t:'quitado'},
+  rejeitado:  {l:'Rejeitado',              t:'vencido'}
+};
+const badgeConc = st => {
+  const c = CONC_ROTULO[st || 'conciliado'] || CONC_ROTULO.conciliado;
+  return `<span class="tag t-${c.t}">${c.l}</span>`;
+};
+
+/* ---------- coleta de itens ---------- */
+function itensConciliacao(){
+  const out = [];
+  (DB.recebimentos||[]).forEach(r=>{
+    const t = titulo(r.tituloId) || {};
+    const v = venda(t.vendaId) || {};
+    out.push({
+      tipo:'recebimento', id:r.id, data:r.data||'', valor:+r.valor||0, reg:r,
+      chassi:v.chassi||'', carro:v.veiculo||'', cliente:v.cliente||'',
+      desc:(t.tipoNome||'Recebimento') + (r.forma? ' · '+r.forma : ''),
+      quem:r.criadoPor || '—',
+      conc:r.conc || 'conciliado'
+    });
+  });
+  (DB.pagamentosFabrica||[]).forEach(p=>{
+    const v = DB.veiculos.find(x=>x.chassi===p.chassi) || {};
+    out.push({
+      tipo:'pagamento', id:p.id, data:p.data||'', valor:+p.valor||0, reg:p,
+      chassi:p.chassi||'', carro:v.veiculo||'', cliente:'',
+      desc:'Pagamento à fábrica' + (p.forma? ' · '+p.forma : ''),
+      quem:p.criadoPor || '—',
+      conc:p.conc || 'conciliado'
+    });
+  });
+  return out.sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+}
+const somarConc = arr => arr.reduce((s,x)=>s+x.valor, 0);
+
+/* ---------- tela ---------- */
+function renderConciliacao(){
+  if(!document.getElementById('conc-tabela')) return;
+  const todos = itensConciliacao();
+  const pend = todos.filter(x=>x.conc==='pendente');
+  const rej  = todos.filter(x=>x.conc==='rejeitado');
+  const mes  = hoje().slice(0,7);
+  const concMes = todos.filter(x=>x.conc==='conciliado' && String(x.reg.concEm||'').slice(0,7)===mes);
+
+  const kpi = document.getElementById('conc-kpis');
+  if(kpi) kpi.innerHTML = `
+    <div class="kpi"><div class="l">Aguardando conciliação</div><div class="v amb">${brl0(somarConc(pend))}</div>
+      <div class="s">${pend.length} movimento(s) · ${pend.filter(x=>x.tipo==='recebimento').length} receb. · ${pend.filter(x=>x.tipo==='pagamento').length} pag.</div></div>
+    <div class="kpi"><div class="l">Conciliado no mês</div><div class="v pos">${brl0(somarConc(concMes))}</div>
+      <div class="s">${concMes.length} movimento(s) confirmado(s)</div></div>
+    <div class="kpi"><div class="l">Rejeitados</div><div class="v ${rej.length?'neg':''}">${rej.length}</div>
+      <div class="s">${brl0(somarConc(rej))} devolvido(s) ao financeiro</div></div>
+    <div class="kpi"><div class="l">Total de movimentos</div><div class="v">${todos.length}</div>
+      <div class="s">${todos.filter(x=>x.conc==='conciliado').length} conciliado(s)</div></div>`;
+
+  const st = (val('f-conc-status') || 'pendente');
+  const tp = (val('f-conc-tipo') || '');
+  let lista = todos;
+  if(st !== 'todos') lista = lista.filter(x=>x.conc===st);
+  if(tp) lista = lista.filter(x=>x.tipo===tp);
+
+  const podeConc = pode('conciliacao','edit');
+  const corpo = document.getElementById('conc-tabela');
+  if(!corpo) return;
+  if(!todos.length){
+    corpo.innerHTML = '<div class="empty">Nenhum recebimento ou pagamento lançado ainda.</div>';
+    return;
+  }
+  if(!lista.length){
+    corpo.innerHTML = '<div class="empty">Nenhum movimento com esse filtro.</div>';
+    return;
+  }
+
+  corpo.innerHTML = `
+    ${st==='pendente' && podeConc ? `<div class="bar">
+      <button class="b ok" onclick="conciliarSelecionados()">✅ Conciliar selecionados</button>
+      <button class="b sec" onclick="marcarTodosConc(true)">Marcar todos</button>
+      <button class="b sec" onclick="marcarTodosConc(false)">Limpar</button>
+      <span class="hint" style="margin:0">Total selecionado: <b id="conc-sel-total">R$ 0,00</b></span>
+    </div>`:''}
+    <table class="tbl"><thead><tr>
+      ${st==='pendente' && podeConc ? '<th style="width:34px"><input type="checkbox" onchange="marcarTodosConc(this.checked)" style="width:16px;height:16px"></th>' : ''}
+      <th>Data</th><th>Tipo</th><th>Veículo / cliente</th><th>Descrição</th>
+      <th class="num">Valor</th><th>Lançado por</th><th>Situação</th><th></th></tr></thead><tbody>
+    ${lista.map(x=>`
+      <tr>
+        ${st==='pendente' && podeConc ? `<td><input type="checkbox" class="conc-chk" data-tipo="${x.tipo}" data-id="${x.id}"
+          data-valor="${x.valor}" onchange="somaSelecionadosConc()" style="width:16px;height:16px"></td>`:''}
+        <td>${fmt(x.data)}</td>
+        <td>${x.tipo==='recebimento'
+            ? '<span class="tag t-aberto">Recebimento</span>'
+            : '<span class="tag t-div">Pagamento</span>'}</td>
+        <td>${esc(x.chassi||'—')}<div class="hint" style="margin:0">${esc(x.cliente || x.carro)}</div></td>
+        <td>${esc(x.desc)}${x.conc==='rejeitado' && x.reg.concObs? `<div class="hint neg" style="margin:0">Devolvido: ${esc(x.reg.concObs)}</div>`:''}</td>
+        <td class="num"><b>${brl(x.valor)}</b></td>
+        <td>${esc(x.quem)}</td>
+        <td>${badgeConc(x.conc)}${x.reg.concEm? `<div class="hint" style="margin:0">${new Date(x.reg.concEm).toLocaleDateString('pt-BR')} · ${esc(x.reg.concPor||'')}</div>`:''}</td>
+        <td>${podeConc? `
+          ${x.conc!=='conciliado'? `<button class="b sm ok" onclick="conciliarItem('${x.tipo}','${x.id}')" title="Conciliar">✅</button>`:''}
+          ${x.conc!=='conciliado'? `<button class="b sm dang" onclick="formRejeitar('${x.tipo}','${x.id}')" title="Devolver ao financeiro">✖</button>`:''}
+          ${x.conc==='conciliado'? `<button class="b sm sec" onclick="reabrirConc('${x.tipo}','${x.id}')" title="Reabrir conciliação">↩</button>`:''}
+        `:''}</td>
+      </tr>`).join('')}
+    </tbody></table>
+    <div class="hint">${lista.length} movimento(s) · ${brl(somarConc(lista))}</div>`;
+
+  const hist = document.getElementById('conc-historico');
+  if(hist){
+    const h = (DB.concLog||[]).slice(0, 40);
+    hist.innerHTML = h.length ? `<table class="tbl"><thead><tr>
+        <th>Quando</th><th>Quem</th><th>Ação</th><th>Movimento</th><th class="num">Valor</th><th>Observação</th></tr></thead><tbody>
+      ${h.map(x=>`<tr><td>${new Date(x.ts).toLocaleString('pt-BR')}</td><td>${esc(x.por)}</td>
+        <td>${x.acao==='conciliado'? '<span class="tag t-quitado">Conciliou</span>':'<span class="tag t-vencido">Rejeitou</span>'}</td>
+        <td>${esc(x.tipo==='recebimento'?'Recebimento':'Pagamento')} · ${esc(x.chassi||'')}</td>
+        <td class="num">${brl(x.valor)}</td><td>${esc(x.obs||'—')}</td></tr>`).join('')}
+      </tbody></table><div class="hint">Últimos ${h.length} registros de conciliação.</div>`
+      : '<div class="empty">Nenhuma conciliação registrada.</div>';
+  }
+}
+
+function somaSelecionadosConc(){
+  const el = document.getElementById('conc-sel-total'); if(!el) return;
+  let t = 0;
+  document.querySelectorAll('.conc-chk:checked').forEach(c=>{ t += +(c.dataset.valor||0); });
+  el.textContent = brl(t);
+}
+function marcarTodosConc(ok){
+  document.querySelectorAll('.conc-chk').forEach(c=>{ c.checked = ok; });
+  somaSelecionadosConc();
+}
+function conciliarSelecionados(){
+  if(!precisaPermissao('conciliacao','edit')) return;
+  const chks = [...document.querySelectorAll('.conc-chk:checked')];
+  if(!chks.length) return alert('Selecione ao menos um movimento.');
+  let n = 0, total = 0;
+  chks.forEach(c=>{
+    if(aplicarConciliacao(c.dataset.tipo, c.dataset.id, 'conciliado')){
+      n++; total += +(c.dataset.valor||0);
+    }
+  });
+  save(); renderAll();
+  alert(`${n} movimento(s) conciliado(s) · ${brl(total)} confirmado(s).`);
+}
+
+/* ---------- ações ---------- */
+function acharRegistroConc(tipo, id){
+  return tipo === 'recebimento'
+    ? (DB.recebimentos||[]).find(r=>r.id===id)
+    : (DB.pagamentosFabrica||[]).find(p=>p.id===id);
+}
+function aplicarConciliacao(tipo, id, status, obs){
+  const reg = acharRegistroConc(tipo, id);
+  if(!reg) return false;
+  const u = usuarioAtual() || {};
+  reg.conc = status;
+  reg.concPor = u.nome || '';
+  reg.concEm = new Date().toISOString();
+  reg.concObs = obs || '';
+  DB.concLog = DB.concLog || [];
+  DB.concLog.unshift({id:uid(), ts:reg.concEm, tipo, refId:id, chassi: chassiDoRegistro(tipo, reg),
+    valor:+reg.valor||0, acao:status, por:u.nome||'', obs:obs||''});
+  if(DB.concLog.length > 400) DB.concLog.length = 400;
+  if(tipo === 'pagamento') recalcPagFab(reg.chassi);
+  logAcao(status === 'conciliado' ? 'Conciliou movimento' : 'Rejeitou movimento', tipo,
+    chassiDoRegistro(tipo, reg) + ' · ' + brl(reg.valor) + (obs? ' · '+obs : ''));
+  return true;
+}
+function chassiDoRegistro(tipo, reg){
+  if(tipo === 'pagamento') return reg.chassi || '';
+  const t = titulo(reg.tituloId) || {};
+  const v = venda(t.vendaId) || {};
+  return v.chassi || '';
+}
+function conciliarItem(tipo, id){
+  if(!precisaPermissao('conciliacao','edit')) return;
+  if(!aplicarConciliacao(tipo, id, 'conciliado')) return;
+  save(); renderAll();
+  alert('Movimento conciliado.');
+}
+function reabrirConc(tipo, id){
+  if(!precisaPermissao('conciliacao','edit')) return;
+  if(!confirm('Reabrir a conciliação deste movimento? Ele volta para "aguardando conciliação" e sai dos saldos até ser confirmado de novo.')) return;
+  if(!aplicarConciliacao(tipo, id, 'pendente', 'Concilição reaberta')) return;
+  save(); renderAll();
+}
+function formRejeitar(tipo, id){
+  if(!precisaPermissao('conciliacao','edit')) return;
+  const reg = acharRegistroConc(tipo, id); if(!reg) return;
+  modal('Devolver ao financeiro', `
+    <p class="hint" style="margin:0 0 12px">Movimento de <b>${brl(reg.valor)}</b> em ${fmt(reg.data)}.
+    Ao rejeitar, ele sai dos saldos e volta para o financeiro corrigir.</p>
+    <div class="fld"><label>Motivo da devolução *</label>
+      <textarea id="m-motivo" rows="3" placeholder="ex.: comprovante não confere com o valor, data errada, título trocado…"></textarea></div>`,
+  ()=>{
+    const motivo = (val('m-motivo')||'').trim();
+    if(!motivo) return alert('Informe o motivo da devolução.');
+    if(!aplicarConciliacao(tipo, id, 'rejeitado', motivo)) return;
+    save(); fechar(); renderAll();
+  });
+}
+
+/* ---------- relatório ---------- */
+function relConciliacoes(){
+  const ini = val('rep-ini'), fim = val('rep-fim');
+  const todos = itensConciliacao().filter(x=>noPeriodo(x.data, ini, fim));
+  const pend = todos.filter(x=>x.conc==='pendente');
+  const conc = todos.filter(x=>x.conc==='conciliado');
+  const rej  = todos.filter(x=>x.conc==='rejeitado');
+  repHeader('Conciliações', `Movimentos de ${fmt(ini)} a ${fmt(fim)}`);
+  const linhas = [['Data','Tipo','Chassi','Cliente/Carro','Descrição','Valor','Lançado por','Situação','Conciliado por','Conciliado em','Observação']];
+  todos.forEach(x=>linhas.push([x.data, x.tipo==='recebimento'?'Recebimento':'Pagamento', x.chassi,
+    x.cliente||x.carro, x.desc, x.valor.toFixed(2), x.quem, (CONC_ROTULO[x.conc]||{}).l||x.conc,
+    x.reg.concPor||'', (x.reg.concEm||'').slice(0,10), x.reg.concObs||'']));
+  REP_CSV = {nome:'conciliacoes', linhas};
+  document.getElementById('rep-body').innerHTML = `
+    <div class="cards">
+      <div class="kpi"><div class="l">Aguardando</div><div class="v amb">${brl0(somarConc(pend))}</div><div class="s">${pend.length} movimento(s)</div></div>
+      <div class="kpi"><div class="l">Conciliado</div><div class="v pos">${brl0(somarConc(conc))}</div><div class="s">${conc.length} movimento(s)</div></div>
+      <div class="kpi"><div class="l">Rejeitado</div><div class="v neg">${brl0(somarConc(rej))}</div><div class="s">${rej.length} movimento(s)</div></div>
+    </div>
+    <table class="tbl"><thead><tr><th>Data</th><th>Tipo</th><th>Veículo</th><th>Descrição</th>
+      <th class="num">Valor</th><th>Lançado por</th><th>Situação</th><th>Conciliado por</th></tr></thead><tbody>
+    ${todos.map(x=>`<tr>
+      <td>${fmt(x.data)}</td>
+      <td>${x.tipo==='recebimento'?'Recebimento':'Pagamento'}</td>
+      <td>${esc(x.chassi||'—')}<div class="hint" style="margin:0">${esc(x.cliente||x.carro)}</div></td>
+      <td>${esc(x.desc)}</td>
+      <td class="num"><b>${brl(x.valor)}</b></td>
+      <td>${esc(x.quem)}</td>
+      <td>${badgeConc(x.conc)}</td>
+      <td>${esc(x.reg.concPor||'—')}</td></tr>`).join('')}
+    </tbody></table>
+    ${todos.length? '' : '<div class="empty">Nenhum movimento no período.</div>'}`;
+}
+
+/* contador de pendências no menu */
+function atualizarBadgeConc(){
+  const btn = document.querySelector('nav button[data-v="conciliacao"]');
+  if(!btn) return;
+  const pend = itensConciliacao().filter(x=>x.conc==='pendente').length;
+  btn.innerHTML = '✅ Conciliação' + (pend
+    ? ` <span style="background:var(--warn);color:#1a1206;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800">${pend}</span>`
+    : '');
+}
+
+/* ============================================================
+   ICAVEL · CONTAS A RECEBER DE VEÍCULOS
+   ============================================================ */
+const KEY = 'icavel_contas_receber';
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const brl = v => (Math.abs(+v||0) < 0.005 ? 0 : +v).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+const brl0 = v => Math.round(+v||0).toLocaleString('pt-BR', {style:'currency', currency:'BRL', maximumFractionDigits:0});
+const fmt = d => d ? String(d).split('-').reverse().join('/') : '—';
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const hoje = () => new Date().toISOString().slice(0,10);
+const num = v => { const n = parseFloat(String(v||'').replace(/\./g,'').replace(',','.')); return isFinite(n) ? n : 0; };
+function diasAte(d){ if(!d) return null; return Math.round((new Date(d+'T12:00') - new Date(hoje()+'T12:00'))/86400000); }
+function atraso(t){ const d = diasAte(t.vencimento); const s = saldoTitulo(t); return (s > 0.005 && d !== null && d < 0) ? -d : 0; }
+function pct(a,b){ return b>0 ? Math.min(100, Math.max(0, a/b*100)) : 0; }
+
+/* ================= BANCO LOCAL ================= */
+let DB = {vendas:[], titulos:[], recebimentos:[], veiculos:[], tipos:[], pagadores:[], clientes:[], vendedores:[], usuarios:[], log:[], pagamentosFabrica:[], juros:{}};
+
+const SEED_TIPOS = [
+  {id:'t-entrada',   nome:'Entrada / Sinal',            categoria:'Entrada',        cor:'#22c55e'},
+  {id:'t-vista',     nome:'À vista / Recursos próprios',categoria:'Entrada',        cor:'#16a34a'},
+  {id:'t-troca',     nome:'Troca (veículo usado)',      categoria:'Entrada',        cor:'#0ea5e9'},
+  {id:'t-fin',       nome:'Financiamento bancário',     categoria:'Financiamento',  cor:'#3b82f6'},
+  {id:'t-fidc',      nome:'Financiamento FIDC / Fábrica',categoria:'Financiamento', cor:'#6366f1'},
+  {id:'t-consorcio', nome:'Consórcio',                  categoria:'Financiamento',  cor:'#8b5cf6'},
+  {id:'t-leasing',   nome:'Leasing',                    categoria:'Financiamento',  cor:'#a78bfa'},
+  {id:'t-cartao',    nome:'Cartão de crédito',          categoria:'Outros',         cor:'#ec4899'},
+  {id:'t-cheque',    nome:'Cheque',                     categoria:'Outros',         cor:'#f97316'},
+  {id:'t-bon-fab',   nome:'Bônus Fábrica',              categoria:'Bonificação',    cor:'#eab308'},
+  {id:'t-bon-meta',  nome:'Bônus Meta',                 categoria:'Bonificação',    cor:'#f59e0b'},
+  {id:'t-bon-local', nome:'Bônus Local / KPI',          categoria:'Bonificação',    cor:'#fbbf24'},
+  {id:'t-fi',        nome:'F&I / Seguro / Garantia',    categoria:'Serviços',       cor:'#14b8a6'},
+  {id:'t-doc',       nome:'Documentação / Emplacamento',categoria:'Serviços',       cor:'#06b6d4'},
+  {id:'t-outro',     nome:'Outro',                      categoria:'Outros',         cor:'#64748b'}
+];
+const SEED_PAGADORES = [
+  'Cliente','Banco Fiat / Stellantis FIDC','GM Financial','Banco Votorantim','Santander Financiamentos',
+  'Itaú Financiamentos','Bradesco Financiamentos','BV Financeira','Banco Pan','Fábrica Fiat','Fábrica Chevrolet'
+].map((nome,i)=>({id:'p-'+(i+1), nome, tipo: i===0?'Cliente':(i>=9?'Fábrica':'Financeira')}));
+
+function normalize(){
+  ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k]=[]; });
+  if(!DB.tipos.length) DB.tipos = SEED_TIPOS.map(x=>({...x}));
+  if(!DB.pagadores.length) DB.pagadores = SEED_PAGADORES.map(x=>({...x}));
+  DB.titulos.forEach(t=>{
+    t.valor = +t.valor || 0;
+    if(!t.tipoNome) t.tipoNome = (DB.tipos.find(x=>x.id===t.tipoId)||{}).nome || 'Outro';
+    if(!t.vencimento) t.vencimento = t.emissao || hoje();
+  });
+  DB.recebimentos.forEach(r=>{ r.valor = +r.valor || 0; });
+  DB.veiculos = DB.veiculos || [];
+  DB.pagamentosFabrica.forEach(p=>{ p.valor = +p.valor || 0; });
+  DB.vendas.forEach(v=>{ v.valorVenda = +v.valorVenda || 0; });
+}
+function carregar(){
+  normalize();
+}
+/* save(): grava no navegador (rascunho) e envia a diferença para a nuvem */
+const save = () => {
+  try{ localStorage.setItem(KEY, JSON.stringify(DB)); }catch(e){}
+  if(typeof enviarMudancas === 'function' && typeof CLOUD !== 'undefined' && CLOUD.pronto) enviarMudancas();
+};
+
+/* ================= CÁLCULOS ================= */
+const venda = id => DB.vendas.find(v=>v.id===id);
+const titulo = id => DB.titulos.find(t=>t.id===id);
+const tipo = id => DB.tipos.find(t=>t.id===id);
+const titulosDaVenda = vid => DB.titulos.filter(t=>t.vendaId===vid);
+const recebidoTitulo = tid => DB.recebimentos.filter(r=>r.tituloId===tid && concOk(r)).reduce((s,r)=>s+r.valor,0);
+const baixasDoTitulo = tid => DB.recebimentos.filter(r=>r.tituloId===tid).sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+const saldoTitulo = t => Math.max(0, (+t.valor||0) - recebidoTitulo(t.id));
+const somaTitulos = vid => titulosDaVenda(vid).reduce((s,t)=>s+(+t.valor||0),0);
+const recebidoVenda = vid => titulosDaVenda(vid).reduce((s,t)=>s+recebidoTitulo(t.id),0);
+const saldoVenda = vid => Math.max(0, somaTitulos(vid) - recebidoVenda(vid));
+const vencidoTitulo = t => saldoTitulo(t) > 0.005 && t.vencimento && diasAte(t.vencimento) < 0;
+
+function statusTitulo(t){
+  const s = saldoTitulo(t), r = recebidoTitulo(t.id);
+  if(s <= 0.005) return {k:'recebido', l:'Recebido'};
+  if(vencidoTitulo(t)) return {k:'vencido', l:'Vencido'};
+  if(r > 0.005) return {k:'parcial', l:'Parcial'};
+  return {k:'aberto', l:'Em aberto'};
+}
+function statusVenda(v){
+  if(!v) return {k:'aberto', l:'—'};
+  const ts = titulosDaVenda(v.id);
+  const total = ts.reduce((s,t)=>s+(+t.valor||0),0);
+  if(!ts.length || total <= 0.005) return {k:'sem-plano', l:'Sem plano'};
+  const saldo = Math.max(0, total - recebidoVenda(v.id));
+  const rec = recebidoVenda(v.id);
+  if(saldo <= 0.005) return {k:'quitado', l:'Quitado'};
+  if(rec > 0.005) return {k:'parcial', l:'Parcialmente quitado'};
+  return {k:'aberto', l:'Em aberto'};
+}
+const divergente = v => { const ts = titulosDaVenda(v.id); if(!ts.length) return false;
+  return Math.abs(ts.reduce((s,t)=>s+(+t.valor||0),0) - (+v.valorVenda||0)) > 0.5; };
+const badge = (k,l) => `<span class="tag t-${k}">${l}</span>`;
+
+/* ================= NAVEGAÇÃO / MODAL ================= */
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); document.getElementById('v-'+b.dataset.v).classList.add('on');
+  renderAll();
+});
+document.querySelectorAll('.ctabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.ctabs button').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.ctab').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); document.getElementById('c-'+b.dataset.c).classList.add('on');
+});
+const val = id => { const e = document.getElementById(id); return e ? e.value : ''; };
+const setv = (id,v) => { const e = document.getElementById(id); if(e) e.value = v==null?'':v; };
+function fechar(){ document.getElementById('mbox').classList.remove('on'); document.getElementById('mbox-body').innerHTML=''; }
+function modal(tituloTxt, corpo, onSave, wide){
+  document.getElementById('mbox-in').className = 'modal' + (wide?' wide':'');
+  document.getElementById('mbox-body').innerHTML = `<h2>${tituloTxt}</h2>${corpo}
+    <div class="mfoot">${onSave?`<button class="b sec" onclick="fechar()">Cancelar</button><button class="b" id="m-ok">Salvar</button>`:`<button class="b sec" onclick="fechar()">Fechar</button>`}</div>`;
+  document.getElementById('mbox').classList.add('on');
+  if(onSave) document.getElementById('m-ok').onclick = onSave;
+}
+document.getElementById('mbox').addEventListener('click', e => { if(e.target.id === 'mbox') fechar(); });
+document.addEventListener('keydown', e => { if(e.key === 'Escape') fechar(); });
+
+/* ================= DASHBOARD ================= */
+function renderDash(){
+  const todos = DB.titulos;
+  const aberto = todos.reduce((s,t)=>s+saldoTitulo(t), 0);
+  const vencido = todos.filter(vencidoTitulo).reduce((s,t)=>s+saldoTitulo(t), 0);
+  const em30 = todos.filter(t=>{ const d = diasAte(t.vencimento); return saldoTitulo(t)>0.005 && d!==null && d>=0 && d<=30; }).reduce((s,t)=>s+saldoTitulo(t),0);
+  const totalEmitido = todos.reduce((s,t)=>s+(+t.valor||0),0);
+  const totalRecebido = DB.recebimentos.reduce((s,r)=>s+(+r.valor||0),0);
+  const mes = hoje().slice(0,7);
+  const recMes = DB.recebimentos.filter(r=>(r.data||'').slice(0,7)===mes).reduce((s,r)=>s+(+r.valor||0),0);
+  const vencidosCount = todos.filter(vencidoTitulo).length;
+  const carros = DB.vendas.length;
+  const quitados = DB.vendas.filter(v=>statusVenda(v).k==='quitado').length;
+  const parciais = DB.vendas.filter(v=>statusVenda(v).k==='parcial').length;
+  const abertos = DB.vendas.filter(v=>statusVenda(v).k==='aberto').length;
+
+  const totCustoFab = DB.veiculos.reduce((s,v)=>s+custoFabrica(v),0);
+  const totPagoFab = DB.veiculos.reduce((s,v)=>s+pagoFabrica(v.chassi),0);
+  const saldoFab = Math.max(0, totCustoFab - totPagoFab);
+  const vencidoFab = DB.veiculos.filter(v=>atrasoFabrica(v)>0).reduce((s,v)=>s+saldoFabrica(v),0);
+
+  document.getElementById('dash-kpis').innerHTML = `
+    <div class="kpi"><div class="l">A receber (clientes)</div><div class="v inf">${brl0(aberto)}</div><div class="s">${todos.filter(t=>saldoTitulo(t)>0.005).length} título(s) em aberto</div></div>
+    <div class="kpi"><div class="l">Recebido vencido</div><div class="v neg">${brl0(vencido)}</div><div class="s">${vencidosCount} título(s) em atraso</div></div>
+    <div class="kpi"><div class="l">A pagar (fábrica)</div><div class="v amb">${brl0(saldoFab)}</div><div class="s">${DB.veiculos.filter(v=>saldoFabrica(v)>0.005).length} veículo(s) com saldo</div></div>
+    <div class="kpi"><div class="l">Pago vencido à fábrica</div><div class="v neg">${brl0(vencidoFab)}</div><div class="s">${DB.veiculos.filter(v=>atrasoFabrica(v)>0).length} veículo(s) em atraso</div></div>
+    <div class="kpi"><div class="l">Recebido no mês</div><div class="v pos">${brl0(recMes)}</div><div class="s">${new Date().toLocaleDateString('pt-BR',{month:'long', year:'numeric'})}</div></div>
+    <div class="kpi"><div class="l">Carros vendidos</div><div class="v">${carros}</div><div class="s"><span class="pos">${quitados} quit.</span> · <span class="amb">${parciais} parc.</span> · <span class="inf">${abertos} abertos</span></div></div>`;
+
+  // por tipo
+  const porTipo = {};
+  todos.forEach(t=>{
+    const k = t.tipoNome || 'Outro';
+    porTipo[k] = porTipo[k] || {valor:0, recebido:0, saldo:0, vencido:0, n:0};
+    porTipo[k].valor += +t.valor||0; porTipo[k].recebido += recebidoTitulo(t.id);
+    porTipo[k].saldo += saldoTitulo(t); porTipo[k].n++;
+    if(vencidoTitulo(t)) porTipo[k].vencido += saldoTitulo(t);
+  });
+  const arrTipo = Object.entries(porTipo).map(([nome,d])=>({nome,...d})).sort((a,b)=>b.saldo-a.saldo);
+  const maxTipo = Math.max(1, ...arrTipo.map(x=>x.saldo));
+  document.getElementById('ch-tipo').innerHTML = arrTipo.length
+    ? arrTipo.map(x=>{
+        const cor = (DB.tipos.find(t=>t.nome===x.nome)||{}).cor || '#3b82f6';
+        return `<div class="hbar"><div class="nm" title="${esc(x.nome)}">${esc(x.nome)}</div>
+          <div class="tr"><div class="fl" style="width:${pct(x.saldo,maxTipo)}%;background:${cor}"></div></div>
+          <div class="vl">${brl0(x.saldo)}</div></div>`;
+      }).join('')
+    : '<div class="empty" style="padding:18px">Sem títulos cadastrados.</div>';
+
+  // aging
+  const faixas = [
+    {l:'A vencer', f:t=>{const d=diasAte(t.vencimento); return saldoTitulo(t)>0.005 && d!==null && d>=0;}, c:'#22c55e'},
+    {l:'1–30 dias', f:t=>atraso(t)>=1 && atraso(t)<=30, c:'#eab308'},
+    {l:'31–60', f:t=>atraso(t)>=31 && atraso(t)<=60, c:'#f59e0b'},
+    {l:'61–90', f:t=>atraso(t)>=61 && atraso(t)<=90, c:'#f97316'},
+    {l:'> 90 dias', f:t=>atraso(t)>90, c:'#ef4444'}
+  ];
+  const aging = faixas.map(f=>({l:f.l, c:f.c, v: DB.titulos.filter(f.f).reduce((s,t)=>s+saldoTitulo(t),0), n: DB.titulos.filter(f.f).length}));
+  const maxAg = Math.max(1, ...aging.map(a=>a.v));
+  document.getElementById('ch-aging').innerHTML = aging.map(a=>`
+    <div class="hbar"><div class="nm">${a.l}</div>
+      <div class="tr"><div class="fl" style="width:${pct(a.v,maxAg)}%;background:${a.c}"></div></div>
+      <div class="vl">${brl0(a.v)}<br><span style="font-size:10px">${a.n} tít.</span></div></div>`).join('');
+
+  // mensal 6 meses
+  const meses = [];
+  const base = new Date(); base.setDate(1);
+  for(let i=5;i>=0;i--){ const d = new Date(base.getFullYear(), base.getMonth()-i, 1); meses.push(d.toISOString().slice(0,7)); }
+  const valores = meses.map(m=>DB.recebimentos.filter(r=>(r.data||'').slice(0,7)===m).reduce((s,r)=>s+(+r.valor||0),0));
+  const maxM = Math.max(1, ...valores);
+  document.getElementById('ch-mensal').innerHTML = `<div class="vbars">${meses.map((m,i)=>`
+    <div class="col"><div class="vl">${valores[i]?brl0(valores[i]):''}</div>
+    <div class="b2" style="height:${valores[i]?Math.max(3,pct(valores[i],maxM)*100):0}%"></div>
+    <div class="lb">${new Date(m+'-02').toLocaleDateString('pt-BR',{month:'short'}).replace('.','')}</div></div>`).join('')}</div>`;
+
+  // próximos 7 dias
+  const prox = DB.titulos.filter(t=>{ const d = diasAte(t.vencimento); return saldoTitulo(t)>0.005 && d!==null && d>=0 && d<=7; })
+    .sort((a,b)=>(a.vencimento||'').localeCompare(b.vencimento||''));
+  document.getElementById('lista-prox').innerHTML = prox.length
+    ? prox.slice(0,8).map(t=>{ const v = venda(t.vendaId)||{}; const ta = atraso(t);
+      return `<div class="list-line"><div><b>${fmt(t.vencimento)}</b> · ${esc(t.tipoNome)}
+        <div class="hint" style="margin:0">${esc(v.chassi||'')} ${esc(v.cliente||'')}</div></div>
+        <div style="text-align:right"><b class="${ta?'neg':''}">${brl(saldoTitulo(t))}</b>
+        <div class="hint" style="margin:0">${ta?ta+'d atraso':(diasAte(t.vencimento)===0?'hoje':'em '+diasAte(t.vencimento)+'d')}</div></div></div>`;
+      }).join('')
+    : '<div class="empty" style="padding:18px">Nenhum vencimento nos próximos 7 dias.</div>';
+
+  // situação dos carros
+  const st = [
+    {k:'quitado', l:'Quitados', n:quitados, c:'#22c55e'},
+    {k:'parcial', l:'Parcialmente quitados', n:parciais, c:'#f59e0b'},
+    {k:'aberto', l:'Em aberto', n:abertos, c:'#3b82f6'},
+    {k:'sem-plano', l:'Sem plano de recebimento', n:DB.vendas.length-quitados-parciais-abertos, c:'#64748b'}
+  ];
+  document.getElementById('dash-situacao').innerHTML = st.map(s=>`
+    <div class="hbar"><div class="nm">${s.l}</div>
+      <div class="tr"><div class="fl" style="width:${pct(s.n,Math.max(1,carros))}%;background:${s.c}"></div></div>
+      <div class="vl">${s.n} carro(s)</div></div>`).join('') +
+    `<div class="hint">Saldo dos carros parcialmente quitados: <b>${brl0(DB.vendas.filter(v=>statusVenda(v).k==='parcial').reduce((s,v)=>s+saldoVenda(v.id),0))}</b></div>`;
+
+  // posição pagar x receber por veículo
+  const pos = DB.vendas.map(v=>{
+    const veic = DB.veiculos.find(x=>x.chassi===v.chassi) || {};
+    return {chassi:v.chassi, carro:v.veiculo||veic.veiculo||'', cliente:v.cliente||'',
+      receb: recebidoVenda(v.id), aReceber: saldoVenda(v.id),
+      pago: pagoFabrica(v.chassi), aPagar: saldoFabrica(veic),
+      custo: custoFabrica(veic)};
+  }).sort((a,b)=>b.aReceber-a.aReceber).slice(0,8);
+  const cpv = document.getElementById('dash-posicao');
+  if(cpv) cpv.innerHTML = pos.length ? `<table class="tbl" style="font-size:12.5px"><thead><tr>
+      <th>Carro</th><th class="num">Custo</th><th class="num">Pago</th><th class="num">A pagar</th>
+      <th class="num">Recebido</th><th class="num">A receber</th></tr></thead><tbody>
+      ${pos.map(p=>`<tr><td>${esc(p.chassi||'—')}<div class="hint" style="margin:0">${esc(p.carro)}</div></td>
+        <td class="num">${brl0(p.custo)}</td><td class="num pos">${brl0(p.pago)}</td>
+        <td class="num ${p.aPagar>0.005?'amb':'pos'}">${brl0(p.aPagar)}</td>
+        <td class="num pos">${brl0(p.receb)}</td>
+        <td class="num ${p.aReceber>0.005?'amb':'pos'}"><b>${brl0(p.aReceber)}</b></td></tr>`).join('')}
+      </tbody></table>` : '<div class="empty" style="padding:18px">Nenhum veículo vendido.</div>';
+
+  // devedores
+  const porCliente = {};
+  DB.vendas.forEach(v=>{ const s = saldoVenda(v.id); if(s>0.005){ const k = v.cliente || 'Sem cliente';
+    porCliente[k] = (porCliente[k]||0) + s; } });
+  const dev = Object.entries(porCliente).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  document.getElementById('lista-devedores').innerHTML = dev.length
+    ? dev.map(([n,s])=>`<div class="list-line"><div>${esc(n)}</div><div><b>${brl(s)}</b></div></div>`).join('')
+    : '<div class="empty" style="padding:18px">Nenhum saldo em aberto.</div>';
+}
+
+/* ================= VENDAS ================= */
+function renderVendas(){
+  const busca = (val('f-busca-v')||'').toLowerCase();
+  const st = val('f-status-v'), tp = val('f-tipo-v');
+  const selTipo = document.getElementById('f-tipo-v');
+  if(selTipo && selTipo.options.length <= 1) selTipo.innerHTML = '<option value="">Todos os tipos</option>' + DB.tipos.map(t=>`<option value="${esc(t.nome)}">${esc(t.nome)}</option>`).join('');
+
+  let lista = DB.vendas.slice().sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+  if(busca) lista = lista.filter(v=>[v.chassi,v.veiculo,v.cliente,v.vendedor].join(' ').toLowerCase().includes(busca));
+  if(st === 'div') lista = lista.filter(divergente);
+  else if(st) lista = lista.filter(v=>statusVenda(v).k===st);
+  if(tp) lista = lista.filter(v=>titulosDaVenda(v.id).some(t=>t.tipoNome===tp));
+
+  const el = document.getElementById('tbl-vendas');
+  if(!DB.vendas.length){ el.innerHTML = '<div class="empty">Nenhum carro vendido registrado. Comece em “＋ Nova venda”.</div>'; return; }
+  if(!lista.length){ el.innerHTML = '<div class="empty">Nenhuma venda encontrada com esses filtros.</div>'; return; }
+
+  el.innerHTML = `<table class="tbl"><thead><tr>
+    <th>Chassi</th><th>Carro</th><th>Venda</th><th>Cliente</th><th>Vendedor</th>
+    <th class="num">Valor da venda</th><th class="num">Títulos</th><th class="num">Recebido</th><th class="num">Saldo</th>
+    <th>Situação</th><th>Progresso</th><th></th></tr></thead><tbody>
+    ${lista.map(v=>{
+      const s = statusVenda(v), total = somaTitulos(v.id), rec = recebidoVenda(v.id), saldo = saldoVenda(v.id);
+      const p = pct(rec, total || v.valorVenda);
+      const atrasada = titulosDaVenda(v.id).some(vencidoTitulo);
+      return `<tr>
+        <td><b style="cursor:pointer" onclick="dossie('${v.id}')">${esc(v.chassi||'—')}</b></td>
+        <td>${esc(v.veiculo||'—')}</td>
+        <td>${fmt(v.data)}</td>
+        <td>${esc(v.cliente||'—')}</td>
+        <td>${esc(v.vendedor||'—')}</td>
+        <td class="num">${brl(v.valorVenda)}${divergente(v)?' <span class="flag">títulos ≠ venda</span>':''}</td>
+        <td class="num">${brl(total)}<div class="hint" style="margin:0">${titulosDaVenda(v.id).length} título(s)</div></td>
+        <td class="num pos">${brl(rec)}</td>
+        <td class="num ${saldo>0.005?'amb':'pos'}"><b>${brl(saldo)}</b>${atrasada?' <span class="tag t-vencido">atraso</span>':''}</td>
+        <td>${badge(s.k==='sem-plano'?'div':s.k, s.l)}</td>
+        <td><div class="prog"><i class="${p<99.9?'p':''}" style="width:${p}%"></i></div><div class="hint" style="margin:0">${p.toFixed(0)}%</div></td>
+        <td>
+          <button class="b sm sec" onclick="dossie('${v.id}')" title="Dossiê da venda">📄</button>
+          ${pode('titulos','edit')?`<button class="b sm ok" onclick="formBaixa(null,'${v.id}')" title="Registrar recebimento">💵</button>`:''}
+          ${pode('vendas','edit')?`<button class="b sm sec" onclick="formVenda('${v.id}')" title="Editar">✏️</button>`:''}
+          ${pode('vendas','del')?`<button class="b sm dang" onclick="excluirVenda('${v.id}')" title="Excluir">🗑</button>`:''}
+        </td></tr>`;
+    }).join('')}</tbody></table>
+    <div class="hint">${lista.length} venda(s) · valor ${brl(lista.reduce((s,v)=>s+(+v.valorVenda||0),0))} · recebido ${brl(lista.reduce((s,v)=>s+recebidoVenda(v.id),0))} · saldo ${brl(lista.reduce((s,v)=>s+saldoVenda(v.id),0))}</div>`;
+}
+
+function formVenda(id){
+  if(!precisaPermissao('vendas', id?'edit':'edit')) return;
+  const v = id ? venda(id) || {} : {};
+  modal(id?'Editar venda':'Nova venda', `<div class="grid">
+    <div class="fld"><label>Chassi *</label><input id="m-chassi" value="${esc(v.chassi||'')}" placeholder="9BD..." style="text-transform:uppercase"></div>
+    <div class="fld"><label>Veículo</label><input id="m-veiculo" value="${esc(v.veiculo||'')}" placeholder="Fiat Argo Drive 1.3" list="dl-carros">
+      <datalist id="dl-carros">${[...new Set(DB.vendas.map(x=>x.veiculo).filter(Boolean))].map(x=>`<option value="${esc(x)}">`).join('')}</datalist></div>
+    <div class="fld"><label>Data da venda</label><input id="m-data" type="date" value="${v.data||hoje()}"></div>
+    <div class="fld"><label>Valor total da venda (R$)</label><input id="m-valor" type="number" step="0.01" value="${v.valorVenda||''}" placeholder="preço + bonificações"></div>
+    <div class="fld"><label>Cliente</label><input id="m-cliente" value="${esc(v.cliente||'')}" list="dl-clientes">
+      <datalist id="dl-clientes">${DB.clientes.map(c=>`<option value="${esc(c.nome)}">`).join('')}</datalist></div>
+    <div class="fld"><label>CPF/CNPJ</label><input id="m-doc" value="${esc(v.doc||'')}"></div>
+    <div class="fld"><label>Vendedor</label><input id="m-vendedor" value="${esc(v.vendedor||'')}" list="dl-vend">
+      <datalist id="dl-vend">${DB.vendedores.map(x=>`<option value="${esc(x.nome)}">`).join('')}</datalist></div>
+    <div class="fld"><label>Nota fiscal / pedido</label><input id="m-nf" value="${esc(v.nf||'')}"></div>
+    <div class="fld full"><label>Observações</label><textarea id="m-obs" rows="2">${esc(v.obs||'')}</textarea></div>
+  </div>`, ()=>{
+    const chassi = val('m-chassi').trim().toUpperCase();
+    if(!chassi) return alert('Informe o chassi.');
+    if(DB.vendas.some(x=>x.chassi===chassi && x.id!==id)) return alert('Já existe uma venda com este chassi.');
+    const d = {chassi, veiculo:val('m-veiculo').trim(), data:val('m-data'), valorVenda:+val('m-valor')||0,
+      cliente:val('m-cliente').trim(), doc:val('m-doc').trim(), vendedor:val('m-vendedor').trim(),
+      nf:val('m-nf').trim(), obs:val('m-obs').trim()};
+    if(id) Object.assign(venda(id), d);
+    else DB.vendas.push(Object.assign({id:uid()}, d));
+    save(); fechar(); renderAll();
+  });
+}
+
+function excluirVenda(id){
+  if(!precisaPermissao('vendas','del')) return;
+  const v = venda(id); if(!v) return;
+  const ts = titulosDaVenda(id), baixas = DB.recebimentos.filter(r=>ts.some(t=>t.id===r.tituloId));
+  if(!confirm(`Excluir a venda ${v.chassi}?\n\nIsso apaga ${ts.length} título(s) e ${baixas.length} recebimento(s) vinculados. Ação irreversível.`)) return;
+  DB.recebimentos = DB.recebimentos.filter(r=>!ts.some(t=>t.id===r.tituloId));
+  DB.titulos = DB.titulos.filter(t=>t.vendaId!==id);
+  DB.vendas = DB.vendas.filter(x=>x.id!==id);
+  save(); renderAll();
+}
+
+/* ================= DOSSIÊ DA VENDA ================= */
+function dossie(id){
+  const v = venda(id); if(!v) return;
+  const veicDossie = DB.veiculos.find(x=>x.chassi===v.chassi) || {};
+  const ts = titulosDaVenda(id).sort((a,b)=>(a.vencimento||'').localeCompare(b.vencimento||''));
+  const s = statusVenda(v), total = somaTitulos(id), rec = recebidoVenda(id), saldo = saldoVenda(id);
+  const p = pct(rec, total || v.valorVenda);
+  const porTipo = {};
+  ts.forEach(t=>{ porTipo[t.tipoNome] = (porTipo[t.tipoNome]||0) + (+t.valor||0); });
+  const corpo = `
+    <div class="cards" style="margin-bottom:14px">
+      <div class="kpi"><div class="l">Valor da venda</div><div class="v" style="font-size:17px">${brl(v.valorVenda)}</div><div class="s">${divergente(v)?'<span class="amb">difere dos títulos</span>':'igual aos títulos'}</div></div>
+      <div class="kpi"><div class="l">Recebido do cliente</div><div class="v pos" style="font-size:17px">${brl(rec)}</div><div class="s">${p.toFixed(1)}% · saldo ${brl(saldo)}</div></div>
+      <div class="kpi"><div class="l">Custo fábrica</div><div class="v" style="font-size:17px">${brl(custoFabrica(veicDossie))}</div><div class="s">pé NF ${brl(veicDossie.peNF)} + juros ${brl(jurosFabrica(veicDossie))}</div></div>
+      <div class="kpi"><div class="l">Pago à fábrica</div><div class="v ${saldoFabrica(veicDossie)>0.005?'amb':'pos'}" style="font-size:17px">${brl(pagoFabrica(v.chassi))}</div><div class="s">saldo ${brl(saldoFabrica(veicDossie))} · ${badgePag(statusPagamento(veicDossie))}</div></div>
+    </div>
+    <div class="prog" style="height:9px;margin-bottom:16px"><i class="${p<99.9?'p':''}" style="width:${p}%"></i></div>
+    <p class="hint" style="margin:0 0 12px">
+      <b>${esc(v.chassi||'—')}</b> · ${esc(v.veiculo||'—')} · venda ${fmt(v.data)} · ${esc(v.cliente||'—')}${v.doc?' ('+esc(v.doc)+')':''} · vendedor ${esc(v.vendedor||'—')}${v.nf?' · NF/pedido '+esc(v.nf):''}
+      ${v.obs?'<br>Obs.: '+esc(v.obs):''}
+    </p>
+    <div class="ctabs" style="margin-bottom:10px"><button class="on" style="pointer-events:none">Composição: ${ts.length} título(s) · ${Object.entries(porTipo).map(([k,x])=>esc(k)+' '+brl0(x)).join(' · ')||'—'}</button></div>
+    ${ts.length?`<table class="tbl"><thead><tr><th>Tipo de recebimento</th><th>Pagador</th><th>Emissão</th><th>Vencimento</th><th class="num">Valor</th><th class="num">Recebido</th><th class="num">Saldo</th><th>Situação</th><th></th></tr></thead><tbody>
+      ${ts.map(t=>{ const st = statusTitulo(t), at = atraso(t);
+        return `<tr>
+          <td><b>${esc(t.tipoNome)}</b>${t.documento?'<div class="hint" style="margin:0">'+esc(t.documento)+'</div>':''}</td>
+          <td>${esc(t.pagador||'—')}</td>
+          <td>${fmt(t.emissao)}</td>
+          <td>${fmt(t.vencimento)}${at?'<div class="hint neg" style="margin:0">'+at+'d de atraso</div>':''}</td>
+          <td class="num">${brl(t.valor)}</td>
+          <td class="num pos">${brl(recebidoTitulo(t.id))}</td>
+          <td class="num"><b>${brl(saldoTitulo(t))}</b></td>
+          <td>${badge(st.k, st.l)}</td>
+          <td>
+            ${saldoTitulo(t)>0.005 && pode('titulos','edit')?`<button class="b sm ok" onclick="formBaixa('${t.id}')" title="Registrar baixa">💵</button>`:''}
+            ${DB.recebimentos.some(r=>r.tituloId===t.id)?`<button class="b sm sec" onclick="gerirBaixas('${t.id}')" title="Baixas">📄 ${DB.recebimentos.filter(r=>r.tituloId===t.id).length}</button>`:''}
+            ${pode('titulos','edit')?`<button class="b sm sec" onclick="formTitulo('${t.id}','${id}')" title="Editar">✏️</button>`:''}
+            ${pode('titulos','del')?`<button class="b sm dang" onclick="excluirTitulo('${t.id}')" title="Excluir">🗑</button>`:''}
+          </td></tr>`;}).join('')}
+      </tbody></table>`
+      : '<div class="empty">Nenhum título nesta venda. Use “＋ Título” ou “Plano de recebimento”.</div>'}
+    <div class="mfoot" style="justify-content:space-between;margin-top:16px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${pode('titulos','edit')?`<button class="b" onclick="formTitulo(null,'${id}')">＋ Título</button>`:''}
+        ${pode('titulos','edit')?`<button class="b sec" onclick="formPlano('${id}')">🧩 Plano de recebimento</button>`:''}
+        ${pode('titulos','edit')?`<button class="b sec" onclick="formBaixa(null,'${id}')">💵 Recebimento</button>`:''}
+        ${pode('pagamentos','edit')?`<button class="b sec" onclick="formPagamento('${esc(v.chassi||'')}')">🏭 Pagar à fábrica</button>`:''}
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="b sec" onclick="imprimirFicha('${id}')">🖨 Ficha</button>
+        <button class="b sec" onclick="fechar()">Fechar</button>
+      </div>
+    </div>`;
+  document.getElementById('mbox-in').className = 'modal wide';
+  document.getElementById('mbox-body').innerHTML = `<h2>Dossiê da venda · ${esc(v.chassi||'')}</h2>${corpo}`;
+  document.getElementById('mbox').classList.add('on');
+}
+
+/* ================= PLANO DE RECEBIMENTO ================= */
+let PLANO = [];
+function formPlano(vendaId){
+  if(!precisaPermissao('titulos','edit')) return;
+  const v = venda(vendaId); if(!v) return;
+  const restante = Math.max(0, (+v.valorVenda||0) - somaTitulos(vendaId));
+  PLANO = [];
+  modal('Plano de recebimento · '+esc(v.chassi||''), `
+    <p class="hint" style="margin:0 0 12px">Valor da venda <b>${brl(v.valorVenda)}</b> · já lançado <b>${brl(somaTitulos(vendaId))}</b> · <b>restante ${brl(restante)}</b>.
+    Defina cada valor que será recebido, com o tipo de recebimento e o vencimento.</p>
+    <div class="grid" style="margin-bottom:12px">
+      <div class="fld"><label>Tipo padrão das novas linhas</label><select id="pl-tipo">${DB.tipos.map(t=>`<option value="${t.id}">${esc(t.nome)}</option>`).join('')}</select></div>
+      <div class="fld"><label>Pagador padrão</label><select id="pl-pagador"><option value="">—</option>${DB.pagadores.map(p=>`<option>${esc(p.nome)}</option>`).join('')}</select></div>
+      <div class="fld"><label>Parcelar restante em</label><input id="pl-nx" type="number" min="1" step="1" placeholder="ex.: 3"></div>
+      <div class="fld"><label>1º vencimento</label><input id="pl-dt" type="date" value="${v.data||hoje()}"></div>
+      <div class="fld"><label>Intervalo (dias)</label><input id="pl-int" type="number" value="30"></div>
+      <div class="fld"><label>&nbsp;</label><button class="b sec" style="width:100%" onclick="gerarParcelas('${vendaId}')">⚡ Gerar parcelas</button></div>
+    </div>
+    <div id="pl-linhas"></div>
+    <div class="mfoot" style="justify-content:space-between">
+      <button class="b sec" onclick="addLinha()">＋ Linha</button>
+      <div style="display:flex;gap:8px">
+        <span id="pl-total" class="hint" style="margin:0;align-self:center"></span>
+        <button class="b sec" onclick="fechar()">Cancelar</button>
+        <button class="b" onclick="salvarPlano('${vendaId}')">Lançar títulos</button>
+      </div>
+    </div>`, null, true);
+  if(restante > 0.005) addLinha({valor:restante, tipoId: (document.getElementById('pl-tipo')||{}).value, pagador:(document.getElementById('pl-pagador')||{}).value, vencimento: somarDias(v.data||hoje(),30)});
+  else addLinha();
+}
+function somarDias(d, n){ const x = new Date((d||hoje())+'T12:00'); x.setDate(x.getDate()+ (+n||0)); return x.toISOString().slice(0,10); }
+function addLinha(d){
+  d = d || {};
+  PLANO.push({tipoId: d.tipoId || (document.getElementById('pl-tipo')||{}).value || DB.tipos[0].id,
+    pagador: d.pagador!=null ? d.pagador : ((document.getElementById('pl-pagador')||{}).value||''),
+    valor: d.valor!=null ? +d.valor : '', vencimento: d.vencimento || (document.getElementById('pl-dt')||{}).value || hoje(),
+    documento:''});
+  renderPlano();
+}
+function rmLinha(i){ PLANO.splice(i,1); renderPlano(); }
+function setLinha(i, campo, valor){
+  PLANO[i][campo] = campo==='valor' ? (valor===''?'':+valor) : valor; renderPlano(); return;
+}
+function renderPlano(){
+  document.getElementById('pl-linhas').innerHTML = `<table class="tbl"><thead><tr>
+    <th>Tipo de recebimento</th><th>Pagador</th><th>Vencimento</th><th style="width:130px">Valor (R$)</th><th>Documento</th><th></th></tr></thead><tbody>
+    ${PLANO.map((l,i)=>`<tr>
+      <td><select onchange="setLinha(${i},'tipoId',this.value)">${DB.tipos.map(t=>`<option value="${t.id}" ${l.tipoId===t.id?'selected':''}>${esc(t.nome)}</option>`).join('')}</select></td>
+      <td><select onchange="setLinha(${i},'pagador',this.value)"><option value="">—</option>${DB.pagadores.map(p=>`<option ${l.pagador===p.nome?'selected':''}>${esc(p.nome)}</option>`).join('')}</select></td>
+      <td><input type="date" value="${l.vencimento||''}" onchange="setLinha(${i},'vencimento',this.value)"></td>
+      <td><input type="number" step="0.01" value="${l.valor}" onchange="setLinha(${i},'valor',this.value)"></td>
+      <td><input value="${esc(l.documento||'')}" placeholder="nº boleto / NF" onchange="setLinha(${i},'documento',this.value)"></td>
+      <td><button class="b sm dang" onclick="rmLinha(${i})">🗑</button></td></tr>`).join('')}
+    </tbody></table>`;
+  const soma = PLANO.reduce((s,l)=>s+(+l.valor||0),0);
+  const el = document.getElementById('pl-total');
+  if(el) el.innerHTML = `Total das linhas: <b>${brl(soma)}</b>`;
+}
+function gerarParcelas(vendaId){
+  const v = venda(vendaId);
+  const restante = Math.max(0, (+v.valorVenda||0) - somaTitulos(vendaId));
+  const n = Math.max(1, parseInt(val('pl-nx'))||1);
+  const dt = val('pl-dt') || v.data || hoje();
+  const it = parseInt(val('pl-int'))||30;
+  const tipoId = val('pl-tipo'); const pagador = val('pl-pagador');
+  const base = Math.floor(restante / n * 100) / 100;
+  PLANO = [];
+  for(let i=0;i<n;i++){
+    const valor = (i === n-1) ? +(restante - base*(n-1)).toFixed(2) : base;
+    PLANO.push({tipoId, pagador, valor, vencimento: somarDias(dt, it*i), documento: n>1?`${i+1}/${n}`:''});
+  }
+  renderPlano();
+}
+function salvarPlano(vendaId){
+  if(!precisaPermissao('titulos','edit')) return;
+  const linhas = PLANO.filter(l=>(+l.valor||0) > 0.005);
+  if(!linhas.length) return alert('Adicione ao menos uma linha com valor.');
+  linhas.forEach(l=>{
+    const t = tipo(l.tipoId) || {};
+    DB.titulos.push({id:uid(), vendaId, tipoId:l.tipoId, tipoNome:t.nome||'Outro', pagador:l.pagador||'',
+      documento:l.documento||'', valor:+l.valor, emissao: venda(vendaId).data || hoje(), vencimento:l.vencimento||hoje(), obs:''});
+  });
+  save(); fechar(); renderAll(); dossie(vendaId);
+}
+
+/* ================= TÍTULOS ================= */
+function renderTitulos(){
+  const sel = document.getElementById('f-tipo-t');
+  if(sel && sel.options.length <= 1) sel.innerHTML = '<option value="">Todos os tipos</option>' + DB.tipos.map(t=>`<option value="${esc(t.nome)}">${esc(t.nome)}</option>`).join('');
+  const busca = (val('f-busca-t')||'').toLowerCase();
+  const st = val('f-status-t'), tp = val('f-tipo-t');
+
+  let lista = DB.titulos.slice();
+  if(busca) lista = lista.filter(t=>{
+    const v = venda(t.vendaId)||{};
+    return [t.tipoNome,t.pagador,t.documento,v.chassi,v.cliente].join(' ').toLowerCase().includes(busca);
+  });
+  if(st === 'aberto') lista = lista.filter(t=>saldoTitulo(t)>0.005);
+  else if(st === 'vencido') lista = lista.filter(vencidoTitulo);
+  else if(st === 'parcial') lista = lista.filter(t=>recebidoTitulo(t.id)>0.005 && saldoTitulo(t)>0.005);
+  else if(st === 'recebido') lista = lista.filter(t=>saldoTitulo(t)<=0.005);
+  if(tp) lista = lista.filter(t=>t.tipoNome===tp);
+  lista.sort((a,b)=>(a.vencimento||'').localeCompare(b.vencimento||''));
+
+  const el = document.getElementById('tbl-titulos');
+  if(!DB.titulos.length){ el.innerHTML = '<div class="empty">Nenhum título. Abra um carro vendido e use “Plano de recebimento”.</div>'; return; }
+  if(!lista.length){ el.innerHTML = '<div class="empty">Nenhum título com esses filtros.</div>'; return; }
+
+  el.innerHTML = `<table class="tbl"><thead><tr>
+    <th>Vencimento</th><th>Carro / cliente</th><th>Tipo de recebimento</th><th>Pagador</th><th>Documento</th>
+    <th class="num">Valor</th><th class="num">Recebido</th><th class="num">Saldo</th><th>Situação</th><th></th></tr></thead><tbody>
+    ${lista.map(t=>{
+      const v = venda(t.vendaId)||{}; const s = statusTitulo(t), at = atraso(t);
+      return `<tr>
+        <td>${fmt(t.vencimento)}${at?`<div class="hint neg" style="margin:0">${at}d atraso</div>`:(saldoTitulo(t)>0.005?`<div class="hint" style="margin:0">${diasAte(t.vencimento)}d</div>`:'')}</td>
+        <td>${esc(v.chassi||'—')}<div class="hint" style="margin:0">${esc(v.cliente||'')}</div></td>
+        <td><b>${esc(t.tipoNome)}</b></td>
+        <td>${esc(t.pagador||'—')}</td>
+        <td>${esc(t.documento||'—')}</td>
+        <td class="num">${brl(t.valor)}</td>
+        <td class="num pos">${brl(recebidoTitulo(t.id))}</td>
+        <td class="num"><b>${brl(saldoTitulo(t))}</b></td>
+        <td>${badge(s.k, s.l)}</td>
+        <td>
+          ${saldoTitulo(t)>0.005 && pode('titulos','edit')?`<button class="b sm ok" onclick="formBaixa('${t.id}')" title="Baixar">💵</button>`:''}
+          <button class="b sm sec" onclick="gerirBaixas('${t.id}')" title="Baixas">📄 ${DB.recebimentos.filter(r=>r.tituloId===t.id).length}</button>${DB.recebimentos.filter(r=>r.tituloId===t.id).some(estaPendente)?' <span class="tag t-parcial" title="Há baixa(s) aguardando conciliação">conciliar</span>':''}
+          ${pode('titulos','edit')?`<button class="b sm sec" onclick="formTitulo('${t.id}')" title="Editar">✏️</button>`:''}
+          ${pode('titulos','del')?`<button class="b sm dang" onclick="excluirTitulo('${t.id}')" title="Excluir">🗑</button>`:''}
+        </td></tr>`;
+    }).join('')}</tbody></table>
+    <div class="hint">${lista.length} título(s) · valor ${brl(lista.reduce((s,t)=>s+(+t.valor||0),0))} · recebido ${brl(lista.reduce((s,t)=>s+recebidoTitulo(t.id),0))} · saldo ${brl(lista.reduce((s,t)=>s+saldoTitulo(t),0))}</div>`;
+}
+
+function formTitulo(id, vendaIdFixo){
+  if(!precisaPermissao('titulos', id?'edit':'edit')) return;
+  const t = id ? titulo(id) || {} : {};
+  const vOpts = DB.vendas.map(v=>`<option value="${v.id}" ${(t.vendaId||vendaIdFixo)===v.id?'selected':''}>${esc(v.chassi)} — ${esc(v.cliente||'sem cliente')}</option>`).join('');
+  if(!vOpts) return alert('Cadastre uma venda primeiro.');
+  modal(id?'Editar título':'Novo título', `<div class="grid">
+    <div class="fld full"><label>Venda / carro *</label><select id="m-venda" ${id?'disabled':''}>${vOpts}</select></div>
+    <div class="fld"><label>Tipo de recebimento *</label><select id="m-tipo">${DB.tipos.map(x=>`<option value="${x.id}" ${t.tipoId===x.id?'selected':''}>${esc(x.nome)}</option>`).join('')}</select></div>
+    <div class="fld"><label>Pagador</label><select id="m-pagador"><option value="">—</option>${DB.pagadores.map(p=>`<option ${t.pagador===p.nome?'selected':''}>${esc(p.nome)}</option>`).join('')}</select></div>
+    <div class="fld"><label>Valor (R$) *</label><input id="m-valor" type="number" step="0.01" value="${t.valor||''}"></div>
+    <div class="fld"><label>Emissão</label><input id="m-emissao" type="date" value="${t.emissao||hoje()}"></div>
+    <div class="fld"><label>Vencimento</label><input id="m-venc" type="date" value="${t.vencimento||somarDias(hoje(),30)}"></div>
+    <div class="fld"><label>Documento / boleto / NF</label><input id="m-doc" value="${esc(t.documento||'')}"></div>
+    <div class="fld full"><label>Observações</label><input id="m-obs" value="${esc(t.obs||'')}"></div>
+  </div>`, ()=>{
+    const valor = +val('m-valor');
+    if(!valor) return alert('Informe o valor do título.');
+    const tp = tipo(val('m-tipo'));
+    const d = {vendaId: id ? t.vendaId : val('m-venda'), tipoId:val('m-tipo'), tipoNome: tp?tp.nome:'Outro',
+      pagador:val('m-pagador'), valor, emissao:val('m-emissao'), vencimento:val('m-venc'), documento:val('m-doc').trim(), obs:val('m-obs')};
+    if(id) Object.assign(titulo(id), d);
+    else DB.titulos.push(Object.assign({id:uid()}, d));
+    save(); fechar(); renderAll();
+  });
+}
+function excluirTitulo(id){
+  if(!precisaPermissao('titulos','del')) return;
+  const t = titulo(id); if(!t) return;
+  const bs = DB.recebimentos.filter(r=>r.tituloId===id);
+  if(!confirm(`Excluir o título “${t.tipoNome}” de ${brl(t.valor)}?${bs.length?'\n\n'+bs.length+' baixa(s) vinculada(s) também serão apagadas.':''}`)) return;
+  DB.recebimentos = DB.recebimentos.filter(r=>r.tituloId!==id);
+  DB.titulos = DB.titulos.filter(x=>x.id!==id);
+  save(); renderAll();
+}
+
+/* ================= BAIXAS ================= */
+function formBaixa(tituloId, vendaId){
+  if(!precisaPermissao('titulos','edit')) return;
+  let t = tituloId ? titulo(tituloId) : null;
+  if(!t){
+    const abertos = DB.titulos.filter(x=>saldoTitulo(x)>0.005 && (!vendaId || x.vendaId===vendaId));
+    if(!abertos.length) return alert('Não há títulos em aberto'+(vendaId?' nesta venda':'')+'.');
+  }
+  const opts = t ? `<option value="${t.id}" selected>${esc(t.tipoNome)} — ${esc((venda(t.vendaId)||{}).chassi||'')} — saldo ${brl(saldoTitulo(t))}</option>`
+    : DB.titulos.filter(x=>saldoTitulo(x)>0.005 && (!vendaId || x.vendaId===vendaId))
+        .sort((a,b)=>(a.vencimento||'').localeCompare(b.vencimento||''))
+        .map(x=>`<option value="${x.id}">${fmt(x.vencimento)} · ${esc(x.tipoNome)} · ${esc((venda(x.vendaId)||{}).chassi||'')} — saldo ${brl(saldoTitulo(x))}</option>`).join('');
+  modal('Registrar recebimento', `<div class="grid">
+    <div class="fld full"><label>Título *</label><select id="m-titulo" onchange="baixaSeleciona()">${opts}</select></div>
+    <div class="fld"><label>Data do recebimento</label><input id="m-data" type="date" value="${hoje()}" onchange="baixaPreview()"></div>
+    <div class="fld"><label>Valor recebido (R$) *</label><input id="m-valor" type="number" step="0.01" oninput="baixaPreview()"></div>
+    <div class="fld"><label>Forma</label><select id="m-forma"><option>PIX</option><option>TED</option><option>Boleto</option><option>Financiamento (repasse banco)</option><option>Cheque</option><option>Dinheiro</option><option>Cartão</option><option>Consórcio</option><option>Outro</option></select></div>
+    <div class="fld"><label>Banco / conta</label><input id="m-conta" placeholder="ex.: Itaú c/ 1234-5"></div>
+    <div class="fld full"><label>Observação</label><input id="m-obs" placeholder="comprovante, parcela, referência…"></div>
+    <div class="fld full"><div id="m-preview" class="hint"></div></div>
+  </div>`, ()=>{
+    const id = val('m-titulo'), v = +val('m-valor');
+    if(!id) return alert('Escolha o título.');
+    if(!v || v <= 0) return alert('Informe o valor recebido.');
+    if(v > saldoTitulo(titulo(id)) + 0.01) return alert('O valor ('+brl(v)+') é maior que o saldo do título ('+brl(saldoTitulo(titulo(id)))+').');
+    const novoRec = {id:uid(), tituloId:id, data:val('m-data'), valor:v, forma:val('m-forma'), conta:val('m-conta').trim(), obs:val('m-obs').trim()};
+    novoRec.criadoPor = (usuarioAtual()||{}).nome || '';
+    novoRec.conc = isMaster() ? 'conciliado' : 'pendente';
+    if(novoRec.conc === 'conciliado'){ novoRec.concPor = novoRec.criadoPor; novoRec.concEm = new Date().toISOString(); }
+    DB.recebimentos.push(novoRec);
+    save(); fechar(); renderAll();
+    if(novoRec.conc === 'pendente') alert('Recebimento lançado.\n\nEle está AGUARDANDO CONCILIAÇÃO: o master precisa confirmar a movimentação antes de entrar nos saldos.');
+  });
+  if(t) document.getElementById('m-valor').value = saldoTitulo(t).toFixed(2);
+  else baixaSeleciona();
+  baixaPreview();
+}
+function baixaSeleciona(){
+  const sel = document.getElementById('m-titulo'); if(!sel) return;
+  const t = titulo(sel.value); if(!t) return;
+  document.getElementById('m-valor').value = saldoTitulo(t).toFixed(2);
+  baixaPreview();
+}
+function baixaPreview(){
+  const sel = document.getElementById('m-titulo'); if(!sel) return;
+  const t = titulo(sel.value); if(!t) return;
+  const v = +val('m-valor');
+  const el = document.getElementById('m-preview'); if(!el) return;
+  const novo = Math.max(0, saldoTitulo(t) - (v||0));
+  el.innerHTML = `Título de <b>${brl(t.valor)}</b> · já recebido ${brl(recebidoTitulo(t.id))} · saldo hoje <b>${brl(saldoTitulo(t))}</b><br>
+    Após este recebimento: recebido ${brl(recebidoTitulo(t.id)+(v||0))} · <b>saldo ${brl(novo)}</b> ${novo<=0.005?'<span class="pos">→ título quitado</span>':''}`;
+}
+function gerirBaixas(tituloId){
+  const t = titulo(tituloId); if(!t) return;
+  const bs = baixasDoTitulo(tituloId);
+  const v = venda(t.vendaId)||{};
+  const corpo = `
+    <p class="hint" style="margin-bottom:12px"><b>${esc(t.tipoNome)}</b> · ${esc(v.chassi||'')} · ${esc(v.cliente||'')} — valor ${brl(t.valor)} · recebido ${brl(recebidoTitulo(tituloId))} · saldo <b>${brl(saldoTitulo(t))}</b></p>
+    ${bs.length?`<table class="tbl"><thead><tr><th>Data</th><th class="num">Valor</th><th>Forma</th><th>Conta</th><th>Obs.</th><th></th></tr></thead><tbody>
+      ${bs.map(r=>`<tr><td>${fmt(r.data)}${seloConc(r)}</td><td class="num"><b>${brl(r.valor)}</b></td><td>${esc(r.forma||'—')}</td>
+        <td>${esc(r.conta||'—')}</td><td>${esc(r.obs||'—')}</td>
+        <td>${pode('titulos','edit')?`<button class="b sm sec" onclick="formEditarBaixa('${r.id}')">✏️</button>`:''}
+        ${pode('titulos','del')?`<button class="b sm dang" onclick="excluirBaixa('${r.id}','${tituloId}')">🗑</button>`:''}</td></tr>`).join('')}
+      </tbody></table>`:'<div class="empty" style="padding:18px">Nenhum recebimento lançado.</div>'}
+    <div class="mfoot" style="justify-content:space-between">
+      ${saldoTitulo(t)>0.005 && pode('titulos','edit')?`<button class="b" onclick="formBaixa('${tituloId}')">＋ Novo recebimento</button>`:'<span class="hint" style="margin:0">Título quitado.</span>'}
+      <button class="b sec" onclick="fechar()">Fechar</button>
+    </div>`;
+  document.getElementById('mbox-in').className = 'modal';
+  document.getElementById('mbox-body').innerHTML = `<h2>Recebimentos do título</h2>${corpo}`;
+  document.getElementById('mbox').classList.add('on');
+}
+function formEditarBaixa(id){
+  if(!precisaPermissao('titulos','edit')) return;
+  const r = DB.recebimentos.find(x=>x.id===id); if(!r) return;
+  const t = titulo(r.tituloId)||{};
+  modal('Editar recebimento', `<div class="grid">
+    <div class="fld full"><label>Título</label><input value="${esc(t.tipoNome||'')} — ${brl(t.valor||0)}" disabled></div>
+    <div class="fld"><label>Data</label><input id="m-data" type="date" value="${r.data||''}"></div>
+    <div class="fld"><label>Valor (R$)</label><input id="m-valor" type="number" step="0.01" value="${r.valor}"></div>
+    <div class="fld"><label>Forma</label><input id="m-forma" value="${esc(r.forma||'')}"></div>
+    <div class="fld"><label>Conta</label><input id="m-conta" value="${esc(r.conta||'')}"></div>
+    <div class="fld full"><label>Observação</label><input id="m-obs" value="${esc(r.obs||'')}"></div>
+  </div>`, ()=>{
+    const v = +val('m-valor'); if(!v) return alert('Informe o valor.');
+    const outros = DB.recebimentos.filter(x=>x.tituloId===r.tituloId && x.id!==id).reduce((s,x)=>s+x.valor,0);
+    if(outros + v > (+titulo(r.tituloId).valor + 0.01)) return alert('A soma das baixas passaria do valor do título.');
+    Object.assign(r, {data:val('m-data'), valor:v, forma:val('m-forma'), conta:val('m-conta'), obs:val('m-obs')});
+    if(!isMaster()){ r.conc = 'pendente'; r.concPor=''; r.concEm=''; r.concObs='Editado pelo financeiro — aguarda nova conciliação'; }
+    save(); fechar(); renderAll(); gerirBaixas(r.tituloId);
+  });
+}
+function excluirBaixa(id, tituloId){
+  if(!precisaPermissao('titulos','del')) return;
+  const r = DB.recebimentos.find(x=>x.id===id); if(!r) return;
+  if(!confirm('Excluir o recebimento de '+brl(r.valor)+' de '+fmt(r.data)+'?')) return;
+  DB.recebimentos = DB.recebimentos.filter(x=>x.id!==id);
+  save(); renderAll(); gerirBaixas(tituloId);
+}
+
+/* ================= CADASTROS ================= */
+function renderTipos(){
+  const el = document.getElementById('tbl-tipos');
+  el.innerHTML = `<table class="tbl"><thead><tr><th></th><th>Tipo</th><th>Categoria</th><th class="num">Títulos</th><th class="num">Valor</th><th class="num">Em aberto</th><th></th></tr></thead><tbody>
+    ${DB.tipos.map(t=>{
+      const ts = DB.titulos.filter(x=>x.tipoId===t.id);
+      return `<tr><td><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:${t.cor||'#3b82f6'}"></span></td>
+        <td><b>${esc(t.nome)}</b></td><td>${esc(t.categoria||'—')}</td>
+        <td class="num">${ts.length}</td><td class="num">${brl(ts.reduce((s,x)=>s+x.valor,0))}</td>
+        <td class="num">${brl(ts.reduce((s,x)=>s+saldoTitulo(x),0))}</td>
+        <td>${pode('cadastros','edit')?`<button class="b sm sec" onclick="formTipo('${t.id}')">✏️</button>`:''}
+        ${pode('cadastros','del')?`<button class="b sm dang" onclick="excluirTipo('${t.id}')">🗑</button>`:''}</td></tr>`;
+    }).join('')}</tbody></table>`;
+}
+function formTipo(id){
+  if(!precisaPermissao('cadastros', id?'edit':'edit')) return;
+  const t = id ? tipo(id)||{} : {};
+  modal(id?'Editar tipo':'Novo tipo de recebimento', `<div class="grid">
+    <div class="fld full"><label>Nome *</label><input id="m-nome" value="${esc(t.nome||'')}" placeholder="ex.: Financiamento bancário"></div>
+    <div class="fld"><label>Categoria</label><select id="m-cat">${['Entrada','Financiamento','Bonificação','Serviços','Outros'].map(c=>`<option ${t.categoria===c?'selected':''}>${c}</option>`).join('')}</select></div>
+    <div class="fld"><label>Cor</label><input id="m-cor" type="color" value="${t.cor||'#3b82f6'}" style="height:38px"></div>
+  </div>`, ()=>{
+    const nome = val('m-nome').trim(); if(!nome) return alert('Informe o nome.');
+    if(id) Object.assign(tipo(id), {nome, categoria:val('m-cat'), cor:val('m-cor')});
+    else DB.tipos.push({id:uid(), nome, categoria:val('m-cat'), cor:val('m-cor')});
+    save(); fechar(); renderAll();
+  });
+}
+function excluirTipo(id){
+  if(!precisaPermissao('cadastros','del')) return;
+  const n = DB.titulos.filter(t=>t.tipoId===id).length;
+  if(n) return alert(`Este tipo está em ${n} título(s). Altere os títulos antes de excluir.`);
+  if(!confirm('Excluir este tipo de recebimento?')) return;
+  DB.tipos = DB.tipos.filter(t=>t.id!==id); save(); renderAll();
+}
+function renderPagadores(){
+  const el = document.getElementById('tbl-pagadores');
+  el.innerHTML = `<table class="tbl"><thead><tr><th>Pagador</th><th>Tipo</th><th class="num">Títulos</th><th class="num">Em aberto</th><th></th></tr></thead><tbody>
+    ${DB.pagadores.map(p=>{ const ts = DB.titulos.filter(t=>t.pagador===p.nome);
+      return `<tr><td><b>${esc(p.nome)}</b></td><td>${esc(p.tipo||'—')}</td><td class="num">${ts.length}</td>
+      <td class="num">${brl(ts.reduce((s,t)=>s+saldoTitulo(t),0))}</td>
+      <td>${pode('cadastros','edit')?`<button class="b sm sec" onclick="formPagador('${p.id}')">✏️</button>`:''}
+      ${pode('cadastros','del')?`<button class="b sm dang" onclick="excluirPagador('${p.id}')">🗑</button>`:''}</td></tr>`;}).join('')}</tbody></table>`;
+}
+function formPagador(id){
+  if(!precisaPermissao('cadastros', id?'edit':'edit')) return;
+  const p = id ? DB.pagadores.find(x=>x.id===id)||{} : {};
+  modal(id?'Editar pagador':'Novo pagador', `<div class="grid">
+    <div class="fld full"><label>Nome *</label><input id="m-nome" value="${esc(p.nome||'')}" placeholder="Banco, financeira, fábrica ou cliente"></div>
+    <div class="fld"><label>Tipo</label><select id="m-tipo">${['Cliente','Financeira','Banco','Fábrica','Outro'].map(c=>`<option ${p.tipo===c?'selected':''}>${c}</option>`).join('')}</select></div>
+  </div>`, ()=>{
+    const nome = val('m-nome').trim(); if(!nome) return alert('Informe o nome.');
+    if(id){ const old = p.nome; Object.assign(p, {nome, tipo:val('m-tipo')});
+      if(old!==nome) DB.titulos.forEach(t=>{ if(t.pagador===old) t.pagador = nome; }); }
+    else DB.pagadores.push({id:uid(), nome, tipo:val('m-tipo')});
+    save(); fechar(); renderAll();
+  });
+}
+function excluirPagador(id){
+  if(!precisaPermissao('cadastros','del')) return;
+  const p = DB.pagadores.find(x=>x.id===id); if(!p) return;
+  if(!confirm('Excluir o pagador “'+p.nome+'”?')) return;
+  DB.pagadores = DB.pagadores.filter(x=>x.id!==id); save(); renderAll();
+}
+function renderClientes(){
+  const el = document.getElementById('tbl-clientes');
+  el.innerHTML = DB.clientes.length ? `<table class="tbl"><thead><tr><th>Cliente</th><th>CPF/CNPJ</th><th>Telefone</th><th class="num">Compras</th><th class="num">Em aberto</th><th></th></tr></thead><tbody>
+    ${DB.clientes.map((c,i)=>{ const vs = DB.vendas.filter(v=>v.cliente===c.nome);
+      return `<tr><td><b>${esc(c.nome)}</b></td><td>${esc(c.doc||'—')}</td><td>${esc(c.tel||'—')}</td>
+      <td class="num">${vs.length}</td><td class="num">${brl(vs.reduce((s,v)=>s+saldoVenda(v.id),0))}</td>
+      <td>${pode('cadastros','edit')?`<button class="b sm sec" onclick="formCliente(${i})">✏️</button>`:''}
+      ${pode('cadastros','del')?`<button class="b sm dang" onclick="excluirCliente(${i})">🗑</button>`:''}</td></tr>`;}).join('')}</tbody></table>`
+    : '<div class="empty">Nenhum cliente cadastrado. Os nomes digitados nas vendas aparecem na hora de digitar.</div>';
+}
+function formCliente(i){
+  if(!precisaPermissao('cadastros', (i!=null&&i>=0)?'edit':'edit')) return;
+  const c = (i!=null && i>=0) ? DB.clientes[i]||{} : {};
+  modal(i!=null&&i>=0?'Editar cliente':'Novo cliente', `<div class="grid">
+    <div class="fld full"><label>Nome *</label><input id="m-nome" value="${esc(c.nome||'')}"></div>
+    <div class="fld"><label>CPF/CNPJ</label><input id="m-doc" value="${esc(c.doc||'')}"></div>
+    <div class="fld"><label>Telefone</label><input id="m-tel" value="${esc(c.tel||'')}"></div>
+  </div>`, ()=>{
+    const nome = val('m-nome').trim(); if(!nome) return alert('Informe o nome.');
+    if(i!=null && i>=0) Object.assign(DB.clientes[i], {nome, doc:val('m-doc'), tel:val('m-tel')});
+    else DB.clientes.push({id:uid(), nome, doc:val('m-doc'), tel:val('m-tel')});
+    save(); fechar(); renderAll();
+  });
+}
+function excluirCliente(i){
+  if(!precisaPermissao('cadastros','del')) return;
+  if(!confirm('Excluir o cliente “'+DB.clientes[i].nome+'”?')) return;
+  DB.clientes.splice(i,1); save(); renderAll();
+}
+function renderVendedores(){
+  const el = document.getElementById('tbl-vendedores');
+  el.innerHTML = DB.vendedores.length ? `<table class="tbl"><thead><tr><th>Vendedor</th><th class="num">Vendas</th><th class="num">Valor vendido</th><th class="num">Em aberto</th><th></th></tr></thead><tbody>
+    ${DB.vendedores.map((x,i)=>{ const vs = DB.vendas.filter(v=>v.vendedor===x.nome);
+      return `<tr><td><b>${esc(x.nome)}</b></td><td class="num">${vs.length}</td>
+      <td class="num">${brl(vs.reduce((s,v)=>s+v.valorVenda,0))}</td>
+      <td class="num">${brl(vs.reduce((s,v)=>s+saldoVenda(v.id),0))}</td>
+      <td>${pode('cadastros','del')?`<button class="b sm dang" onclick="excluirVendedor(${i})">🗑</button>`:''}</td></tr>`;}).join('')}</tbody></table>`
+    : '<div class="empty">Nenhum vendedor cadastrado.</div>';
+}
+function formVendedor(){
+  if(!precisaPermissao('cadastros','edit')) return;
+  modal('Novo vendedor', `<div class="fld"><label>Nome *</label><input id="m-nome"></div>`, ()=>{
+    const nome = val('m-nome').trim(); if(!nome) return alert('Informe o nome.');
+    DB.vendedores.push({id:uid(), nome}); save(); fechar(); renderAll();
+  });
+}
+function excluirVendedor(i){
+  if(!precisaPermissao('cadastros','del')) return;
+  DB.vendedores.splice(i,1); save(); renderAll();
+}
+
+/* ================= RELATÓRIOS ================= */
+function periodoPadrao(){
+  const d = new Date(); const ini = new Date(d.getFullYear(), d.getMonth(), 1);
+  setv('rep-ini', ini.toISOString().slice(0,10)); setv('rep-fim', hoje()); renderPeriodoHint();
+}
+function renderPeriodoHint(){
+  const el = document.getElementById('rep-periodo-hint');
+  if(el) el.textContent = `Período: ${fmt(val('rep-ini'))} a ${fmt(val('rep-fim'))}`;
+}
+const noPeriodo = (d, ini, fim) => !d || ((!ini || d >= ini) && (!fim || d <= fim));
+function repHeader(t, sub){
+  document.getElementById('rep-out').innerHTML = `<div class="card">
+    <div class="rep-head"><div><h2>${t}</h2><div class="hint" style="margin:0">${sub}</div></div>
+      <div style="display:flex;gap:8px" class="no-print">
+        <button class="b sec sm" onclick="window.print()">🖨 PDF</button>
+        <button class="b sec sm" onclick="csvAtual()">📤 CSV</button>
+      </div></div>
+    <div id="rep-body"></div></div>`;
+  document.getElementById('rep-out').scrollIntoView({behavior:'smooth', block:'start'});
+}
+let REP_CSV = {nome:'relatorio', linhas:[]};
+function csvAtual(){
+  if(!REP_CSV.linhas.length) return alert('Nada para exportar.');
+  baixarCSV(REP_CSV.nome, REP_CSV.linhas);
+}
+
+function relCarteira(){
+  const ini = val('rep-ini'), fim = val('rep-fim');
+  const vs = DB.vendas.filter(v=>noPeriodo(v.data, ini, fim));
+  repHeader('Carteira por situação', `Vendas de ${fmt(ini)} a ${fmt(fim)} · ${vs.length} carro(s)`);
+  const linhas = [['Chassi','Carro','Data','Cliente','Vendedor','Valor da venda','Títulos','Recebido','Saldo','Situação','Vencido','Tipo de recebimento predominante']];
+  const grupos = {quitado:[], parcial:[], aberto:[], 'sem-plano':[]};
+  vs.forEach(v=>{ grupos[statusVenda(v).k].push(v); });
+  const nomes = {quitado:'Quitados', parcial:'Parcialmente quitados', aberto:'Em aberto', 'sem-plano':'Sem plano de recebimento'};
+  let html = '<div class="cards">' + Object.entries(grupos).map(([k,g])=>`
+    <div class="kpi"><div class="l">${nomes[k]}</div><div class="v" style="font-size:18px">${g.length}</div>
+    <div class="s">${brl(g.reduce((s,v)=>s+saldoVenda(v.id),0))} em aberto</div></div>`).join('') + '</div>';
+  Object.entries(grupos).forEach(([k,g])=>{
+    if(!g.length) return;
+    html += `<h3 style="margin:16px 0 8px;font-size:13px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px">${nomes[k]} (${g.length})</h3>
+      <table class="tbl"><thead><tr><th>Chassi</th><th>Carro</th><th>Cliente</th><th class="num">Valor venda</th><th class="num">Recebido</th><th class="num">Saldo</th><th>Composição</th><th>Situação</th></tr></thead><tbody>
+      ${g.map(v=>{ const ts = titulosDaVenda(v.id);
+        const comp = Object.entries(ts.reduce((m,t)=>{ m[t.tipoNome]=(m[t.tipoNome]||0)+t.valor; return m;},{})).map(([a,b])=>esc(a)+': '+brl0(b)).join(' · ');
+        const pred = Object.entries(ts.reduce((m,t)=>{ m[t.tipoNome]=(m[t.tipoNome]||0)+t.valor; return m;},{})).sort((a,b)=>b[1]-a[1])[0];
+        linhas.push([v.chassi,v.veiculo,v.data,v.cliente,v.vendedor,(v.valorVenda||0).toFixed(2),ts.length,recebidoVenda(v.id).toFixed(2),saldoVenda(v.id).toFixed(2),nomes[k],ts.some(vencidoTitulo)?'sim':'não',pred?pred[0]:'']);
+        return `<tr><td><b>${esc(v.chassi)}</b></td><td>${esc(v.veiculo||'—')}</td><td>${esc(v.cliente||'—')}</td>
+          <td class="num">${brl(v.valorVenda)}</td><td class="num pos">${brl(recebidoVenda(v.id))}</td>
+          <td class="num"><b>${brl(saldoVenda(v.id))}</b></td><td style="white-space:normal;font-size:12px">${comp||'—'}</td>
+          <td>${badge(statusVenda(v).k==='sem-plano'?'div':statusVenda(v).k, statusVenda(v).l)}</td></tr>`;}).join('')}
+      </tbody></table>`;
+  });
+  REP_CSV = {nome:'carteira-por-situacao', linhas};
+  document.getElementById('rep-body').innerHTML = html + `<div class="hint">Total: ${brl(vs.reduce((s,v)=>s+v.valorVenda,0))} vendidos · ${brl(vs.reduce((s,v)=>s+recebidoVenda(v.id),0))} recebidos · <b>${brl(vs.reduce((s,v)=>s+saldoVenda(v.id),0))} em aberto</b>.</div>`;
+}
+
+function relTipo(){
+  const ini = val('rep-ini'), fim = val('rep-fim');
+  const vs = DB.vendas.filter(v=>noPeriodo(v.data, ini, fim));
+  const ids = new Set(vs.map(v=>v.id));
+  const ts = DB.titulos.filter(t=>ids.has(t.vendaId));
+  repHeader('Por tipo de recebimento', `Títulos das vendas de ${fmt(ini)} a ${fmt(fim)} · ${ts.length} título(s)`);
+  const g = {};
+  ts.forEach(t=>{
+    const k = t.tipoNome || 'Outro';
+    g[k] = g[k] || {valor:0, rec:0, saldo:0, venc:0, n:0, pagadores:new Set()};
+    g[k].valor += t.valor; g[k].rec += recebidoTitulo(t.id); g[k].saldo += saldoTitulo(t); g[k].n++;
+    if(vencidoTitulo(t)) g[k].venc += saldoTitulo(t);
+    if(t.pagador) g[k].pagadores.add(t.pagador);
+  });
+  const arr = Object.entries(g).map(([nome,d])=>({nome,...d})).sort((a,b)=>b.valor-a.valor);
+  const tot = arr.reduce((s,x)=>s+x.valor,0);
+  const linhas = [['Tipo de recebimento','Títulos','Valor emitido','Recebido','Saldo em aberto','Vencido','% do total','Pagadores']];
+  arr.forEach(x=>linhas.push([x.nome,x.n,x.valor.toFixed(2),x.rec.toFixed(2),x.saldo.toFixed(2),x.venc.toFixed(2),(tot?x.valor/tot*100:0).toFixed(1),[...x.pagadores].join(' | ')]));
+  REP_CSV = {nome:'por-tipo-de-recebimento', linhas};
+  document.getElementById('rep-body').innerHTML = `
+    <table class="tbl"><thead><tr><th>Tipo de recebimento</th><th class="num">Títulos</th><th class="num">Valor emitido</th><th class="num">Recebido</th>
+      <th class="num">Saldo em aberto</th><th class="num">Vencido</th><th class="num">% do total</th><th>Pagadores</th></tr></thead><tbody>
+      ${arr.map(x=>`<tr><td><b>${esc(x.nome)}</b></td><td class="num">${x.n}</td><td class="num">${brl(x.valor)}</td>
+        <td class="num pos">${brl(x.rec)}</td><td class="num"><b>${brl(x.saldo)}</b></td>
+        <td class="num ${x.venc?'neg':''}">${brl(x.venc)}</td><td class="num">${(tot?x.valor/tot*100:0).toFixed(1)}%</td>
+        <td style="white-space:normal;font-size:12px">${esc([...x.pagadores].join(', '))||'—'}</td></tr>`).join('')}
+      </tbody>
+      <tfoot><tr style="background:var(--panel2);font-weight:700"><td>Total</td><td class="num">${arr.reduce((s,x)=>s+x.n,0)}</td>
+        <td class="num">${brl(arr.reduce((s,x)=>s+x.valor,0))}</td><td class="num">${brl(arr.reduce((s,x)=>s+x.rec,0))}</td>
+        <td class="num">${brl(arr.reduce((s,x)=>s+x.saldo,0))}</td><td class="num">${brl(arr.reduce((s,x)=>s+x.venc,0))}</td><td></td><td></td></tr></tfoot></table>`;
+}
+
+function relExtrato(){
+  const ini = val('rep-ini'), fim = val('rep-fim');
+  const rs = DB.recebimentos.filter(r=>noPeriodo(r.data, ini, fim)).sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+  repHeader('Extrato de recebimentos', `${rs.length} baixa(s) de ${fmt(ini)} a ${fmt(fim)}`);
+  const linhas = [['Data','Chassi','Cliente','Tipo de recebimento','Pagador','Forma','Conta','Valor','Observação']];
+  let html = '';
+  if(!rs.length){ html = '<div class="empty">Nenhum recebimento no período.</div>'; }
+  else {
+    html = `<table class="tbl"><thead><tr><th>Data</th><th>Carro / cliente</th><th>Tipo</th><th>Pagador</th><th>Forma</th><th>Conta</th><th class="num">Valor</th><th></th></tr></thead><tbody>
+    ${rs.map(r=>{ const t = titulo(r.tituloId)||{}; const v = venda(t.vendaId)||{};
+      linhas.push([r.data,v.chassi,v.cliente,t.tipoNome,t.pagador,r.forma,r.conta,(+r.valor).toFixed(2),r.obs]);
+      return `<tr><td>${fmt(r.data)}</td><td>${esc(v.chassi||'—')}<div class="hint" style="margin:0">${esc(v.cliente||'')}</div></td>
+      <td>${esc(t.tipoNome||'—')}</td><td>${esc(t.pagador||'—')}</td><td>${esc(r.forma||'—')}</td><td>${esc(r.conta||'—')}</td>
+      <td class="num"><b>${brl(r.valor)}</b>${seloConc(r)}</td>
+      <td>${pode('titulos','edit')?`<button class="b sm sec" onclick="formEditarBaixa('${r.id}')">✏️</button>`:''}</td></tr>`;}).join('')}
+    </tbody><tfoot><tr style="background:var(--panel2);font-weight:700"><td colspan="6">Total recebido</td><td class="num">${brl(rs.reduce((s,r)=>s+r.valor,0))}</td><td></td></tr></tfoot></table>`;
+    const porForma = {};
+    rs.forEach(r=>{ porForma[r.forma||'—'] = (porForma[r.forma||'—']||0)+r.valor; });
+    html += `<h3 style="margin:18px 0 8px;font-size:13px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px">Por forma de recebimento</h3>
+      <table class="tbl"><tbody>${Object.entries(porForma).sort((a,b)=>b[1]-a[1]).map(([f,v])=>`<tr><td>${esc(f)}</td><td class="num">${brl(v)}</td><td class="num" style="width:80px">${pct(v,rs.reduce((s,r)=>s+r.valor,0)).toFixed(1)}%</td></tr>`).join('')}</tbody></table>`;
+  }
+  REP_CSV = {nome:'extrato-de-recebimentos', linhas};
+  document.getElementById('rep-body').innerHTML = html;
+}
+
+function relAging(){
+  const ini = val('rep-ini'), fim = val('rep-fim');
+  const abertos = DB.titulos.filter(t=>saldoTitulo(t)>0.005);
+  repHeader('Inadimplência / aging', `Carteira em aberto em ${fmt(hoje())} · ${abertos.length} título(s)`);
+  const faixas = [
+    {l:'A vencer', f:t=>diasAte(t.vencimento)>=0},
+    {l:'1–30 dias', f:t=>atraso(t)>=1&&atraso(t)<=30},
+    {l:'31–60 dias', f:t=>atraso(t)>=31&&atraso(t)<=60},
+    {l:'61–90 dias', f:t=>atraso(t)>=61&&atraso(t)<=90},
+    {l:'91–120 dias', f:t=>atraso(t)>=91&&atraso(t)<=120},
+    {l:'> 120 dias', f:t=>atraso(t)>120}
+  ];
+  const tot = abertos.reduce((s,t)=>s+saldoTitulo(t),0) || 1;
+  const linhas = [['Faixa','Títulos','Valor em aberto','% da carteira']];
+  const porPagador = {};
+  abertos.forEach(t=>{
+    const k = t.pagador || 'Sem pagador';
+    porPagador[k] = porPagador[k] || {saldo:0, venc:0, n:0, maior:0};
+    porPagador[k].saldo += saldoTitulo(t); porPagador[k].n++;
+    if(vencidoTitulo(t)) porPagador[k].venc += saldoTitulo(t);
+    porPagador[k].maior = Math.max(porPagador[k].maior, atraso(t));
+  });
+  faixas.forEach(f=>{ const arr = abertos.filter(f.f); linhas.push([f.l, arr.length, arr.reduce((s,t)=>s+saldoTitulo(t),0).toFixed(2), (arr.reduce((s,t)=>s+saldoTitulo(t),0)/tot*100).toFixed(1)]); });
+  REP_CSV = {nome:'inadimplencia-aging', linhas};
+  document.getElementById('rep-body').innerHTML = `
+    <table class="tbl"><thead><tr><th>Faixa de atraso</th><th class="num">Títulos</th><th class="num">Valor em aberto</th><th class="num">% da carteira</th></tr></thead><tbody>
+      ${faixas.map(f=>{ const arr = abertos.filter(f.f); const v = arr.reduce((s,t)=>s+saldoTitulo(t),0);
+        return `<tr><td><b>${f.l}</b></td><td class="num">${arr.length}</td><td class="num">${brl(v)}</td><td class="num">${(v/tot*100).toFixed(1)}%</td></tr>`;}).join('')}
+      </tbody><tfoot><tr style="background:var(--panel2);font-weight:700"><td>Total em aberto</td><td class="num">${abertos.length}</td><td class="num">${brl(tot)}</td><td class="num">100%</td></tr></tfoot></table>
+    <h3 style="margin:20px 0 8px;font-size:13px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px">Por pagador</h3>
+    <table class="tbl"><thead><tr><th>Pagador</th><th class="num">Títulos</th><th class="num">Em aberto</th><th class="num">Vencido</th><th class="num">Maior atraso</th></tr></thead><tbody>
+      ${Object.entries(porPagador).sort((a,b)=>b[1].saldo-a[1].saldo).map(([k,d])=>`<tr><td>${esc(k)}</td><td class="num">${d.n}</td>
+        <td class="num"><b>${brl(d.saldo)}</b></td><td class="num ${d.venc?'neg':''}">${brl(d.venc)}</td>
+        <td class="num">${d.maior?d.maior+' dias':'—'}</td></tr>`).join('')}
+    </tbody></table>`;
+}
+
+function relCliente(){
+  const ini = val('rep-ini'), fim = val('rep-fim');
+  const vs = DB.vendas.filter(v=>noPeriodo(v.data, ini, fim));
+  repHeader('Posição por cliente', `Vendas de ${fmt(ini)} a ${fmt(fim)}`);
+  const g = {};
+  vs.forEach(v=>{ const k = v.cliente || 'Sem cliente';
+    g[k] = g[k] || {compras:0, valor:0, rec:0, saldo:0, venc:0, n:0};
+    g[k].compras += v.valorVenda; g[k].n++;
+    g[k].rec += recebidoVenda(v.id); g[k].saldo += saldoVenda(v.id);
+    g[k].venc += titulosDaVenda(v.id).filter(vencidoTitulo).reduce((s,t)=>s+saldoTitulo(t),0);
+  });
+  const arr = Object.entries(g).map(([nome,d])=>({nome,...d})).sort((a,b)=>b.saldo-a.saldo);
+  const linhas = [['Cliente','Carros','Valor comprado','Recebido','Saldo em aberto','Vencido']];
+  arr.forEach(x=>linhas.push([x.nome,x.n,x.valor.toFixed(2),x.rec.toFixed(2),x.saldo.toFixed(2),x.venc.toFixed(2)]));
+  REP_CSV = {nome:'posicao-por-cliente', linhas};
+  document.getElementById('rep-body').innerHTML = arr.length ? `<table class="tbl"><thead><tr><th>Cliente</th><th class="num">Carros</th><th class="num">Valor comprado</th>
+    <th class="num">Recebido</th><th class="num">Saldo em aberto</th><th class="num">Vencido</th><th>Situação</th></tr></thead><tbody>
+    ${arr.map(x=>`<tr><td><b>${esc(x.nome)}</b></td><td class="num">${x.n}</td><td class="num">${brl(x.valor)}</td>
+      <td class="num pos">${brl(x.rec)}</td><td class="num"><b>${brl(x.saldo)}</b></td>
+      <td class="num ${x.venc?'neg':''}">${brl(x.venc)}</td>
+      <td>${x.saldo<=0.005?badge('quitado','Quitado'):(x.rec>0.005?badge('parcial','Parcial'):badge('aberto','Em aberto'))}</td></tr>`).join('')}
+    </tbody></table>` : '<div class="empty">Nenhuma venda no período.</div>';
+}
+
+function relTitulosAbertos(){
+  let ts = DB.titulos.filter(t=>saldoTitulo(t)>0.005);
+  ts.sort((a,b)=>(a.vencimento||'').localeCompare(b.vencimento||''));
+  repHeader('Títulos em aberto', `Posição da carteira em ${fmt(hoje())} · ${ts.length} título(s) com saldo`);
+  const linhas = [['Vencimento','Chassi','Cliente','Tipo de recebimento','Pagador','Documento','Valor','Recebido','Saldo','Dias de atraso']];
+  ts.forEach(t=>{ const v = venda(t.vendaId)||{};
+    linhas.push([t.vencimento,v.chassi,v.cliente,t.tipoNome,t.pagador,t.documento,(+t.valor).toFixed(2),recebidoTitulo(t.id).toFixed(2),saldoTitulo(t).toFixed(2),atraso(t)||0]);
+  });
+  REP_CSV = {nome:'titulos-em-aberto', linhas};
+  document.getElementById('rep-body').innerHTML = ts.length ? `<table class="tbl"><thead><tr>
+    <th>Vencimento</th><th>Carro / cliente</th><th>Tipo</th><th>Pagador</th><th class="num">Valor</th><th class="num">Recebido</th><th class="num">Saldo</th><th class="num">Atraso</th><th>Situação</th></tr></thead><tbody>
+    ${ts.map(t=>{ const v = venda(t.vendaId)||{}; const at = atraso(t);
+      return `<tr><td>${fmt(t.vencimento)}</td>
+        <td>${esc(v.chassi||'—')}<div class="hint" style="margin:0">${esc(v.cliente||'')}</div></td>
+        <td>${esc(t.tipoNome)}</td><td>${esc(t.pagador||'—')}</td>
+        <td class="num">${brl(t.valor)}</td><td class="num pos">${brl(recebidoTitulo(t.id))}</td>
+        <td class="num"><b>${brl(saldoTitulo(t))}</b></td><td class="num ${at?'neg':''}">${at?at+'d':'—'}</td>
+        <td>${badge(statusTitulo(t).k, statusTitulo(t).l)}</td></tr>`;}).join('')}
+    </tbody><tfoot><tr style="background:var(--panel2);font-weight:700"><td colspan="6">Total em aberto</td>
+      <td class="num">${brl(ts.reduce((s,t)=>s+saldoTitulo(t),0))}</td>
+      <td colspan="2" class="num">${brl(ts.filter(vencidoTitulo).reduce((s,t)=>s+saldoTitulo(t),0))} vencido</td></tr></tfoot></table>`
+    : '<div class="empty">Nenhum título em aberto no período.</div>';
+}
+
+/* ================= EXPORTAÇÃO ================= */
+function baixarCSV(nome, linhas){
+  const csv = '\uFEFF' + linhas.map(l=>l.map(c=>{
+    const s = String(c==null?'':c);
+    return /[;"\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+  }).join(';')).join('\n');
+  baixar(nome+'-'+hoje()+'.csv', csv, 'text/csv;charset=utf-8');
+}
+function baixar(nome, conteudo, mime){
+  const blob = new Blob([conteudo], {type: mime||'text/plain;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = nome; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+}
+function exportarVendas(){
+  const linhas = [['Chassi','Carro','Data','Cliente','CPF/CNPJ','Vendedor','Valor da venda','Qtd títulos','Recebido','Saldo','Situação','Vencido']];
+  DB.vendas.forEach(v=>linhas.push([v.chassi,v.veiculo,v.data,v.cliente,v.doc,v.vendedor,(+v.valorVenda).toFixed(2),
+    titulosDaVenda(v.id).length, recebidoVenda(v.id).toFixed(2), saldoVenda(v.id).toFixed(2), statusVenda(v).l,
+    titulosDaVenda(v.id).some(vencidoTitulo)?'sim':'não']));
+  baixarCSV('vendas-carros', linhas);
+}
+function exportarTitulos(){
+  const linhas = [['Chassi','Cliente','Tipo de recebimento','Pagador','Documento','Emissão','Vencimento','Valor','Recebido','Saldo','Situação','Dias de atraso']];
+  DB.titulos.forEach(t=>{ const v = venda(t.vendaId)||{};
+    linhas.push([v.chassi,v.cliente,t.tipoNome,t.pagador,t.documento,t.emissao,t.vencimento,(+t.valor).toFixed(2),
+      recebidoTitulo(t.id).toFixed(2), saldoTitulo(t).toFixed(2), statusTitulo(t).l, atraso(t)||0]);
+  });
+  baixarCSV('titulos-a-receber', linhas);
+}
+function imprimirCarteira(){ window.print(); }
+function imprimirTitulos(){ window.print(); }
+
+function imprimirFicha(id){
+  const v = venda(id); if(!v) return;
+  const ts = titulosDaVenda(id).sort((a,b)=>(a.vencimento||'').localeCompare(b.vencimento||''));
+  const s = statusVenda(v), total = somaTitulos(id), rec = recebidoVenda(id), saldo = saldoVenda(id);
+  const rows = ts.map(t=>`<tr><td>${fmt(t.vencimento)}</td><td>${esc(t.tipoNome)}</td><td>${esc(t.pagador||'—')}</td>
+    <td class="r">${brl(t.valor)}</td><td class="r">${brl(recebidoTitulo(t.id))}</td><td class="r">${brl(saldoTitulo(t))}</td><td>${statusTitulo(t).l}</td></tr>`).join('');
+  const baixas = DB.recebimentos.filter(r=>ts.some(t=>t.id===r.tituloId)).sort((a,b)=>(a.data||'').localeCompare(b.data||''))
+    .map(r=>{ const t = ts.find(x=>x.id===r.tituloId)||{};
+      return `<tr><td>${fmt(r.data)}</td><td>${esc(t.tipoNome||'')}</td><td>${esc(r.forma||'—')}</td><td>${esc(r.conta||'—')}</td><td class="r">${brl(r.valor)}</td></tr>`;}).join('');
+  const w = window.open('', '_blank');
+  if(!w) return alert('Permita pop-ups para imprimir a ficha.');
+  w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Ficha ${esc(v.chassi)}</title>
+  <style>body{font-family:Arial,sans-serif;padding:26px;color:#111;font-size:12px}
+  h1{font-size:17px;margin:0 0 2px} .hd{display:flex;justify-content:space-between;border-bottom:2px solid #222;padding-bottom:10px;margin-bottom:14px}
+  .mut{color:#666} table{width:100%;border-collapse:collapse;margin:10px 0 18px}
+  th,td{border:1px solid #bbb;padding:6px 7px;text-align:left;font-size:11.5px} th{background:#eee}
+  .r{text-align:right} .box{display:inline-block;border:1px solid #bbb;border-radius:5px;padding:6px 10px;margin-right:8px}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.5px;margin:16px 0 4px;color:#444}
+  </style></head><body>
+  <div class="hd"><div><h1>Ficha de vendas e contas a receber</h1><div class="mut">Icavel · emitida em ${fmt(hoje())}</div></div>
+  <div class="mut" style="text-align:right">Chassi <b>${esc(v.chassi||'—')}</b><br>${esc(v.veiculo||'')}</div></div>
+  <div><span class="box"><b>Cliente:</b> ${esc(v.cliente||'—')}</span>${v.doc?`<span class="box"><b>CPF/CNPJ:</b> ${esc(v.doc)}</span>`:''}
+  <span class="box"><b>Venda:</b> ${fmt(v.data)}</span><span class="box"><b>Vendedor:</b> ${esc(v.vendedor||'—')}</span>
+  ${v.nf?`<span class="box"><b>NF/pedido:</b> ${esc(v.nf)}</span>`:''}</div>
+  <h2>Situação</h2>
+  <table><tr><th>Valor da venda</th><th>Total em títulos</th><th>Recebido</th><th>Saldo</th><th>Situação</th></tr>
+  <tr><td class="r">${brl(v.valorVenda)}</td><td class="r">${brl(total)}</td><td class="r">${brl(rec)}</td>
+  <td class="r"><b>${brl(saldo)}</b></td><td>${s.l}</td></tr></table>
+  <h2>Títulos por tipo de recebimento</h2>
+  <table><thead><tr><th>Vencimento</th><th>Tipo</th><th>Pagador</th><th class="r">Valor</th><th class="r">Recebido</th><th class="r">Saldo</th><th>Situação</th></tr></thead>
+  <tbody>${rows || '<tr><td colspan="7">Nenhum título.</td></tr>'}</tbody>
+  <tfoot><tr><th colspan="3">Total</th><th class="r">${brl(total)}</th><th class="r">${brl(rec)}</th><th class="r">${brl(saldo)}</th><th></th></tr></tfoot></table>
+  <h2>Recebimentos lançados</h2>
+  <table><thead><tr><th>Data</th><th>Tipo</th><th>Forma</th><th>Conta</th><th class="r">Valor</th></tr></thead>
+  <tbody>${baixas || '<tr><td colspan="5">Nenhum recebimento.</td></tr>'}</tbody></table>
+  ${v.obs?`<div class="mut"><b>Observações:</b> ${esc(v.obs)}</div>`:''}
+  <p class="mut" style="margin-top:26px;font-size:10.5px">Documento gerado pelo sistema de Contas a Receber de Veículos · Icavel</p>
+  </body></html>`);
+  w.document.close();
+  setTimeout(()=>{ w.focus(); w.print(); }, 350);
+}
+
+/* ================= DADOS ================= */
+function backup(){
+  if(!precisaPermissao('dados','ver')) return;
+  const payload = {app:'icavel-contas-receber', versao:1, exportado:new Date().toISOString(), dados:DB};
+  baixar('contas-a-receber-backup-'+hoje()+'.json', JSON.stringify(payload, null, 2), 'application/json');
+}
+function restaurar(inp){
+  if(!precisaPermissao('dados','edit')) return;
+  const f = inp.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = e => {
+    try{
+      const j = JSON.parse(e.target.result);
+      const d = j.dados || j;
+      if(!d.vendas || !d.titulos) throw new Error('estrutura');
+      if(!confirm('Substituir os dados atuais pelo backup? ('+d.vendas.length+' vendas, '+d.titulos.length+' títulos)')) return;
+      DB = Object.assign({vendas:[],titulos:[],recebimentos:[],tipos:[],pagadores:[],clientes:[],vendedores:[],usuarios:[],log:[],pagamentosFabrica:[],juros:{}}, d);
+      normalize(); save(); renderAll(); fechar();
+      alert('Backup restaurado.');
+    }catch(x){ alert('Arquivo inválido.'); }
+  };
+  rd.readAsText(f); inp.value = '';
+}
+function importarEstoque(){
+  if(!precisaPermissao('dados','edit')) return;
+  let raw = null;
+  try{ raw = localStorage.getItem('icavel_estoque'); }catch(e){}
+  if(raw){
+    try{ const d = JSON.parse(raw); return aplicarImportEstoque(d); }catch(e){}
+  }
+  if(confirm('Não encontrei os dados do Controle de Estoque neste navegador.\n\nSelecione o arquivo de backup JSON do estoque?')){
+    document.getElementById('f-estoque').click();
+  }
+}
+function importarEstoqueArquivo(inp){
+  const f = inp.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = e => { try{ aplicarImportEstoque(JSON.parse(e.target.result)); }catch(x){ alert('Arquivo inválido.'); } };
+  rd.readAsText(f); inp.value='';
+}
+function aplicarImportEstoque(d){
+  d = d.dados || d;
+  if(!Array.isArray(d.vendas)) return alert('Este arquivo não tem vendas do estoque.');
+  let novas = 0, tit = 0;
+  const veics = {};
+  (d.veiculos||[]).forEach(v=>{ veics[v.chassi] = v; });
+  d.vendas.forEach(v=>{
+    if(DB.vendas.some(x=>x.chassi===v.chassi)) return;
+    const veic = veics[v.chassi] || {};
+    const bon = (+v.bonFabrica||0)+(+v.bonMeta||0)+(+v.bonLocal||0)+(+v.bonKpi||0)+(v.bonificacoes||[]).reduce((s,b)=>s+(+b.valor||0),0);
+    const valor = (+v.preco||0) + bon;
+    const nova = {id:uid(), chassi:v.chassi, veiculo:veic.veiculo||'', data:v.data||hoje(), valorVenda:valor,
+      cliente:v.cliente||'', doc:'', vendedor:v.vendedor||'', nf:'', obs:'Importado do Controle de Estoque'};
+    DB.vendas.push(nova); novas++;
+    let jaRecebido = 0;
+    (d.recebimentos||[]).filter(r=>r.vendaId===v.id).forEach(r=>{
+      const t = {id:uid(), vendaId:nova.id, tipoId:'t-outro', tipoNome:'Recebimento importado', pagador:'',
+        documento:'', valor:+r.valor||0, emissao:r.data||nova.data, vencimento:r.data||nova.data, obs:'Importado'};
+      DB.titulos.push(t); tit++; jaRecebido += +r.valor||0;
+      DB.recebimentos.push({id:uid(), tituloId:t.id, data:r.data||nova.data, valor:+r.valor||0, forma:r.forma||'', conta:'', obs:'Importado do estoque'});
+    });
+    const saldo = Math.max(0, valor - jaRecebido);
+    if(saldo > 0.005){
+      DB.titulos.push({id:uid(), vendaId:nova.id, tipoId:'t-outro', tipoNome:'Saldo a receber (importado)', pagador:'',
+        documento:'', valor:saldo, emissao:nova.data, vencimento:somarDias(nova.data, 30), obs:'Defina o tipo real editando o título'});
+      tit++;
+    }
+  });
+  save(); renderAll();
+  alert(`Importação concluída: ${novas} venda(s) e ${tit} título(s).\nRevise os títulos importados e ajuste o tipo de recebimento de cada um.`);
+}
+function renderDados(){
+  const el = document.getElementById('dados-resumo'); if(!el) return;
+  let bytes = 0; try{ bytes = new Blob([JSON.stringify(DB)]).size; }catch(e){}
+  el.innerHTML = `<h3 style="font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Resumo da base</h3>
+    <div class="cards" style="margin:0">
+      <div class="kpi"><div class="l">Carros vendidos</div><div class="v">${DB.vendas.length}</div></div>
+      <div class="kpi"><div class="l">Títulos</div><div class="v">${DB.titulos.length}</div></div>
+      <div class="kpi"><div class="l">Recebimentos</div><div class="v">${DB.recebimentos.length}</div></div>
+      <div class="kpi"><div class="l">Tipos de recebimento</div><div class="v">${DB.tipos.length}</div></div>
+      <div class="kpi"><div class="l">Tamanho da base</div><div class="v" style="font-size:16px">${(bytes/1024).toFixed(1)} KB</div></div>
+    </div>
+    <div class="hint" style="margin-top:14px">Último salvamento automático no navegador. Faça backup JSON semanalmente — é o arquivo que restaura tudo em outro computador.</div>`;
+}
+function zerar(){
+  if(!precisaPermissao('dados','del')) return;
+  if(!confirm('Apagar TODOS os dados (vendas, títulos, recebimentos)? Os cadastros de tipos permanecem.')) return;
+  if(!confirm('Confirmar exclusão definitiva?')) return;
+  DB = {vendas:[], titulos:[], recebimentos:[], tipos:DB.tipos, pagadores:DB.pagadores, clientes:DB.clientes, vendedores:DB.vendedores, usuarios:DB.usuarios, log:DB.log, pagamentosFabrica:[], juros:DB.juros};
+  save(); renderAll();
+}
+
+/* ================= RENDER ALL ================= */
+function renderAll(){
+  renderDash(); renderVendas(); renderTitulos();
+  renderTipos(); renderPagadores(); renderClientes(); renderVendedores(); renderDados();
+  renderPagar(); renderJuros();
+  if(typeof renderConciliacao==='function'){ renderConciliacao(); atualizarBadgeConc(); }
+  if(typeof renderUsuarios==='function') renderUsuarios();
+  renderPeriodoHint();
+}
+document.querySelectorAll('#rep-ini,#rep-fim').forEach(i=>i.addEventListener('change', renderPeriodoHint));
+periodoPadrao();
+iniciarSessao();
+
+</script>
+</body>
+</html>
