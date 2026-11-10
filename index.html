@@ -201,7 +201,8 @@
 
   <section class="view" id="v-estoque">
     <h1>Estoque de veículos</h1>
-    <p class="sub">Todo veículo faturado pela fábrica entra aqui. <b>Estoque</b> = disponível para venda · <b>Venda direta</b> = já vendido no faturamento · <b>Test-drive</b> = veículo da loja. Cada veículo tem fotos, custo e condição de pagamento à fábrica.</p>
+    <p class="sub">Todo veículo faturado pela fábrica entra aqui. <b>Estoque</b> = disponível para venda · <b>Venda direta</b> = já vendido no faturamento · <b>Test-drive</b> = veículo da loja.
+    Para vender, clique em <b>💰 Vender</b> no carro: a ficha já vem preenchida e você monta o plano de recebimento na mesma tela.</p>
     <div class="cards" id="est-kpis"></div>
     <div class="bar">
       <button class="b ok" data-perm="estoque:edit" onclick="abrirImportPlanilha()">📊 Atualizar pela planilha Estoque</button>
@@ -223,6 +224,7 @@
         <option value="">Todos</option>
         <option value="vendido">Vendidos</option>
       </select>
+      <button class="b ok" data-perm="vendas:edit" onclick="escolherVeiculoParaVender()">💰 Vender um carro</button>
     </div>
     <div id="tbl-estoque"></div>
   </section>
@@ -3438,7 +3440,9 @@ function renderEstoque(){
       <div class="kpi"><div class="l">Valor do estoque (pé da NF)</div><div class="v inf">${brl0(valorDisp)}</div><div class="s">${brl0(disp.reduce((s,v)=>s+custoFabrica(v),0))} com juros</div></div>
       <div class="kpi"><div class="l">Estoque</div><div class="v">${disp.filter(v=>natDe(v)==='estoque').length}</div><div class="s">Rede</div></div>
       <div class="kpi"><div class="l">Venda direta</div><div class="v" style="color:#a78bfa">${DB.veiculos.filter(v=>natDe(v)==='vendaDireta'&&veicDisponivel(v)).length}</div><div class="s">aguardando venda</div></div>
-      <div class="kpi"><div class="l">Test-drive</div><div class="v pos">${disp.filter(v=>natDe(v)==='testDrive').length}</div><div class="s">frota da loja</div></div>`;
+      <div class="kpi"><div class="l">Test-drive</div><div class="v pos">${disp.filter(v=>natDe(v)==='testDrive').length}</div><div class="s">frota da loja</div></div>
+      <div class="kpi"><div class="l">Vendidos no mês</div><div class="v">${DB.vendas.filter(x=>String(x.data||'').slice(0,7)===hoje().slice(0,7)).length}</div>
+        <div class="s">${brl0(DB.vendas.filter(x=>String(x.data||'').slice(0,7)===hoje().slice(0,7)).reduce((s,x)=>s+(+x.valorVenda||0),0))} em vendas</div></div>`;
   }
   if(!lista.length){ el.innerHTML = '<div class="empty">Nenhum veículo. Use “Importar faturamento da fábrica” para carregar o relatório do dia.</div>'; return; }
   el.innerHTML = `<table class="tbl"><thead><tr>
@@ -3451,12 +3455,15 @@ function renderEstoque(){
         <td><b>${esc(v.chassi)}</b><div class="hint" style="margin:0">${esc(v.anoModelo||'')}</div></td>
         <td>${esc(v.modelo||'—')}<div class="hint" style="margin:0">${esc(v.cor||'')}${v.diasEstoque!=null?'':' '}</div></td>
         <td>${badgeNat(v)}</td>
-        <td>${vend?'<span class="tag t-parcial">Vendido</span>':'<span class="tag t-quitado">Disponível</span>'}</td>
+        <td>${vend?'<span class="tag t-parcial">Vendido</span>':'<span class="tag t-quitado">Disponível</span>'}
+          <div class="hint" style="margin:0">${vend ? esc((DB.vendas.find(x=>x.chassi===v.chassi)||{}).cliente||'') : (v.diasEstoque!=null? v.diasEstoque+' dia(s) em estoque':'')}</div></td>
         <td>${badgePag(st)}</td>
         <td>${galeriaMini(v.fotos)}</td>
         <td class="num">${brl(v.peNF)}</td>
         <td class="num">${brl(custoFabrica(v))}</td>
         <td style="white-space:nowrap">
+          ${(!vend && pode('vendas','edit'))?`<button class="b sm ok" onclick="formVenderVeiculo('${v.chassi}')" title="Vender este veículo">💰 Vender</button>`:''}
+          ${vend?`<button class="b sm sec" onclick="dossie(DB.vendas.find(x=>x.chassi==='${v.chassi}').id)" title="Ver a venda">📄</button>`:''}
           ${pode('estoque','edit')?`<button class="b sm sec" onclick="formVeiculo('${v.chassi}')" title="Editar">✏️</button>`:''}
           ${pode('pagamentos','edit')?`<button class="b sm sec" onclick="gerirBoletos('${v.chassi}')" title="Boletos à fábrica">🏭</button>`:''}
           ${pode('estoque','del')?`<button class="b sm dang" onclick="excluirVeiculo('${v.chassi}')" title="Excluir">🗑</button>`:''}
@@ -4997,6 +5004,221 @@ function confirmarImportPlanilha(){
   fechar();
   alert(`Planilha importada.\n\n${novos} veículo(s) novo(s) no estoque\n${atualizados} atualizado(s)\n${iguais} sem diferença`
     + (baixas? `\n${baixas} baixa(s) à fábrica lançada(s) (carros marcados como PAGO na planilha)`:''));
+}
+
+/* ============================================================
+   VENDER VEÍCULO — a venda nasce do próprio estoque
+   Botão "💰 Vender" em cada carro disponível. Abre a ficha já
+   preenchida com o carro, pede cliente/valor e monta o plano de
+   recebimento (os títulos) na mesma tela.
+   ============================================================ */
+
+const VENDA_TMP = {chassi:'', itens:[]};
+
+const tipoDe = id => DB.tipos.find(t=>t.id===id) || null;
+function tipoPadraoVenda(todos){
+  const lista = todos ? DB.tipos : DB.tipos;
+  const por = re => lista.find(t=>re.test(String(t.nome||'')));
+  return (por(/à vista|a vista/i) || por(/entrada|sinal/i) || lista[0] || {}).id || '';
+}
+const somaPlanoTmp = () => VENDA_TMP.itens.reduce((s,i)=>s+(+i.valor||0), 0);
+
+/* ---------- abre a venda de um veículo do estoque ---------- */
+function formVenderVeiculo(chassi){
+  if(!precisaPermissao('vendas','edit')) return;
+  const v = DB.veiculos.find(x=>x.chassi===chassi);
+  if(!v) return alert('Veículo não encontrado.');
+  if(veicVendido(v)){
+    const ja = DB.vendas.find(x=>x.chassi===v.chassi);
+    if(ja) { dossie(ja.id); return; }
+    return alert('Este veículo já está vendido.');
+  }
+  const sugestao = Math.round((+v.peNF||0) * 100)/100;
+  VENDA_TMP.chassi = v.chassi;
+  VENDA_TMP.itens = [{tipoId: tipoPadraoVenda(), valor: sugestao, venc: hoje(), pagador:''}];
+
+  modal('Vender veículo · '+esc(v.chassi), `
+    <div class="cards" style="margin-bottom:14px">
+      <div class="kpi"><div class="l">Veículo</div><div class="v" style="font-size:15px">${esc(veicRotulo(v)||'—')}</div>
+        <div class="s">${esc(v.cor||'')}${v.anoModelo?' · '+esc(v.anoModelo):''}</div></div>
+      <div class="kpi"><div class="l">Chassi</div><div class="v" style="font-size:14px">${esc(v.chassi)}</div>
+        <div class="s">${badgeNat(v)}</div></div>
+      <div class="kpi"><div class="l">Custo à fábrica</div><div class="v" style="font-size:15px">${brl(custoFabrica(v))}</div>
+        <div class="s">pé da NF ${brl(v.peNF)}</div></div>
+    </div>
+    <div class="grid">
+      <div class="fld"><label>Data da venda</label><input id="vv-data" type="date" value="${hoje()}"></div>
+      <div class="fld"><label>Valor total da venda (R$) *</label>
+        <input id="vv-valor" type="number" step="0.01" value="${sugestao}" oninput="planoAjustarAoTotal()"></div>
+      <div class="fld"><label>Cliente *</label><input id="vv-cliente" list="dl-vv-cli" placeholder="nome do cliente">
+        <datalist id="dl-vv-cli">${DB.clientes.map(c=>`<option value="${esc(c.nome)}">`).join('')}</datalist></div>
+      <div class="fld"><label>CPF/CNPJ</label><input id="vv-doc"></div>
+      <div class="fld"><label>Vendedor</label><input id="vv-vendedor" list="dl-vv-vend">
+        <datalist id="dl-vv-vend">${DB.vendedores.map(x=>`<option value="${esc(x.nome)}">`).join('')}</datalist></div>
+      <div class="fld"><label>Nota fiscal / pedido</label><input id="vv-nf"></div>
+    </div>
+    <div class="sect" style="margin-top:16px">Plano de recebimento</div>
+    <div id="vv-plano"></div>
+    <div class="bar" style="margin-top:8px">
+      <button class="b sec sm" onclick="planoAdd()">＋ Adicionar parcela</button>
+      <button class="b sec sm" onclick="planoParcelar(2)">2x</button>
+      <button class="b sec sm" onclick="planoParcelar(3)">3x</button>
+      <button class="b sec sm" onclick="planoParcelar(4)">4x</button>
+      <span class="hint" style="margin:0">As parcelas viram <b>títulos a receber</b> ao salvar.</span>
+    </div>`, ()=>salvarVendaVeiculo(), true);
+
+  pintarPlanoVenda();
+}
+
+/* ---------- plano de recebimento ---------- */
+function pintarPlanoVenda(){
+  const el = document.getElementById('vv-plano'); if(!el) return;
+  el.innerHTML = `
+    <table class="tbl"><thead><tr>
+      <th style="min-width:150px">Como recebe</th>
+      <th class="num" style="width:130px">Valor (R$)</th>
+      <th style="width:150px">Vencimento</th>
+      <th style="min-width:120px">Pagador</th>
+      <th style="width:40px"></th></tr></thead><tbody>
+    ${VENDA_TMP.itens.map((it,i)=>`
+      <tr>
+        <td><select onchange="planoMuda(${i},'tipoId',this.value)">${
+          DB.tipos.map(t=>`<option value="${esc(t.id)}" ${t.id===it.tipoId?'selected':''}>${esc(t.nome)}</option>`).join('')
+        }</select></td>
+        <td><input type="number" step="0.01" value="${(+it.valor||0).toFixed(2)}"
+             oninput="planoMuda(${i},'valor',this.value)" style="text-align:right"></td>
+        <td><input type="date" value="${it.venc||''}" onchange="planoMuda(${i},'venc',this.value)"></td>
+        <td><input value="${esc(it.pagador||'')}" placeholder="—" onchange="planoMuda(${i},'pagador',this.value)"
+             list="dl-vv-pag"><datalist id="dl-vv-pag">${DB.pagadores.map(p=>`<option value="${esc(p.nome)}">`).join('')}</datalist></td>
+        <td>${VENDA_TMP.itens.length>1?`<button class="b sm dang" onclick="planoRemove(${i})" title="Remover">🗑</button>`:''}</td>
+      </tr>`).join('')}
+    </tbody></table>
+    <div id="vv-total" class="hint" style="margin:6px 0 0"></div>`;
+  pintarTotalPlano();
+}
+function pintarTotalPlano(){
+  const el = document.getElementById('vv-total'); if(!el) return;
+  const plano = somaPlanoTmp();
+  const valor = +(val('vv-valor')||0);
+  const dif = valor - plano;
+  let txt = `Plano: <b>${brl(plano)}</b> em ${VENDA_TMP.itens.length} parcela(s)`;
+  if(valor > 0.005){
+    if(Math.abs(dif) <= 0.02) txt += ' · <b class="pos">igual ao valor da venda</b>';
+    else if(dif > 0) txt += ` · <b class="amb">faltam ${brl(dif)} para fechar o valor da venda</b>`;
+    else txt += ` · <b class="neg">${brl(-dif)} acima do valor da venda</b>`;
+  }
+  el.innerHTML = txt;
+}
+function planoMuda(i, campo, valor){
+  if(!VENDA_TMP.itens[i]) return;
+  VENDA_TMP.itens[i][campo] = campo === 'valor' ? (+valor||0) : valor;
+  pintarTotalPlano();
+}
+function planoAdd(){
+  const falta = Math.max(0, +(val('vv-valor')||0) - somaPlanoTmp());
+  VENDA_TMP.itens.push({tipoId: tipoPadraoVenda(), valor: Math.round(falta*100)/100, venc: somarDias(hoje(),30), pagador:''});
+  pintarPlanoVenda();
+}
+function planoRemove(i){
+  VENDA_TMP.itens.splice(i,1);
+  if(!VENDA_TMP.itens.length) VENDA_TMP.itens.push({tipoId:tipoPadraoVenda(), valor:0, venc:hoje(), pagador:''});
+  pintarPlanoVenda();
+}
+/* divide o valor da venda em n parcelas iguais, 30 dias entre elas */
+function planoParcelar(n){
+  const valor = +(val('vv-valor')||0);
+  if(valor <= 0) return alert('Informe primeiro o valor da venda.');
+  const base = Math.floor((valor/n)*100)/100;
+  VENDA_TMP.itens = [];
+  for(let i=1;i<=n;i++){
+    const v = i === n ? Math.round((valor - base*(n-1))*100)/100 : base;
+    VENDA_TMP.itens.push({
+      tipoId: i===1 ? tipoPadraoVenda() : (DB.tipos.find(t=>/parcel/i.test(t.nome||''))||{}).id || tipoPadraoVenda(),
+      valor: v, venc: somarDias(hoje(), 30*i), pagador:''
+    });
+  }
+  pintarPlanoVenda();
+}
+/* ao mudar o valor da venda: se só há uma parcela, acompanha */
+function planoAjustarAoTotal(){
+  if(VENDA_TMP.itens.length === 1){
+    VENDA_TMP.itens[0].valor = +(val('vv-valor')||0);
+    const inp = document.querySelectorAll('#vv-plano tbody input[type=number]');
+    if(inp[0]) inp[0].value = (+(val('vv-valor')||0)).toFixed(2);
+  }
+  pintarTotalPlano();
+}
+
+/* ---------- gravar ---------- */
+function salvarVendaVeiculo(){
+  const v = DB.veiculos.find(x=>x.chassi===VENDA_TMP.chassi); if(!v) return;
+  const cliente = (val('vv-cliente')||'').trim();
+  const valor   = +(val('vv-valor')||0);
+  if(!cliente) return alert('Informe o cliente.');
+  if(valor <= 0) return alert('Informe o valor da venda.');
+
+  const itens = VENDA_TMP.itens.filter(i=>+i.valor > 0.005);
+  if(!itens.length) return alert('O plano de recebimento precisa de pelo menos uma parcela com valor.');
+  const planoTotal = itens.reduce((s,i)=>s+(+i.valor||0), 0);
+  if(Math.abs(planoTotal - valor) > 0.02){
+    if(!confirm('O plano soma ' + brl(planoTotal) + ' e a venda é ' + brl(valor) + '.\n\nDiferença de ' + brl(Math.abs(valor-planoTotal)) + '. Salvar assim mesmo?')) return;
+  }
+  if(DB.vendas.some(x=>x.chassi===v.chassi)) return alert('Já existe uma venda com este chassi.');
+
+  const nova = {
+    id: uid(), chassi: v.chassi, veiculo: veicRotulo(v), data: val('vv-data') || hoje(),
+    valorVenda: valor, cliente, doc: (val('vv-doc')||'').trim(),
+    vendedor: (val('vv-vendedor')||'').trim(), nf: (val('vv-nf')||'').trim(),
+    obs: 'Venda registrada a partir do estoque'
+  };
+  DB.vendas.push(nova);
+
+  itens.forEach(it=>{
+    const tp = tipoDe(it.tipoId) || {};
+    DB.titulos.push({
+      id: uid(), vendaId: nova.id, tipoId: it.tipoId, tipoNome: tp.nome || 'Outro',
+      pagador: it.pagador || '', valor: +it.valor, emissao: nova.data,
+      vencimento: it.venc || nova.data, documento: '', obs: ''
+    });
+  });
+
+  /* cliente novo entra no cadastro, para reaproveitar depois */
+  if(cliente && !DB.clientes.some(c=>String(c.nome||'').toLowerCase() === cliente.toLowerCase())){
+    DB.clientes.push({id: uid(), nome: cliente, doc: nova.doc || '', tel: '', obs: ''});
+  }
+
+  save();
+  logAcao('Vendeu veículo', 'vendas', v.chassi + ' · ' + cliente + ' · ' + brl(valor));
+  fechar(); renderAll();
+
+  alert('Venda registrada.\n\n' + (veicRotulo(v)||v.chassi) + '\nCliente: ' + cliente +
+    '\nValor: ' + brl(valor) + '\nTítulos criados: ' + itens.length +
+    '\n\nEla já aparece em "Carros vendidos" e os títulos em "Títulos a receber".');
+}
+
+/* ---------- atalho: escolher o carro e vender ---------- */
+function escolherVeiculoParaVender(){
+  if(!precisaPermissao('vendas','edit')) return;
+  const disp = DB.veiculos.filter(veicDisponivel);
+  if(!disp.length){
+    return alert('Não há veículo disponível no estoque.\n\nAtualize o estoque pela planilha ou cadastre um veículo primeiro.');
+  }
+  modal('Vender um carro', `
+    <p class="hint" style="margin:0 0 12px">Escolha o veículo que está saindo. A ficha de venda abre já preenchida.</p>
+    <div class="fld full"><label>Veículo disponível (${disp.length})</label>
+      <select id="ev-chassi" size="${Math.min(10, Math.max(3, disp.length))}" style="height:auto">
+        ${disp.sort((a,b)=>(veicRotulo(a)||'').localeCompare(veicRotulo(b)||'')).map(v=>
+          `<option value="${esc(v.chassi)}">${esc(veicRotulo(v)||v.chassi)} · ${esc(v.cor||'')} · ${esc(v.chassi)} · ${brl(v.peNF)}</option>`
+        ).join('')}
+      </select>
+    </div>
+    <div class="fld full"><div class="hint" style="margin:0">Custo à fábrica de cada um aparece ao lado do chassi, para você negociar com margem na mão.</div></div>`,
+  ()=>{
+    const ch = val('ev-chassi');
+    if(!ch) return alert('Escolha o veículo.');
+    fechar();
+    setTimeout(()=>formVenderVeiculo(ch), 120);
+  });
 }
 
 </script>
