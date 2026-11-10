@@ -45,6 +45,7 @@
   .tbl{width:100%; border-collapse:collapse; background:var(--panel); border-radius:12px; overflow:hidden; font-size:13.5px}
   .tbl th{background:var(--panel2); text-align:left; padding:10px 12px; color:var(--mut); font-size:11.5px; text-transform:uppercase; letter-spacing:.4px; white-space:nowrap}
   .tbl td{padding:10px 12px; border-top:1px solid var(--line); white-space:nowrap}
+  .tbl .tag{white-space:nowrap}
   .tbl tr:hover td{background:#202a44}
   .tbl .num{text-align:right; font-variant-numeric:tabular-nums}
   .tag{display:inline-block; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:700; letter-spacing:.2px}
@@ -147,8 +148,9 @@
 <div id="app">
 <nav>
   <div class="logo">ICAVEL<span>.</span></div>
-  <div class="logo-sub">Contas a Receber</div>
+  <div class="logo-sub">Contas a Receber · v3.1</div>
   <button data-v="dash">📊 Dashboard</button>
+  <button data-v="estoque">🏷 Estoque de veículos</button>
   <button data-v="vendas">🚗 Carros vendidos</button>
   <button data-v="titulos">🧾 Títulos a receber</button>
   <button data-v="pagar">🏭 Pagamento à fábrica</button>
@@ -174,6 +176,13 @@
   <section class="view" id="v-dash">
     <h1>Dashboard · Contas a Receber</h1>
     <p class="sub">Carteira de veículos vendidos. Cada valor da venda é um título com seu tipo de recebimento; a baixa pode ser total ou parcial.</p>
+    <div class="cards" id="dashd-kpis"></div>
+    <div class="charts">
+      <div class="card"><h3>Estoque · valor por natureza</h3><div id="dashd-estoque"></div></div>
+      <div class="card"><h3>O que falta receber dos vendidos</h3><div id="dashd-receber"></div></div>
+    </div>
+    <div class="card" style="margin-bottom:18px"><h3>Vendido e ainda não pago à fábrica</h3><div id="dashd-fab-vend"></div></div>
+    <h1 style="font-size:15px;margin:26px 0 10px">Detalhe da carteira</h1>
     <div class="cards" id="dash-kpis"></div>
     <div class="charts">
       <div class="card"><h3>Carteira em aberto por tipo de recebimento</h3><div id="ch-tipo"></div></div>
@@ -188,6 +197,34 @@
       <div class="card"><h3>Situação dos carros vendidos</h3><div id="dash-situacao"></div></div>
       <div class="card"><h3>Maiores saldos por cliente</h3><div id="lista-devedores"></div></div>
     </div>
+  </section>
+
+  <section class="view" id="v-estoque">
+    <h1>Estoque de veículos</h1>
+    <p class="sub">Todo veículo faturado pela fábrica entra aqui. <b>Estoque</b> = disponível para venda · <b>Venda direta</b> = já vendido no faturamento · <b>Test-drive</b> = veículo da loja. Cada veículo tem fotos, custo e condição de pagamento à fábrica.</p>
+    <div class="cards" id="est-kpis"></div>
+    <div class="bar">
+      <button class="b ok" data-perm="estoque:edit" onclick="abrirImportPlanilha()">📊 Atualizar pela planilha Estoque</button>
+      <button class="b sec" data-perm="estoque:edit" onclick="abrirImportFabricante()">📥 Importar faturamento da fábrica</button>
+      <button class="b" data-perm="estoque:edit" onclick="formVeiculo()">＋ Novo veículo</button>
+      <button class="b sec" onclick="exportarEstoque()">📤 CSV</button>
+      <button class="b sec" onclick="window.print()">🖨 PDF</button>
+    </div>
+    <div class="bar">
+      <input id="f-busca-e" placeholder="Buscar chassi, modelo, cor, NF…" oninput="renderEstoque()" style="flex:1;min-width:180px">
+      <select id="f-nat-e" onchange="renderEstoque()">
+        <option value="">Todas as naturezas</option>
+        <option value="estoque">Estoque</option>
+        <option value="vendaDireta">Venda direta</option>
+        <option value="testDrive">Test-drive</option>
+      </select>
+      <select id="f-sit-e" onchange="renderEstoque()">
+        <option value="disponivel">Disponíveis (no estoque)</option>
+        <option value="">Todos</option>
+        <option value="vendido">Vendidos</option>
+      </select>
+    </div>
+    <div id="tbl-estoque"></div>
   </section>
 
   <section class="view" id="v-vendas">
@@ -294,6 +331,7 @@
       <button onclick="relPagamentos()"><b>7 · Pagamentos à fábrica</b><span>Extrato de pagamentos por veículo e posição de custo</span></button>
       <button onclick="relAgingPagar()"><b>8 · Vencidos à fábrica</b><span>Saldo a pagar por faixa de atraso e por fornecedor</span></button>
       <button onclick="relConciliacoes()"><b>9 · Conciliações</b><span>Movimentos pendentes, confirmados e rejeitados, com autor e data</span></button>
+      <button onclick="relCobranca()"><b>10 · Cobrança por cliente</b><span>Carta de cobrança formal por cliente, com os títulos em aberto e o total</span></button>
     </div>
     <div id="rep-out"><div class="empty">Escolha um relatório acima.</div></div>
   </section>
@@ -334,8 +372,9 @@
     <h1>Usuários e permissões</h1>
     <p class="sub">Somente o master vê esta tela. Cada usuário recebe acesso por módulo: ver, criar/editar e excluir. O master tem acesso total e não pode ser bloqueado.</p>
     <div class="bar">
+      <button class="b" id="btn-novo-usuario" onclick="formUsuario()">＋ Novo usuário</button>
       <button class="b sec" onclick="renderUsuarios()">↻ Atualizar lista</button>
-      <span class="hint" style="margin:0">Novos usuários criam a conta em “Primeiro acesso / criar usuário” na tela de login e entram bloqueados até você liberar.</span>
+      <span class="hint" style="margin:0">Somente o master cria usuários. Cada pessoa entra com o login e a senha definidos aqui.</span>
     </div>
     <div id="tbl-usuarios"></div>
     <h1 style="font-size:16px;margin:26px 0 4px">Trilha de auditoria</h1>
@@ -369,6 +408,7 @@
    ============================================================ */
 const PERMS = [
   {k:'dash',       l:'Dashboard',              d:'Indicadores da carteira, aging e situação dos carros'},
+  {k:'estoque',    l:'Estoque de veículos',   d:'Veículos faturados, natureza, fotos, custo e condição'},
   {k:'vendas',     l:'Carros vendidos',         d:'Cadastro de vendas, dossiê e situação de cada carro'},
   {k:'titulos',    l:'Títulos a receber',       d:'Criar títulos, lançar recebimentos, editar e excluir'},
   {k:'pagamentos', l:'Pagamento à fábrica',     d:'Custo do veículo, condição, juros e pagamentos ao fornecedor'},
@@ -486,18 +526,37 @@ async function sairNuvem(){
 }
 
 /* ---------- perfil / permissões ---------- */
+/* A área de conciliação (receber/pagar/ambos) precisa existir em QUALQUER
+   banco já criado, sem exigir alteração de coluna no Supabase. Ela é guardada
+   dentro do próprio JSON de permissões e exposta como u.areaConc. */
+function normalizarPerfil(row){
+  if(!row) return row;
+  const p = row.permissoes || {};
+  if(!row.areaConc && p.areaConc) row.areaConc = p.areaConc;
+  return row;
+}
+function comAreaConc(dados){
+  const d = Object.assign({}, dados);
+  if(d.areaConc !== undefined){
+    d.permissoes = Object.assign({}, d.permissoes || {});
+    if(d.areaConc) d.permissoes.areaConc = d.areaConc;
+    else delete d.permissoes.areaConc;
+    delete d.areaConc;
+  }
+  return d;
+}
 async function carregarPerfil(){
   const uid = CLOUD.usuarioId || (CLOUD.sessao && CLOUD.sessao.uid);
   if(!uid) return null;
   const rows = await apiRest(`usuarios?id=eq.${uid}&select=*`);
-  return (rows && rows[0]) || null;
+  return normalizarPerfil((rows && rows[0]) || null);
 }
 async function criarPerfil(dados){
-  await apiRest('usuarios', {method:'POST', body: dados, prefer:'return=representation'});
+  await apiRest('usuarios', {method:'POST', body: comAreaConc(dados), prefer:'return=representation'});
   return carregarPerfil();
 }
 async function atualizarPerfil(uid, dados){
-  await apiRest(`usuarios?id=eq.${uid}`, {method:'PATCH', body: dados});
+  await apiRest(`usuarios?id=eq.${uid}`, {method:'PATCH', body: comAreaConc(dados)});
 }
 
 /* ---------- carga e gravação ---------- */
@@ -794,7 +853,7 @@ async function iniciarAppNuvem(){
   const primeira = [...document.querySelectorAll('nav button[data-v]')].find(b=>b.style.display !== 'none');
   if(primeira) primeira.click();
   salvarLog('Login', 'sessao', '');
-  concluirConciliacaoAtrasada?.();
+  if(typeof concluirConciliacaoAtrasada === 'function') concluirConciliacaoAtrasada();
 }
 
 async function iniciarSessao(){
@@ -866,7 +925,7 @@ function logAcao(acao, entidade, detalhe){
 async function renderUsuarios(){
   const el = document.getElementById('tbl-usuarios'); if(!el) return;
   let lista = [];
-  try{ lista = await apiRest('usuarios?select=*&order=nome.asc') || []; }catch(e){ el.innerHTML = '<div class="empty">Não foi possível carregar os usuários: '+esc(e.message)+'</div>'; return; }
+  try{ lista = (await apiRest('usuarios?select=*&order=nome.asc') || []).map(normalizarPerfil); }catch(e){ el.innerHTML = '<div class="empty">Não foi possível carregar os usuários: '+esc(e.message)+'</div>'; return; }
   // contas que se cadastraram mas ficaram SEM perfil (não conseguem entrar)
   let pendentes = [];
   try{ pendentes = await apiRest('rpc/usuarios_pendentes', {method:'POST', body:{}}) || []; }catch(e){ pendentes = []; }
@@ -893,7 +952,8 @@ async function renderUsuarios(){
 function resumoPerm(u){
   const p = u.permissoes || {};
   const ver = PERMS.filter(x=>(p[x.k]||{}).ver).map(x=>x.l);
-  return ver.length? `<span class="hint">${esc(ver.join(' · '))}</span>` : '<span class="tag t-vencido">Sem acesso</span>';
+  const area = (u.areaConc || (p.areaConc||'')) ? ` <span class="tag t-div">concilia: ${esc((AREA_ROTULO||{})[u.areaConc||p.areaConc] ? AREA_ROTULO[u.areaConc||p.areaConc].l : (u.areaConc||p.areaConc))}</span>` : '';
+  return (ver.length? `<span class="hint">${esc(ver.join(' · '))}</span>` : '<span class="tag t-vencido">Sem acesso</span>') + area;
 }
 async function renderLogNuvem(){
   const el = document.getElementById('tbl-log'); if(!el) return;
@@ -912,8 +972,85 @@ async function liberarPendente(email){
     alert(r === 'liberado' ? 'Acesso liberado. A pessoa já pode entrar com a senha que cadastrou.'
                            : 'Cadastro criado e liberado. A pessoa já pode entrar.');
     renderUsuarios();
-  }catch(e){ alert(e.message); }
+  }catch(e){
+    const msg = String(e.message||'');
+    alert(/Could not find the function|schema cache/i.test(msg)
+      ? 'Falta aplicar a correção no banco. Rode o arquivo supabase-correcao-seguranca.sql no SQL Editor do Supabase e tente de novo.'
+      : msg);
+  }
 }
+
+/* ---------- criar usuário (somente master) ---------- */
+function formNovoUsuarioCloud(){
+  if(!isMaster()) return alert('Apenas o usuário master pode criar usuários.');
+  const permHtml = PERMS.map(p=>`<tr><td><b>${p.l}</b><div class="hint" style="margin:0">${p.d}</div></td>
+    ${ACOES.map(a=>`<td style="text-align:center"><input type="checkbox" id="pm-${p.k}-${a.k}" ${a.k==='ver'?'checked':''} style="width:17px;height:17px"></td>`).join('')}
+  </tr>`).join('');
+  modal('Novo usuário', `<div class="grid">
+    <div class="fld full"><label>Nome completo *</label><input id="nu-nome" placeholder="Flaviane ..."></div>
+    <div class="fld"><label>E-mail *</label><input id="nu-email" type="email" placeholder="pessoa@icavel.com.br"></div>
+    <div class="fld"><label>Senha inicial *</label><input id="nu-senha" type="password" placeholder="mín. 8 caracteres"></div>
+    <div class="fld full"><label>Área de conciliação</label>
+      <select id="nu-area">
+        <option value="">Não concilia</option>
+        <option value="receber">Contas a receber</option>
+        <option value="pagar">Contas a pagar</option>
+        <option value="ambos">Receber e pagar</option>
+      </select>
+      <div class="hint" style="margin:2px 0 0">Marque a área para o gerente conferir os movimentos dela. A homologação final é sempre do master.</div></div>
+    <div class="fld full"><div class="hint" style="margin:0">Entregue o e-mail e esta senha à pessoa. Ela entra pelo site e pode trocar a senha depois.</div></div>
+    <div class="fld full sect">Permissões por módulo</div>
+    <div class="fld full">
+      <table class="tbl"><thead><tr><th>Módulo</th>${ACOES.map(a=>`<th style="text-align:center">${a.l}</th>`).join('')}</tr></thead>
+      <tbody>${permHtml}</tbody></table>
+      <div class="hint">“Ver” libera a consulta · “Criar/Editar” libera lançamentos · “Excluir” libera apagar.</div>
+    </div>
+  </div>`, async ()=>{
+    const nome = val('nu-nome').trim(), email = val('nu-email').trim().toLowerCase(), senha = val('nu-senha');
+    if(!nome) return alert('Informe o nome.');
+    if(!email || !/@/.test(email)) return alert('Informe um e-mail válido.');
+    if(senha.length < 8) return alert('A senha precisa ter ao menos 8 caracteres.');
+
+    const perm = {};
+    PERMS.forEach(p=>{ perm[p.k] = {}; ACOES.forEach(a=>{ perm[p.k][a.k] = !!document.getElementById(`pm-${p.k}-${a.k}`).checked; }); });
+
+    // guarda a sessão do master: o cadastro troca a sessão para o novo usuário
+    const sessMaster = JSON.parse(JSON.stringify(CLOUD.sessao));
+
+    try{
+      let j;
+      try{ j = await apiAuth('signup', {email, password: senha, data:{nome}}); }
+      catch(e){
+        if(/already|existe/i.test(e.message)) throw new Error('Já existe um login com este e-mail.');
+        throw e;
+      }
+      const uidNovo = (j.user && j.user.id) || j.id;
+      if(!uidNovo) throw new Error('O cadastro não retornou o identificador do usuário.');
+
+      // com a sessão do novo usuário, cria o perfil (o banco força bloqueado)
+      salvarSessao({access_token:j.access_token, refresh_token:j.refresh_token,
+        expires_at: Date.now()+3600*1000, email, uid: uidNovo});
+      CLOUD.usuarioId = uidNovo;
+      const areaConc = val('nu-area') || '';
+      if(areaConc){ perm.conciliacao = perm.conciliacao || {}; perm.conciliacao.ver = true; perm.conciliacao.edit = true; }
+      await apiRest('usuarios', {method:'POST', prefer:'return=minimal', body:{
+        id: uidNovo, nome, login: email.split('@')[0], email,
+        master:false, ativo:false, permissoes:comAreaConc({permissoes:perm, areaConc}).permissoes
+      }});
+
+      // volta para a sessão do master e libera o acesso com as permissões
+      salvarSessao(sessMaster); CLOUD.usuarioId = sessMaster.uid;
+      await atualizarPerfil(uidNovo, {ativo:true, permissoes:perm, nome, areaConc});
+      salvarLog('Criou usuário','usuarios', nome+' ('+email+')');
+      fechar(); renderUsuarios();
+      alert('Usuário criado e liberado.\n\nE-mail: '+email+'\nSenha: (a que você definiu)\n\nA pessoa já pode entrar pelo site.');
+    }catch(e){
+      try{ salvarSessao(sessMaster); CLOUD.usuarioId = sessMaster.uid; }catch(x){}
+      alert('Não foi possível criar: '+e.message);
+    }
+  }, true);
+}
+
 async function bloquearUsuario(id, ativo){
   try{
     await atualizarPerfil(id, {ativo});
@@ -922,8 +1059,10 @@ async function bloquearUsuario(id, ativo){
   }catch(e){ alert(e.message); }
 }
 function formUsuario(id){
+  if(!isMaster()) return alert('Apenas o usuário master pode criar ou alterar usuários.');
+  if(!id) return formNovoUsuarioCloud();
   const el = document.getElementById('m-perm-body');
-  apiRest(`usuarios?id=eq.${id}&select=*`).then(rows=>{
+  apiRest(`usuarios?id=eq.${id}&select=*`).then(rs=>{ const rows=(rs||[]).map(normalizarPerfil);
     const u = rows && rows[0]; if(!u) return;
     const permHtml = PERMS.map(p=>{
       const atual = (u.permissoes||{})[p.k] || {};
@@ -936,6 +1075,14 @@ function formUsuario(id){
       <div class="fld full"><label>E-mail</label><input value="${esc(u.email||'')}" disabled></div>
       <div class="fld full"><label>Situação</label>
         <select id="m-ativo"><option value="1" ${u.ativo?'selected':''}>Ativo</option><option value="0" ${!u.ativo?'selected':''}>Bloqueado</option></select></div>
+      <div class="fld full"><label>Área de conciliação</label>
+        <select id="m-area">
+          <option value="">Não concilia</option>
+          <option value="receber" ${u.areaConc==='receber'?'selected':''}>Contas a receber</option>
+          <option value="pagar" ${u.areaConc==='pagar'?'selected':''}>Contas a pagar</option>
+          <option value="ambos" ${u.areaConc==='ambos'?'selected':''}>Receber e pagar</option>
+        </select>
+        <div class="hint" style="margin:2px 0 0">O gerente confere os movimentos da área dele; a homologação final é do master.</div></div>
       <div class="fld full sect">Permissões por módulo</div>
       <div class="fld full">
         <table class="tbl"><thead><tr><th>Módulo</th>${ACOES.map(a=>`<th style="text-align:center">${a.l}</th>`).join('')}</tr></thead>
@@ -945,8 +1092,10 @@ function formUsuario(id){
     </div>`, async ()=>{
       const perm = {};
       PERMS.forEach(p=>{ perm[p.k] = {}; ACOES.forEach(a=>{ perm[p.k][a.k] = !!document.getElementById(`pm-${p.k}-${a.k}`).checked; }); });
+      const areaConc = val('m-area') || '';
+      if(areaConc){ perm.conciliacao = perm.conciliacao || {}; perm.conciliacao.ver = true; perm.conciliacao.edit = true; }
       try{
-        await atualizarPerfil(id, {nome: val('m-nome').trim(), ativo: val('m-ativo')==='1', permissoes: perm});
+        await atualizarPerfil(id, {nome: val('m-nome').trim(), ativo: val('m-ativo')==='1', permissoes: perm, areaConc});
         salvarLog('Alterou permissões','usuarios', u.nome);
         fechar(); renderUsuarios(); aplicarPermissoes();
       }catch(e){ alert(e.message); }
@@ -1058,7 +1207,7 @@ function renderPagar(){
   const busca = (val('f-busca-p')||'').toLowerCase();
   const st = val('f-status-p');
   let lista = DB.veiculos.slice();
-  if(busca) lista = lista.filter(v=>[v.chassi, v.veiculo, v.fornecedor, v.condicaoPagamento].join(' ').toLowerCase().includes(busca));
+  if(busca) lista = lista.filter(v=>[v.chassi, veicRotulo(v), v.fornecedor, v.condicaoPagamento].join(' ').toLowerCase().includes(busca));
   if(st === 'vencido') lista = lista.filter(v=>atrasoFabrica(v)>0);
   else if(st) lista = lista.filter(v=>{
     const s = statusPagamento(v);
@@ -1090,7 +1239,7 @@ function renderPagar(){
     <table class="tbl"><thead><tr>
       <th>Chassi</th><th>Veículo</th><th>Condição</th><th>Faturamento</th><th>Início juros</th>
       <th class="num">Pé da NF</th><th class="num">Juros</th><th class="num">Custo</th>
-      <th class="num">Pago</th><th class="num">Saldo</th><th>Vencimento</th><th>Situação</th><th></th>
+      <th class="num">Pago</th><th class="num">Saldo</th><th>Vencimento</th><th style="min-width:120px">Situação</th><th></th>
     </tr></thead><tbody>
     ${lista.map(v=>{
       const c = COND_PAG[v.condicao||''] || null;
@@ -1098,7 +1247,7 @@ function renderPagar(){
       const ini = v.inicioJuros || (c? inicioJurosCond(v.condicao, v.dataFaturamento||v.dataCompra):'');
       return `<tr>
         <td><b>${esc(v.chassi||'—')}</b></td>
-        <td>${esc(v.veiculo||'—')}</td>
+        <td>${esc(veicRotulo(v)||'—')}</td>
         <td>${c? `<span style="color:${c.cor};font-weight:700">${c.rotulo}</span>`:'<span class="hint">manual</span>'}</td>
         <td>${fmt(v.dataFaturamento||v.dataCompra)}</td>
         <td>${ini? fmt(ini):'<span class="hint">—</span>'}</td>
@@ -1110,7 +1259,7 @@ function renderPagar(){
             ? '<div class="hint amb" style="margin:0">+'+brl(pagoFabricaBruto(v.chassi)-pagoFabrica(v.chassi))+' aguard. conciliação</div>' : ''}</td>
         <td class="num ${saldoFabrica(v)>0.005?'amb':'pos'}"><b>${brl(saldoFabrica(v))}</b></td>
         <td>${vencFabrica(v)? fmt(vencFabrica(v)) : (saldoFabrica(v)>0.005
-              ? `<button class="b sm sec" style="font-size:11px;padding:3px 8px" onclick="formCusto('${esc(v.chassi)}')" title="Informar vencimento">definir</button>`
+              ? `<button class="b sm sec" style="font-size:11px;padding:3px 8px" onclick="formBoleto('${esc(v.chassi)}')" title="Lançar boleto com vencimento">lançar boleto</button>`
               : '—')}
             ${at?`<div class="hint neg" style="margin:0">${at}d atraso</div>`:''}</td>
         <td>${badgePag(s)}</td>
@@ -1129,7 +1278,7 @@ function formCusto(chassi){
   if(!precisaPermissao('pagamentos','edit')) return;
   if(!DB.veiculos.length) return alert('Nenhum veículo no estoque.');
   const v = chassi ? (DB.veiculos.find(x=>x.chassi===chassi)||{}) : {};
-  const opcoes = chassi ? '' : DB.veiculos.map(x=>`<option value="${esc(x.chassi)}">${esc(x.chassi)} — ${esc(x.veiculo||'')}</option>`).join('');
+  const opcoes = chassi ? '' : DB.veiculos.map(x=>`<option value="${esc(x.chassi)}">${esc(x.chassi)} — ${esc(veicRotulo(x)||'')}</option>`).join('');
   modal(chassi? 'Custo e condição · '+esc(chassi) : 'Custo / condição do veículo', `<div class="grid">
     ${chassi? '' : `<div class="fld full"><label>Veículo *</label><select id="m-vchassi" onchange="formCusto(this.value)">${opcoes}</select></div>`}
     <div class="fld"><label>Pé da NF (R$)</label><input id="m-penf" type="number" step="0.01" value="${v.peNF||''}"></div>
@@ -1201,7 +1350,7 @@ function formPagamento(chassi){
   if(!alvo) return;
   const opts = veics.map(x=>{
     const s = saldoFabrica(x);
-    return `<option value="${esc(x.chassi)}" ${x.chassi===alvo.chassi?'selected':''}>${esc(x.chassi)} — ${esc(x.veiculo||'')} — saldo ${brl(s)}</option>`;
+    return `<option value="${esc(x.chassi)}" ${x.chassi===alvo.chassi?'selected':''}>${esc(x.chassi)} — ${esc(veicRotulo(x)||'')} — saldo ${brl(s)}</option>`;
   }).join('');
   modal('Registrar pagamento à fábrica', `<div class="grid">
     <div class="fld full"><label>Veículo *</label><select id="m-pv" onchange="pagPreview()">${opts}</select></div>
@@ -1356,7 +1505,7 @@ function exportarPagamentos(){
   const linhas = [['Chassi','Veículo','Condição','Faturamento','Início juros','Vencimento','Pé da NF','Desconto','Juros','Custo','Pago','Saldo','Situação','Atraso (dias)']];
   DB.veiculos.forEach(v=>{
     const s = statusPagamento(v);
-    linhas.push([v.chassi, v.veiculo, (COND_PAG[v.condicao||'']||{}).rotulo||'manual',
+    linhas.push([v.chassi, veicRotulo(v), (COND_PAG[v.condicao||'']||{}).rotulo||'manual',
       v.dataFaturamento||v.dataCompra||'', v.inicioJuros||'',
       vencFabrica(v), (+v.peNF||0).toFixed(2), (+v.descontoNF||0).toFixed(2),
       jurosFabrica(v).toFixed(2), custoFabrica(v).toFixed(2),
@@ -1376,8 +1525,8 @@ function relPagamentos(){
   else {
     html = `<table class="tbl"><thead><tr><th>Data</th><th>Veículo</th><th>Forma</th><th>Conta</th><th class="num">Valor</th><th></th></tr></thead><tbody>
     ${ps.map(p=>{ const v = DB.veiculos.find(x=>x.chassi===p.chassi)||{};
-      linhas.push([p.data, p.chassi, v.veiculo, p.forma, p.conta, (+p.valor).toFixed(2), p.obs]);
-      return `<tr><td>${fmt(p.data)}</td><td>${esc(p.chassi)}<div class="hint" style="margin:0">${esc(v.veiculo||'')}</div></td>
+      linhas.push([p.data, p.chassi, veicRotulo(v), p.forma, p.conta, (+p.valor).toFixed(2), p.obs]);
+      return `<tr><td>${fmt(p.data)}</td><td>${esc(p.chassi)}<div class="hint" style="margin:0">${esc(veicRotulo(v)||'')}</div></td>
       <td>${esc(p.forma||'—')}</td><td>${esc(p.conta||'—')}</td><td class="num"><b>${brl(p.valor)}</b>${seloConc(p)}</td>
       <td>${pode('pagamentos','edit')?`<button class="b sm sec" onclick="editarPagFab('${p.id}','${esc(p.chassi)}')">✏️</button>`:''}</td></tr>`;}).join('')}
     </tbody><tfoot><tr style="background:var(--panel2);font-weight:700"><td colspan="4">Total pago</td><td class="num">${brl(ps.reduce((s,p)=>s+p.valor,0))}</td><td></td></tr></tfoot></table>`;
@@ -1388,7 +1537,7 @@ function relPagamentos(){
     html += `<h3 style="margin:20px 0 8px;font-size:13px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px">Posição de custo dos veículos faturados no período</h3>
     <table class="tbl"><thead><tr><th>Chassi</th><th>Condição</th><th class="num">Custo</th><th class="num">Pago</th><th class="num">Saldo</th><th>Situação</th></tr></thead><tbody>
     ${vs.map(v=>{ const s = statusPagamento(v);
-      return `<tr><td>${esc(v.chassi)}<div class="hint" style="margin:0">${esc(v.veiculo||'')}</div></td>
+      return `<tr><td>${esc(v.chassi)}<div class="hint" style="margin:0">${esc(veicRotulo(v)||'')}</div></td>
       <td>${(COND_PAG[v.condicao||'']||{}).rotulo||'manual'}</td>
       <td class="num">${brl(custoFabrica(v))}</td><td class="num pos">${brl(pagoFabrica(v.chassi))}</td>
       <td class="num"><b>${brl(saldoFabrica(v))}</b></td><td>${badgePag(s)}</td></tr>`;}).join('')}
@@ -1428,7 +1577,7 @@ function relAgingPagar(){
     <table class="tbl"><thead><tr><th>Chassi</th><th>Condição</th><th>Vencimento</th><th class="num">Custo</th><th class="num">Pago</th><th class="num">Saldo</th><th class="num">Atraso</th></tr></thead><tbody>
     ${abertos.sort((a,b)=>atrasoFabrica(b)-atrasoFabrica(a)).map(v=>{
       const at = atrasoFabrica(v);
-      return `<tr><td>${esc(v.chassi)}<div class="hint" style="margin:0">${esc(v.veiculo||'')}</div></td>
+      return `<tr><td>${esc(v.chassi)}<div class="hint" style="margin:0">${esc(veicRotulo(v)||'')}</div></td>
       <td>${(COND_PAG[v.condicao||'']||{}).rotulo||'manual'}</td><td>${fmt(vencFabrica(v))}</td>
       <td class="num">${brl(custoFabrica(v))}</td><td class="num pos">${brl(pagoFabrica(v.chassi))}</td>
       <td class="num"><b>${brl(saldoFabrica(v))}</b></td><td class="num ${at?'neg':''}">${at?at+'d':'—'}</td></tr>`;}).join('')}
@@ -1436,33 +1585,69 @@ function relAgingPagar(){
 }
 
 /* ============================================================
-   CONCILIAÇÃO — controle apartado das movimentações
-   Todo recebimento e todo pagamento à fábrica lançado por um
-   usuário que NÃO é master nasce "pendente". O master confirma
-   (concilia) ou devolve (rejeita) com o motivo.
-   Só o que está conciliado entra nos saldos.
+   CONCILIAÇÃO EM DOIS NÍVEIS
+   NÍVEL 1 — GERENTE: concilia os movimentos da SUA área
+             (Flaviane · contas a receber · Orlete · contas a pagar)
+             O movimento passa a "Conferido pelo gerente".
+   NÍVEL 2 — MASTER: concilia a conciliação do gerente.
+             Só depois disso o valor entra nos saldos.
+   Registro sem o campo "conc" é histórico e conta como conciliado.
    ============================================================ */
 
-
-/* ---------- regra central ----------
-   Registro sem o campo "conc" é histórico (anterior ao controle) e conta como
-   conciliado, para não quebrar dados já existentes.                     */
 const concOk = reg => !reg || reg.conc === undefined || reg.conc === 'conciliado';
-const estaPendente = reg => !!(reg && reg.conc === 'pendente');
-const estaRejeitado = reg => !!(reg && reg.conc === 'rejeitado');
+const estaPendente   = reg => !!(reg && reg.conc === 'pendente');
+const estaConferido  = reg => !!(reg && reg.conc === 'conferido');
+const estaRejeitado  = reg => !!(reg && reg.conc === 'rejeitado');
+
+/* ---------- área de cada gerente ---------- */
+const areaDoTipo = tipo => tipo === 'recebimento' ? 'receber' : 'pagar';
+const AREA_ROTULO = {
+  receber: {l:'Contas a receber', t:'aberto'},
+  pagar:   {l:'Contas a pagar',   t:'div'},
+  ambos:   {l:'Receber e pagar',  t:'div'}
+};
+function areaConcDoUsuario(u){
+  if(!u) return '';
+  return u.areaConc || '';
+}
+/* o gerente da área pode agir sobre este tipo de movimento? */
+function gerenteDaArea(tipo){
+  const u = usuarioAtual();
+  if(!u || u.master) return false;
+  if(!pode('conciliacao','edit')) return false;
+  const a = areaConcDoUsuario(u);
+  return a === 'ambos' || a === areaDoTipo(tipo);
+}
+/* o que ESTE usuário pode fazer neste movimento */
+function acoesDoUsuario(tipo, status){
+  const master = isMaster();
+  const gerente = gerenteDaArea(tipo);
+  const st = status || 'pendente';
+  if(master){
+    if(st === 'conciliado') return {conciliar:false, rejeitar:false, reabrir:true, rotulo:'master'};
+    return {conciliar:true, rejeitar:true, reabrir:false, rotulo:'master'};
+  }
+  if(gerente){
+    if(st === 'pendente' || st === 'rejeitado') return {conciliar:true, rejeitar:true, reabrir:false, rotulo:'gerente'};
+    return {conciliar:false, rejeitar:false, reabrir:false, rotulo:'gerente'};
+  }
+  return {conciliar:false, rejeitar:false, reabrir:false, rotulo:''};
+}
 
 /* ---------- selo do lançamento ---------- */
 function seloConc(reg){
   if(!reg) return '';
-  if(reg.conc === 'pendente')  return ' <span class="tag t-parcial" title="Aguardando conciliação do master">conciliar</span>';
-  if(reg.conc === 'rejeitado') return ' <span class="tag t-vencido" title="Devolvido pelo master">rejeitado</span>';
+  if(reg.conc === 'pendente')  return ' <span class="tag t-parcial" title="Aguardando o gerente da área">a conciliar</span>';
+  if(reg.conc === 'conferido') return ' <span class="tag t-aberto" title="Conferido pelo gerente, aguardando o master">aguarda master</span>';
+  if(reg.conc === 'rejeitado') return ' <span class="tag t-vencido" title="Devolvido">rejeitado</span>';
   return '';
 }
 
 const CONC_ROTULO = {
-  pendente:   {l:'Aguardando conciliação', t:'parcial'},
-  conciliado: {l:'Conciliado',             t:'quitado'},
-  rejeitado:  {l:'Rejeitado',              t:'vencido'}
+  pendente:   {l:'Aguardando gerente',        t:'parcial'},
+  conferido:  {l:'Conferido pelo gerente',    t:'aberto'},
+  conciliado: {l:'Conciliado pelo master',    t:'quitado'},
+  rejeitado:  {l:'Rejeitado',                 t:'vencido'}
 };
 const badgeConc = st => {
   const c = CONC_ROTULO[st || 'conciliado'] || CONC_ROTULO.conciliado;
@@ -1477,7 +1662,7 @@ function itensConciliacao(){
     const v = venda(t.vendaId) || {};
     out.push({
       tipo:'recebimento', id:r.id, data:r.data||'', valor:+r.valor||0, reg:r,
-      chassi:v.chassi||'', carro:v.veiculo||'', cliente:v.cliente||'',
+      chassi:v.chassi||'', carro:veicRotulo(v)||'', cliente:v.cliente||'',
       desc:(t.tipoNome||'Recebimento') + (r.forma? ' · '+r.forma : ''),
       quem:r.criadoPor || '—',
       conc:r.conc || 'conciliado'
@@ -1486,9 +1671,9 @@ function itensConciliacao(){
   (DB.pagamentosFabrica||[]).forEach(p=>{
     const v = DB.veiculos.find(x=>x.chassi===p.chassi) || {};
     out.push({
-      tipo:'pagamento', id:p.id, data:p.data||'', valor:+p.valor||0, reg:p,
-      chassi:p.chassi||'', carro:v.veiculo||'', cliente:'',
-      desc:'Pagamento à fábrica' + (p.forma? ' · '+p.forma : ''),
+      tipo:'pagamento', id:p.id, data:p.data||p.vencimento||'', valor:+p.valor||0, reg:p,
+      chassi:p.chassi||'', carro:veicRotulo(v)||'', cliente:'',
+      desc:'Boleto à fábrica' + (p.numero? ' · '+p.numero : ''),
       quem:p.criadoPor || '—',
       conc:p.conc || 'conciliado'
     });
@@ -1496,77 +1681,107 @@ function itensConciliacao(){
   return out.sort((a,b)=>(b.data||'').localeCompare(a.data||''));
 }
 const somarConc = arr => arr.reduce((s,x)=>s+x.valor, 0);
+/* filtra pelo escopo de quem está logado */
+function escopoConc(lista){
+  if(isMaster()) return lista;
+  const u = usuarioAtual(); if(!u) return [];
+  const a = areaConcDoUsuario(u);
+  if(!a) return [];
+  if(a === 'ambos') return lista;
+  return lista.filter(x=>areaDoTipo(x.tipo) === a);
+}
 
 /* ---------- tela ---------- */
 function renderConciliacao(){
   if(!document.getElementById('conc-tabela')) return;
-  const todos = itensConciliacao();
+  const todos = escopoConc(itensConciliacao());
   const pend = todos.filter(x=>x.conc==='pendente');
+  const conf = todos.filter(x=>x.conc==='conferido');
   const rej  = todos.filter(x=>x.conc==='rejeitado');
   const mes  = hoje().slice(0,7);
   const concMes = todos.filter(x=>x.conc==='conciliado' && String(x.reg.concEm||'').slice(0,7)===mes);
+  const master = isMaster();
 
   const kpi = document.getElementById('conc-kpis');
-  if(kpi) kpi.innerHTML = `
-    <div class="kpi"><div class="l">Aguardando conciliação</div><div class="v amb">${brl0(somarConc(pend))}</div>
-      <div class="s">${pend.length} movimento(s) · ${pend.filter(x=>x.tipo==='recebimento').length} receb. · ${pend.filter(x=>x.tipo==='pagamento').length} pag.</div></div>
+  if(kpi) kpi.innerHTML = master ? `
+    <div class="kpi"><div class="l">Conferidos pelos gerentes</div><div class="v amb">${brl0(somarConc(conf))}</div>
+      <div class="s">${conf.length} movimento(s) aguardando VOCÊ</div></div>
+    <div class="kpi"><div class="l">Aguardando gerente</div><div class="v inf">${brl0(somarConc(pend))}</div>
+      <div class="s">${pend.length} movimento(s) ainda no nível 1</div></div>
     <div class="kpi"><div class="l">Conciliado no mês</div><div class="v pos">${brl0(somarConc(concMes))}</div>
       <div class="s">${concMes.length} movimento(s) confirmado(s)</div></div>
     <div class="kpi"><div class="l">Rejeitados</div><div class="v ${rej.length?'neg':''}">${rej.length}</div>
-      <div class="s">${brl0(somarConc(rej))} devolvido(s) ao financeiro</div></div>
-    <div class="kpi"><div class="l">Total de movimentos</div><div class="v">${todos.length}</div>
-      <div class="s">${todos.filter(x=>x.conc==='conciliado').length} conciliado(s)</div></div>`;
+      <div class="s">${brl0(somarConc(rej))} devolvido(s)</div></div>`
+  : `
+    <div class="kpi"><div class="l">Aguardando minha conciliação</div><div class="v amb">${brl0(somarConc(pend))}</div>
+      <div class="s">${pend.length} movimento(s) da sua área</div></div>
+    <div class="kpi"><div class="l">Conferidos por mim</div><div class="v inf">${brl0(somarConc(conf))}</div>
+      <div class="s">${conf.length} aguardando o master</div></div>
+    <div class="kpi"><div class="l">Conciliado pelo master</div><div class="v pos">${brl0(somarConc(concMes))}</div>
+      <div class="s">${concMes.length} no mês</div></div>
+    <div class="kpi"><div class="l">Rejeitados</div><div class="v ${rej.length?'neg':''}">${rej.length}</div>
+      <div class="s">${brl0(somarConc(rej))} para corrigir</div></div>`;
 
-  const st = (val('f-conc-status') || 'pendente');
+  const st = (val('f-conc-status') || (master ? 'conferido' : 'pendente'));
   const tp = (val('f-conc-tipo') || '');
   let lista = todos;
   if(st !== 'todos') lista = lista.filter(x=>x.conc===st);
   if(tp) lista = lista.filter(x=>x.tipo===tp);
 
-  const podeConc = pode('conciliacao','edit');
   const corpo = document.getElementById('conc-tabela');
   if(!corpo) return;
   if(!todos.length){
-    corpo.innerHTML = '<div class="empty">Nenhum recebimento ou pagamento lançado ainda.</div>';
+    corpo.innerHTML = isMaster()
+      ? '<div class="empty">Nenhum recebimento ou pagamento lançado ainda.</div>'
+      : '<div class="empty">Você não tem área de conciliação definida. Peça ao master para indicar se você concilia contas a receber, a pagar, ou ambas.</div>';
     return;
   }
-  if(!lista.length){
-    corpo.innerHTML = '<div class="empty">Nenhum movimento com esse filtro.</div>';
-    return;
-  }
+  if(!lista.length){ corpo.innerHTML = '<div class="empty">Nenhum movimento com esse filtro.</div>'; return; }
+
+  const podeAlgum = lista.some(x=>acoesDoUsuario(x.tipo, x.conc).conciliar);
 
   corpo.innerHTML = `
-    ${st==='pendente' && podeConc ? `<div class="bar">
+    ${st==='pendente' && podeAlgum ? `<div class="bar">
       <button class="b ok" onclick="conciliarSelecionados()">✅ Conciliar selecionados</button>
       <button class="b sec" onclick="marcarTodosConc(true)">Marcar todos</button>
       <button class="b sec" onclick="marcarTodosConc(false)">Limpar</button>
       <span class="hint" style="margin:0">Total selecionado: <b id="conc-sel-total">R$ 0,00</b></span>
     </div>`:''}
+    ${st==='conferido' && master ? `<div class="bar">
+      <button class="b ok" onclick="conciliarSelecionados()">✅ Homologar selecionados (master)</button>
+      <button class="b sec" onclick="marcarTodosConc(true)">Marcar todos</button>
+      <button class="b sec" onclick="marcarTodosConc(false)">Limpar</button>
+      <span class="hint" style="margin:0">Total selecionado: <b id="conc-sel-total">R$ 0,00</b></span>
+    </div>`:''}
     <table class="tbl"><thead><tr>
-      ${st==='pendente' && podeConc ? '<th style="width:34px"><input type="checkbox" onchange="marcarTodosConc(this.checked)" style="width:16px;height:16px"></th>' : ''}
+      ${(st==='pendente'||st==='conferido') && podeAlgum ? '<th style="width:34px"><input type="checkbox" onchange="marcarTodosConc(this.checked)" style="width:16px;height:16px"></th>' : ''}
       <th>Data</th><th>Tipo</th><th>Veículo / cliente</th><th>Descrição</th>
-      <th class="num">Valor</th><th>Lançado por</th><th>Situação</th><th></th></tr></thead><tbody>
-    ${lista.map(x=>`
+      <th class="num">Valor</th><th>Lançado por</th><th>Situação</th><th style="min-width:120px">Ações</th></tr></thead><tbody>
+    ${lista.map(x=>{
+      const ac = acoesDoUsuario(x.tipo, x.conc);
+      const sel = (st==='pendente'||st==='conferido') && ac.conciliar;
+      return `
       <tr>
-        ${st==='pendente' && podeConc ? `<td><input type="checkbox" class="conc-chk" data-tipo="${x.tipo}" data-id="${x.id}"
-          data-valor="${x.valor}" onchange="somaSelecionadosConc()" style="width:16px;height:16px"></td>`:''}
+        ${(st==='pendente'||st==='conferido') && podeAlgum ? `<td>${sel?`<input type="checkbox" class="conc-chk" data-tipo="${x.tipo}" data-id="${x.id}"
+          data-valor="${x.valor}" onchange="somaSelecionadosConc()" style="width:16px;height:16px">`:''}</td>`:''}
         <td>${fmt(x.data)}</td>
         <td>${x.tipo==='recebimento'
             ? '<span class="tag t-aberto">Recebimento</span>'
             : '<span class="tag t-div">Pagamento</span>'}</td>
         <td>${esc(x.chassi||'—')}<div class="hint" style="margin:0">${esc(x.cliente || x.carro)}</div></td>
-        <td>${esc(x.desc)}${x.conc==='rejeitado' && x.reg.concObs? `<div class="hint neg" style="margin:0">Devolvido: ${esc(x.reg.concObs)}</div>`:''}</td>
+        <td>${esc(x.desc)}${x.reg.concObs? `<div class="hint neg" style="margin:0">${x.conc==='rejeitado'?'Devolvido':'Obs.'}: ${esc(x.reg.concObs)}</div>`:''}</td>
         <td class="num"><b>${brl(x.valor)}</b></td>
         <td>${esc(x.quem)}</td>
         <td>${badgeConc(x.conc)}${x.reg.concEm? `<div class="hint" style="margin:0">${new Date(x.reg.concEm).toLocaleDateString('pt-BR')} · ${esc(x.reg.concPor||'')}</div>`:''}</td>
-        <td>${podeConc? `
-          ${x.conc!=='conciliado'? `<button class="b sm ok" onclick="conciliarItem('${x.tipo}','${x.id}')" title="Conciliar">✅</button>`:''}
-          ${x.conc!=='conciliado'? `<button class="b sm dang" onclick="formRejeitar('${x.tipo}','${x.id}')" title="Devolver ao financeiro">✖</button>`:''}
-          ${x.conc==='conciliado'? `<button class="b sm sec" onclick="reabrirConc('${x.tipo}','${x.id}')" title="Reabrir conciliação">↩</button>`:''}
-        `:''}</td>
-      </tr>`).join('')}
+        <td style="white-space:nowrap">${ac.conciliar? `
+          <button class="b sm ok" onclick="conciliarItem('${x.tipo}','${x.id}')" title="${ac.rotulo==='master'?'Conciliar como master':('Conferir como gerente')}">✅</button>`:''}
+          ${ac.rejeitar? `<button class="b sm dang" onclick="formRejeitar('${x.tipo}','${x.id}')" title="Devolver">✖</button>`:''}
+          ${ac.reabrir? `<button class="b sm sec" onclick="reabrirConc('${x.tipo}','${x.id}')" title="Reabrir conciliação">↩</button>`:''}
+          ${(!ac.conciliar && !ac.rejeitar && !ac.reabrir)? '<span class="hint" style="margin:0">—</span>':''}
+        </td>
+      </tr>`;}).join('')}
     </tbody></table>
-    <div class="hint">${lista.length} movimento(s) · ${brl(somarConc(lista))}</div>`;
+    <div class="hint">${lista.length} movimento(s) · ${brl(somarConc(lista))}${master?'':' · sua área: '+esc((AREA_ROTULO[areaConcDoUsuario(usuarioAtual())]||{}).l||'não definida')}</div>`;
 
   const hist = document.getElementById('conc-historico');
   if(hist){
@@ -1574,7 +1789,9 @@ function renderConciliacao(){
     hist.innerHTML = h.length ? `<table class="tbl"><thead><tr>
         <th>Quando</th><th>Quem</th><th>Ação</th><th>Movimento</th><th class="num">Valor</th><th>Observação</th></tr></thead><tbody>
       ${h.map(x=>`<tr><td>${new Date(x.ts).toLocaleString('pt-BR')}</td><td>${esc(x.por)}</td>
-        <td>${x.acao==='conciliado'? '<span class="tag t-quitado">Conciliou</span>':'<span class="tag t-vencido">Rejeitou</span>'}</td>
+        <td>${x.acao==='conciliado'? '<span class="tag t-quitado">Homologou (master)</span>'
+             : x.acao==='conferido'? '<span class="tag t-aberto">Conferiu (gerente)</span>'
+             : '<span class="tag t-vencido">Rejeitou</span>'}</td>
         <td>${esc(x.tipo==='recebimento'?'Recebimento':'Pagamento')} · ${esc(x.chassi||'')}</td>
         <td class="num">${brl(x.valor)}</td><td>${esc(x.obs||'—')}</td></tr>`).join('')}
       </tbody></table><div class="hint">Últimos ${h.length} registros de conciliação.</div>`
@@ -1593,17 +1810,16 @@ function marcarTodosConc(ok){
   somaSelecionadosConc();
 }
 function conciliarSelecionados(){
-  if(!precisaPermissao('conciliacao','edit')) return;
   const chks = [...document.querySelectorAll('.conc-chk:checked')];
   if(!chks.length) return alert('Selecione ao menos um movimento.');
-  let n = 0, total = 0;
+  let n = 0, total = 0, negados = 0;
   chks.forEach(c=>{
-    if(aplicarConciliacao(c.dataset.tipo, c.dataset.id, 'conciliado')){
-      n++; total += +(c.dataset.valor||0);
-    }
+    const r = conciliarItem(c.dataset.tipo, c.dataset.id, true);
+    if(r){ n++; total += +(c.dataset.valor||0); } else negados++;
   });
   save(); renderAll();
-  alert(`${n} movimento(s) conciliado(s) · ${brl(total)} confirmado(s).`);
+  if(n) alert(`${n} movimento(s) conciliado(s) · ${brl(total)}.` + (negados? `\n${negados} sem permissão.`:''));
+  else alert('Nenhum movimento pôde ser conciliado. Verifique sua área de conciliação.');
 }
 
 /* ---------- ações ---------- */
@@ -1611,6 +1827,10 @@ function acharRegistroConc(tipo, id){
   return tipo === 'recebimento'
     ? (DB.recebimentos||[]).find(r=>r.id===id)
     : (DB.pagamentosFabrica||[]).find(p=>p.id===id);
+}
+/* status de destino conforme quem age */
+function destinoConciliacao(tipo){
+  return isMaster() ? 'conciliado' : 'conferido';
 }
 function aplicarConciliacao(tipo, id, status, obs){
   const reg = acharRegistroConc(tipo, id);
@@ -1620,12 +1840,16 @@ function aplicarConciliacao(tipo, id, status, obs){
   reg.concPor = u.nome || '';
   reg.concEm = new Date().toISOString();
   reg.concObs = obs || '';
+  if(status === 'conferido') reg.concNivel = 1;
+  if(status === 'conciliado'){ reg.concNivel = 2; reg.concMasterPor = u.nome || ''; }
   DB.concLog = DB.concLog || [];
   DB.concLog.unshift({id:uid(), ts:reg.concEm, tipo, refId:id, chassi: chassiDoRegistro(tipo, reg),
     valor:+reg.valor||0, acao:status, por:u.nome||'', obs:obs||''});
   if(DB.concLog.length > 400) DB.concLog.length = 400;
   if(tipo === 'pagamento') recalcPagFab(reg.chassi);
-  logAcao(status === 'conciliado' ? 'Conciliou movimento' : 'Rejeitou movimento', tipo,
+  logAcao(status === 'conciliado' ? 'Homologou conciliação (master)'
+        : status === 'conferido'  ? 'Conferiu movimento (gerente)'
+        : 'Rejeitou movimento', tipo,
     chassiDoRegistro(tipo, reg) + ' · ' + brl(reg.valor) + (obs? ' · '+obs : ''));
   return true;
 }
@@ -1635,24 +1859,40 @@ function chassiDoRegistro(tipo, reg){
   const v = venda(t.vendaId) || {};
   return v.chassi || '';
 }
-function conciliarItem(tipo, id){
-  if(!precisaPermissao('conciliacao','edit')) return;
-  if(!aplicarConciliacao(tipo, id, 'conciliado')) return;
-  save(); renderAll();
-  alert('Movimento conciliado.');
+/* conciliar um item; silencioso quando vem do lote */
+function conciliarItem(tipo, id, silencioso){
+  const reg = acharRegistroConc(tipo, id); if(!reg) return false;
+  const status = reg.conc || 'pendente';
+  const ac = acoesDoUsuario(tipo, status);
+  if(!ac.conciliar){
+    if(!silencioso) alert(isMaster()
+      ? 'Este movimento não está em condição de ser conciliado.'
+      : 'Só o master pode homologar a conciliação do gerente. Você pode conferir movimentos da sua área que estejam aguardando ou rejeitados.');
+    return false;
+  }
+  const destino = destinoConciliacao(tipo);
+  if(!aplicarConciliacao(tipo, id, destino)) return false;
+  if(!silencioso){
+    save(); renderAll();
+    alert(destino === 'conciliado'
+      ? 'Conciliação homologada pelo master. O valor entrou nos saldos.'
+      : 'Movimento conferido. Agora aguarda a homologação do master para entrar nos saldos.');
+  }
+  return true;
 }
 function reabrirConc(tipo, id){
-  if(!precisaPermissao('conciliacao','edit')) return;
-  if(!confirm('Reabrir a conciliação deste movimento? Ele volta para "aguardando conciliação" e sai dos saldos até ser confirmado de novo.')) return;
-  if(!aplicarConciliacao(tipo, id, 'pendente', 'Concilição reaberta')) return;
+  if(!isMaster()) return alert('Só o master pode reabrir uma conciliação já homologada.');
+  if(!confirm('Reabrir a conciliação deste movimento? Ele volta para "aguardando gerente" e sai dos saldos até ser confirmado de novo.')) return;
+  if(!aplicarConciliacao(tipo, id, 'pendente', 'Conciliação reaberta pelo master')) return;
   save(); renderAll();
 }
 function formRejeitar(tipo, id){
-  if(!precisaPermissao('conciliacao','edit')) return;
   const reg = acharRegistroConc(tipo, id); if(!reg) return;
-  modal('Devolver ao financeiro', `
-    <p class="hint" style="margin:0 0 12px">Movimento de <b>${brl(reg.valor)}</b> em ${fmt(reg.data)}.
-    Ao rejeitar, ele sai dos saldos e volta para o financeiro corrigir.</p>
+  const ac = acoesDoUsuario(tipo, reg.conc || 'pendente');
+  if(!ac.rejeitar) return alert('Você não pode devolver este movimento.');
+  modal('Devolver movimento', `
+    <p class="hint" style="margin:0 0 12px">Movimento de <b>${brl(reg.valor)}</b> em ${fmt(reg.data||reg.vencimento)}.
+    Ao rejeitar, ele sai dos saldos e volta para correção.</p>
     <div class="fld"><label>Motivo da devolução *</label>
       <textarea id="m-motivo" rows="3" placeholder="ex.: comprovante não confere com o valor, data errada, título trocado…"></textarea></div>`,
   ()=>{
@@ -1666,11 +1906,12 @@ function formRejeitar(tipo, id){
 /* ---------- relatório ---------- */
 function relConciliacoes(){
   const ini = val('rep-ini'), fim = val('rep-fim');
-  const todos = itensConciliacao().filter(x=>noPeriodo(x.data, ini, fim));
+  const todos = escopoConc(itensConciliacao()).filter(x=>noPeriodo(x.data, ini, fim));
   const pend = todos.filter(x=>x.conc==='pendente');
+  const conf = todos.filter(x=>x.conc==='conferido');
   const conc = todos.filter(x=>x.conc==='conciliado');
   const rej  = todos.filter(x=>x.conc==='rejeitado');
-  repHeader('Conciliações', `Movimentos de ${fmt(ini)} a ${fmt(fim)}`);
+  repHeader('Conciliações', `Movimentos de ${fmt(ini)} a ${fmt(fim)}${isMaster()?'':' · apenas a sua área'}`);
   const linhas = [['Data','Tipo','Chassi','Cliente/Carro','Descrição','Valor','Lançado por','Situação','Conciliado por','Conciliado em','Observação']];
   todos.forEach(x=>linhas.push([x.data, x.tipo==='recebimento'?'Recebimento':'Pagamento', x.chassi,
     x.cliente||x.carro, x.desc, x.valor.toFixed(2), x.quem, (CONC_ROTULO[x.conc]||{}).l||x.conc,
@@ -1678,8 +1919,9 @@ function relConciliacoes(){
   REP_CSV = {nome:'conciliacoes', linhas};
   document.getElementById('rep-body').innerHTML = `
     <div class="cards">
-      <div class="kpi"><div class="l">Aguardando</div><div class="v amb">${brl0(somarConc(pend))}</div><div class="s">${pend.length} movimento(s)</div></div>
-      <div class="kpi"><div class="l">Conciliado</div><div class="v pos">${brl0(somarConc(conc))}</div><div class="s">${conc.length} movimento(s)</div></div>
+      <div class="kpi"><div class="l">Aguardando gerente</div><div class="v amb">${brl0(somarConc(pend))}</div><div class="s">${pend.length} movimento(s)</div></div>
+      <div class="kpi"><div class="l">Conferido pelo gerente</div><div class="v inf">${brl0(somarConc(conf))}</div><div class="s">${conf.length} aguardando master</div></div>
+      <div class="kpi"><div class="l">Conciliado (master)</div><div class="v pos">${brl0(somarConc(conc))}</div><div class="s">${conc.length} movimento(s)</div></div>
       <div class="kpi"><div class="l">Rejeitado</div><div class="v neg">${brl0(somarConc(rej))}</div><div class="s">${rej.length} movimento(s)</div></div>
     </div>
     <table class="tbl"><thead><tr><th>Data</th><th>Tipo</th><th>Veículo</th><th>Descrição</th>
@@ -1697,13 +1939,20 @@ function relConciliacoes(){
     ${todos.length? '' : '<div class="empty">Nenhum movimento no período.</div>'}`;
 }
 
-/* contador de pendências no menu */
+/* contador no menu: o que ESTE usuário precisa fazer */
 function atualizarBadgeConc(){
   const btn = document.querySelector('nav button[data-v="conciliacao"]');
   if(!btn) return;
-  const pend = itensConciliacao().filter(x=>x.conc==='pendente').length;
-  btn.innerHTML = '✅ Conciliação' + (pend
-    ? ` <span style="background:var(--warn);color:#1a1206;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800">${pend}</span>`
+  let n = 0;
+  try{
+    const lista = escopoConc(itensConciliacao());
+    n = lista.filter(x=>{
+      const ac = acoesDoUsuario(x.tipo, x.conc);
+      return ac.conciliar && (x.conc==='pendente' || (isMaster() && x.conc==='conferido'));
+    }).length;
+  }catch(e){ n = 0; }
+  btn.innerHTML = '✅ Conciliação' + (n
+    ? ` <span style="background:var(--warn);color:#1a1206;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800">${n}</span>`
     : '');
 }
 
@@ -1735,7 +1984,9 @@ const SEED_TIPOS = [
   {id:'t-leasing',   nome:'Leasing',                    categoria:'Financiamento',  cor:'#a78bfa'},
   {id:'t-cartao',    nome:'Cartão de crédito',          categoria:'Outros',         cor:'#ec4899'},
   {id:'t-cheque',    nome:'Cheque',                     categoria:'Outros',         cor:'#f97316'},
-  {id:'t-bon-fab',   nome:'Bônus Fábrica',              categoria:'Bonificação',    cor:'#eab308'},
+  {id:'t-bon-emplace',nome:'Bônus de Emplacamento',       categoria:'Bonificação',    cor:'#10b981'},
+  {id:'t-bon-varejo',nome:'Bônus de Varejo',              categoria:'Bonificação',    cor:'#059669'},
+  {id:'t-bon-fab',   nome:'Bônus Fábrica',                categoria:'Bonificação',    cor:'#eab308'},
   {id:'t-bon-meta',  nome:'Bônus Meta',                 categoria:'Bonificação',    cor:'#f59e0b'},
   {id:'t-bon-local', nome:'Bônus Local / KPI',          categoria:'Bonificação',    cor:'#fbbf24'},
   {id:'t-fi',        nome:'F&I / Seguro / Garantia',    categoria:'Serviços',       cor:'#14b8a6'},
@@ -2229,7 +2480,7 @@ function renderTitulos(){
         <td>${badge(s.k, s.l)}</td>
         <td>
           ${saldoTitulo(t)>0.005 && pode('titulos','edit')?`<button class="b sm ok" onclick="formBaixa('${t.id}')" title="Baixar">💵</button>`:''}
-          <button class="b sm sec" onclick="gerirBaixas('${t.id}')" title="Baixas">📄 ${DB.recebimentos.filter(r=>r.tituloId===t.id).length}</button>${DB.recebimentos.filter(r=>r.tituloId===t.id).some(estaPendente)?' <span class="tag t-parcial" title="Há baixa(s) aguardando conciliação">conciliar</span>':''}
+          <button class="b sm sec" onclick="gerirBaixas('${t.id}')" title="Ver baixas deste título">📄${DB.recebimentos.filter(r=>r.tituloId===t.id).length?' '+DB.recebimentos.filter(r=>r.tituloId===t.id).length:''}</button>${DB.recebimentos.filter(r=>r.tituloId===t.id).some(estaPendente)?' <span class="tag t-parcial" title="Há baixa(s) aguardando conciliação">conciliar</span>':''}
           ${pode('titulos','edit')?`<button class="b sm sec" onclick="formTitulo('${t.id}')" title="Editar">✏️</button>`:''}
           ${pode('titulos','del')?`<button class="b sm dang" onclick="excluirTitulo('${t.id}')" title="Excluir">🗑</button>`:''}
         </td></tr>`;
@@ -2862,6 +3113,1864 @@ function renderAll(){
 document.querySelectorAll('#rep-ini,#rep-fim').forEach(i=>i.addEventListener('change', renderPeriodoHint));
 periodoPadrao();
 iniciarSessao();
+
+/* ============================================================
+   ICAVEL · SISTEMA DEFINITIVO — ESTOQUE, VEÍCULOS, BOLETOS,
+   FOTOS E IMPORTAÇÃO DO FATURAMENTO
+   Carregado depois de cre-app.js: sobrescreve o que precisa.
+   ============================================================ */
+
+/* master, funcionando também no modo local (onde isMaster não existe) */
+const ehMasterAgora = () => { try{ return typeof isMaster === 'function' ? isMaster() : true; }catch(e){ return true; } };
+
+
+/* rótulo do veículo: aceita o campo novo (modelo) e o antigo (veiculo) */
+function veicRotulo(v){
+  if(!v) return '';
+  return v.modelo || v.veiculo || v.carro || '';
+}
+
+/* ---------- natureza do veículo ---------- */
+const NAT = {
+  estoque:    {l:'Estoque',     c:'#3b82f6', d:'Disponível para venda'},
+  vendaDireta:{l:'Venda direta',c:'#a78bfa', d:'Já faturado para um cliente'},
+  testDrive:  {l:'Test-drive',  c:'#22c55e', d:'Veículo da loja (frota)'}
+};
+const natDe = v => NAT[v && v.natureza] ? v.natureza : 'estoque';
+const natLabel = v => NAT[natDe(v)].l;
+const badgeNat = v => { const n = NAT[natDe(v)]; return `<span class="tag" style="background:${n.c}22;color:${n.c}">${n.l}</span>`; };
+
+/* veículo vendido? = existe venda com este chassi */
+const veicVendido = v => !!(v && DB.vendas.some(x=>x.chassi === v.chassi));
+const veicDisponivel = v => !veicVendido(v);
+
+/* ============================================================
+   FOTOS — compressão no navegador, guardadas no próprio registro
+   ============================================================ */
+const FOTO_MAX_PX = 1000, FOTO_Q = 0.65, FOTO_MAX_KB = 140, FOTO_LIMITE = 6;
+
+function comprimirImagem(file){
+  return new Promise((resolve, reject)=>{
+    if(!file || !/^image\//.test(file.type)) return reject(new Error('O arquivo não é uma imagem.'));
+    const rd = new FileReader();
+    rd.onerror = ()=>reject(new Error('Não consegui ler o arquivo.'));
+    rd.onload = ()=>{
+      const img = new Image();
+      img.onerror = ()=>reject(new Error('Imagem inválida ou corrompida.'));
+      img.onload = ()=>{
+        let {width:w, height:h} = img;
+        const esc = Math.min(1, FOTO_MAX_PX / Math.max(w,h));
+        w = Math.round(w*esc); h = Math.round(h*esc);
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        let q = FOTO_Q, url = cv.toDataURL('image/jpeg', q);
+        while(url.length/1024 > FOTO_MAX_KB && q > 0.3){
+          q -= 0.1; url = cv.toDataURL('image/jpeg', q);
+        }
+        resolve({id: uid(), nome: (file.name||'foto').slice(0,60), dataUrl: url, kb: Math.round(url.length/1024)});
+      };
+      img.src = rd.result;
+    };
+    rd.readAsDataURL(file);
+  });
+}
+
+/* lista temporária enquanto o modal está aberto */
+let FOTOS_TMP = [];
+function fotosEditorHTML(){
+  return `<div class="fld full">
+    <label>Fotos <span class="hint" style="display:inline;margin:0">(até ${FOTO_LIMITE} · reduzidas automaticamente)</span></label>
+    <div id="foto-lista" style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0"></div>
+    <input type="file" id="foto-input" accept="image/*" multiple style="display:none" onchange="adicionarFotos(this)">
+    <button type="button" class="b sec sm" onclick="document.getElementById('foto-input').click()">📷 Adicionar fotos</button>
+    <span class="hint" id="foto-peso" style="display:inline-block;margin-left:8px"></span>
+  </div>`;
+}
+function pintarFotos(){
+  const el = document.getElementById('foto-lista'); if(!el) return;
+  el.innerHTML = FOTOS_TMP.map((f,i)=>`
+    <div style="position:relative;width:88px">
+      <img src="${f.dataUrl}" onclick="verFoto('${f.id}')" style="width:88px;height:66px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:pointer">
+      <button type="button" onclick="removerFoto('${f.id}')" title="Remover"
+        style="position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer;line-height:1">×</button>
+    </div>`).join('');
+  const peso = document.getElementById('foto-peso');
+  if(peso) peso.textContent = FOTOS_TMP.length ? FOTOS_TMP.length+' foto(s) · '+Math.round(FOTOS_TMP.reduce((s,f)=>s+(f.kb||0),0))+' KB' : '';
+}
+async function adicionarFotos(input){
+  const arquivos = [...(input.files||[])];
+  input.value = '';
+  for(const a of arquivos){
+    if(FOTOS_TMP.length >= FOTO_LIMITE){ alert('Máximo de '+FOTO_LIMITE+' fotos neste cadastro.'); break; }
+    try{ FOTOS_TMP.push(await comprimirImagem(a)); }
+    catch(e){ alert('Foto “'+a.name+'”: '+e.message); }
+  }
+  pintarFotos();
+}
+function removerFoto(id){
+  FOTOS_TMP = FOTOS_TMP.filter(f=>f.id !== id);
+  pintarFotos();
+}
+function verFoto(id){
+  const todas = [...FOTOS_TMP, ...DB.veiculos.flatMap(v=>v.fotos||[]), ...DB.clientes.flatMap(c=>c.fotos||[])];
+  const f = todas.find(x=>x.id === id); if(!f) return;
+  modal('Foto · '+esc(f.nome||''), `<img src="${f.dataUrl}" style="width:100%;border-radius:10px">
+    <div class="mfoot"><button class="b sec" onclick="fechar()">Fechar</button></div>`, null, true);
+}
+function galeriaMini(fotos, max){
+  if(!fotos || !fotos.length) return '<span class="hint" style="margin:0">—</span>';
+  const n = max || 3;
+  return `<div style="display:flex;gap:4px">${fotos.slice(0,n).map(f=>
+    `<img src="${f.dataUrl}" onclick="verFoto('${f.id}')" title="${esc(f.nome||'')}"
+      style="width:34px;height:26px;object-fit:cover;border-radius:5px;border:1px solid var(--line);cursor:pointer">`).join('')}
+    ${fotos.length>n?`<span class="hint" style="margin:0;align-self:center">+${fotos.length-n}</span>`:''}</div>`;
+}
+
+/* ============================================================
+   PAGAMENTO À FÁBRICA — boletos com vencimento
+   ============================================================ */
+/* registro pago? legado (sem campo "pago") = pago */
+const boletoPago = r => r.pago === undefined ? true : !!r.pago;
+const boletosDoVeic = chassi => (DB.pagamentosFabrica||[]).filter(p=>p.chassi===chassi)
+  .sort((a,b)=>(a.vencimento||'9999').localeCompare(b.vencimento||'9999'));
+
+function pagoFabrica(chassi){
+  return boletosDoVeic(chassi).filter(r=>boletoPago(r) && concOk(r)).reduce((s,r)=>s+(+r.valor||0),0);
+}
+function abertoFabrica(chassi){
+  return boletosDoVeic(chassi).filter(r=>!boletoPago(r)).reduce((s,r)=>s+(+r.valor||0),0);
+}
+function boletosVencidos(chassi){
+  return boletosDoVeic(chassi).filter(r=>!boletoPago(r) && r.vencimento && diasAte(r.vencimento) < 0);
+}
+
+/* custo = pé da NF + desconto + juros − bônus da fábrica */
+function custoFabrica(v){
+  if(!v) return 0;
+  return (+v.peNF||0) + (+v.descontoNF||0) + jurosFabrica(v) - (+v.bonusFabrica||0);
+}
+function saldoFabrica(v){
+  return Math.max(0, custoFabrica(v) - pagoFabrica(v.chassi));
+}
+/* vencimento da fatura = boleto em aberto mais antigo */
+function vencFabrica(v){
+  if(!v) return '';
+  const ab = boletosDoVeic(v.chassi).filter(r=>!boletoPago(r) && r.vencimento);
+  return ab.length ? ab[0].vencimento : '';
+}
+function atrasoFabrica(v){
+  const saldo = saldoFabrica(v);
+  if(saldo <= 0.005) return 0;
+  const venc = vencFabrica(v);
+  if(!venc) return 0;
+  const d = diasCorridos(venc, hoje());
+  return d > 0 ? d : 0;
+}
+function statusPagamento(v){
+  const custo = custoFabrica(v), pago = pagoFabrica(v.chassi), saldo = saldoFabrica(v);
+  if(custo <= 0.005) return {k:'div', l:'Sem custo'};
+  if(saldo <= 0.005) return {k:'quitado', l:'Quitado'};
+  if(atrasoFabrica(v) > 0) return {k:'vencido', l:'Vencido há '+atrasoFabrica(v)+'d'};
+  if(pago > 0.005) return {k:'parcial', l:'Parcialmente pago'};
+  return {k:'aberto', l:'Em aberto'};
+}
+
+/* ---------- telas de boleto ---------- */
+function formBoleto(chassi){
+  if(!precisaPermissao('pagamentos','edit')) return;
+  const v = DB.veiculos.find(x=>x.chassi===chassi) || {};
+  modal('Boleto à fábrica · '+esc(chassi), `<div class="grid">
+    <div class="fld full"><label>Veículo</label><input value="${esc((v.modelo||'')+' · '+chassi)}" disabled></div>
+    <div class="fld"><label>Número do boleto</label><input id="b-num" placeholder="opcional"></div>
+    <div class="fld"><label>Valor (R$)</label><input id="b-valor" type="number" step="0.01" value="${(+v.peNF||0).toFixed(2)}"></div>
+    <div class="fld"><label>Vencimento</label><input id="b-venc" type="date" value="${somarDiasData(hoje(),30)}"></div>
+    <div class="fld"><label>Situação</label><select id="b-pago">
+      <option value="0">Em aberto</option><option value="1">Já pago</option></select></div>
+    <div class="fld"><label>Data do pagamento</label><input id="b-dt" type="date"></div>
+    <div class="fld full"><label>Observação</label><input id="b-obs"></div>
+  </div>`, ()=>{
+    const valor = +val('b-valor') || 0;
+    if(valor <= 0) return alert('Informe o valor do boleto.');
+    const pago = val('b-pago') === '1';
+    if(pago && !val('b-dt')) return alert('Informe a data do pagamento.');
+    const rec = {id:uid(), chassi, numero:val('b-num').trim(), valor,
+      vencimento:val('b-venc'), pago, dataPagamento: pago ? val('b-dt') : '',
+      obs:val('b-obs').trim()};
+    if(!ehMasterAgora()) rec.conc = 'pendente';
+    DB.pagamentosFabrica.push(rec);
+    recalcPagFab(chassi);
+    save(); fechar(); renderAll();
+  });
+}
+
+function pagarBoleto(id){
+  if(!precisaPermissao('pagamentos','edit')) return;
+  const r = DB.pagamentosFabrica.find(x=>x.id===id); if(!r) return;
+  modal('Baixar boleto', `<p class="hint" style="margin:0 0 12px">Boleto ${esc(r.numero||'—')} · ${brl(r.valor)} · vence ${fmt(r.vencimento)}</p>
+    <div class="fld full"><label>Data do pagamento</label><input id="bp-dt" type="date" value="${hoje()}"></div>`,
+    ()=>{
+      const d = val('bp-dt'); if(!d) return alert('Informe a data.');
+      r.pago = true; r.dataPagamento = d;
+      if(!ehMasterAgora()) r.conc = 'pendente';
+      recalcPagFab(r.chassi);
+      save(); fechar(); renderAll();
+    });
+}
+function excluirBoleto(id){
+  if(!precisaPermissao('pagamentos','del')) return;
+  const r = DB.pagamentosFabrica.find(x=>x.id===id); if(!r) return;
+  if(!confirm('Excluir este boleto de '+brl(r.valor)+'?')) return;
+  DB.pagamentosFabrica = DB.pagamentosFabrica.filter(x=>x.id!==id);
+  recalcPagFab(r.chassi); save(); renderAll();
+}
+
+/* ============================================================
+   CADASTRO DO VEÍCULO (com fotos)
+   ============================================================ */
+function formVeiculo(chassi){
+  if(!precisaPermissao('estoque','edit')) return;
+  const v = chassi ? (DB.veiculos.find(x=>x.chassi===chassi)||{}) : {};
+  FOTOS_TMP = (v.fotos||[]).slice();
+  modal(chassi?'Editar veículo':'Novo veículo', `<div class="grid">
+    <div class="fld"><label>Chassi *</label><input id="v-chassi" value="${esc(v.chassi||'')}" ${chassi?'disabled':''} style="text-transform:uppercase"></div>
+    <div class="fld"><label>Natureza</label><select id="v-nat">
+      ${Object.entries(NAT).map(([k,x])=>`<option value="${k}" ${natDe(v)===k?'selected':''}>${x.l} — ${x.d}</option>`).join('')}
+    </select></div>
+    <div class="fld"><label>Modelo</label><input id="v-modelo" value="${esc(v.modelo||'')}" placeholder="FIAT/ARGO DRIVE 1.0"></div>
+    <div class="fld"><label>Cor</label><input id="v-cor" value="${esc(v.cor||'')}"></div>
+    <div class="fld"><label>Ano/modelo</label><input id="v-ano" value="${esc(v.anoModelo||'')}" placeholder="2026/2027"></div>
+    <div class="fld"><label>Nota fiscal</label><input id="v-nf" value="${esc(v.nf||'')}"></div>
+    <div class="fld"><label>Faturamento fábrica</label><input id="v-fat" type="date" value="${v.dataFaturamento||''}"></div>
+    <div class="fld"><label>Pé da NF (R$)</label><input id="v-pen" type="number" step="0.01" value="${v.peNF||''}"></div>
+    <div class="fld"><label>Desconto em NF (R$)</label><input id="v-desc" type="number" step="0.01" value="${v.descontoNF||''}"></div>
+    <div class="fld"><label>Bônus da fábrica (R$)</label><input id="v-bonus" type="number" step="0.01" value="${v.bonusFabrica||''}"></div>
+    <div class="fld"><label>Condição de pagamento</label><select id="v-cond">
+      <option value="fdic" ${v.condicao==='fdic'?'selected':''}>FDIC</option>
+      <option value="floorPlan" ${v.condicao==='floorPlan'?'selected':''}>Floor Plan</option>
+      <option value="avista" ${v.condicao==='avista'?'selected':''}>À vista</option>
+    </select></div>
+    <div class="fld"><label>Início dos juros</label><input id="v-inij" type="date" value="${v.inicioJuros||''}"></div>
+    <div class="fld full"><label>Opcionais</label><input id="v-opic" value="${esc(v.opcionais||'')}"></div>
+    ${fotosEditorHTML()}
+  </div>`, ()=>{
+    const ch = (chassi || val('v-chassi')).trim().toUpperCase();
+    if(!ch) return alert('Informe o chassi.');
+    const dup = DB.veiculos.find(x=>x.chassi===ch && x.chassi!==chassi);
+    if(dup) return alert('Já existe um veículo com este chassi.');
+    const cond = val('v-cond');
+    const dados = {
+      chassi: ch, natureza: val('v-nat'), modelo: val('v-modelo').trim().toUpperCase(),
+      cor: val('v-cor').trim().toUpperCase(), anoModelo: val('v-ano').trim(),
+      nf: val('v-nf').trim(), dataFaturamento: val('v-fat'),
+      peNF: +val('v-pen')||0, descontoNF: +val('v-desc')||0, bonusFabrica: +val('v-bonus')||0,
+      condicao: cond,
+      inicioJuros: val('v-inij') || inicioJurosCond(cond, val('v-fat')),
+      opcionais: val('v-opic').trim(), fotos: FOTOS_TMP.slice()
+    };
+    if(chassi){ Object.assign(v, dados); }
+    else DB.veiculos.push(Object.assign({id:uid()}, dados));
+    save(); fechar(); renderAll();
+  }, true);
+  setTimeout(pintarFotos, 0);
+}
+function excluirVeiculo(chassi){
+  if(!precisaPermissao('estoque','del')) return;
+  const v = DB.veiculos.find(x=>x.chassi===chassi); if(!v) return;
+  const bol = boletosDoVeic(chassi).length;
+  if(!confirm(`Excluir o veículo ${chassi}?\n\nIsso apaga ${bol} boleto(s) à fábrica vinculados. A venda, se houver, não é apagada.`)) return;
+  DB.veiculos = DB.veiculos.filter(x=>x.chassi!==chassi);
+  DB.pagamentosFabrica = DB.pagamentosFabrica.filter(p=>p.chassi!==chassi);
+  save(); renderAll();
+}
+
+/* ---------- tela do estoque ---------- */
+function estoqueFiltrado(){
+  const q = (val('f-busca-e')||'').toLowerCase();
+  const nat = val('f-nat-e'), sit = val('f-sit-e');
+  return DB.veiculos.filter(v=>{
+    if(nat && natDe(v) !== nat) return false;
+    if(sit === 'disponivel' && !veicDisponivel(v)) return false;
+    if(sit === 'vendido' && !veicVendido(v)) return false;
+    if(q){
+      const alvo = [v.chassi,v.modelo,v.cor,v.nf,v.anoModelo].join(' ').toLowerCase();
+      if(!alvo.includes(q)) return false;
+    }
+    return true;
+  });
+}
+function renderEstoque(){
+  const el = document.getElementById('tbl-estoque'); if(!el) return;
+  const lista = estoqueFiltrado();
+  const disp = DB.veiculos.filter(veicDisponivel);
+  const k = document.getElementById('est-kpis');
+  if(k){
+    const valorDisp = disp.reduce((s,v)=>s+(+v.peNF||0),0);
+    k.innerHTML = `
+      <div class="kpi"><div class="l">Veículos no estoque</div><div class="v">${disp.length}</div><div class="s">disponíveis para venda</div></div>
+      <div class="kpi"><div class="l">Valor do estoque (pé da NF)</div><div class="v inf">${brl0(valorDisp)}</div><div class="s">${brl0(disp.reduce((s,v)=>s+custoFabrica(v),0))} com juros</div></div>
+      <div class="kpi"><div class="l">Estoque</div><div class="v">${disp.filter(v=>natDe(v)==='estoque').length}</div><div class="s">Rede</div></div>
+      <div class="kpi"><div class="l">Venda direta</div><div class="v" style="color:#a78bfa">${DB.veiculos.filter(v=>natDe(v)==='vendaDireta'&&veicDisponivel(v)).length}</div><div class="s">aguardando venda</div></div>
+      <div class="kpi"><div class="l">Test-drive</div><div class="v pos">${disp.filter(v=>natDe(v)==='testDrive').length}</div><div class="s">frota da loja</div></div>`;
+  }
+  if(!lista.length){ el.innerHTML = '<div class="empty">Nenhum veículo. Use “Importar faturamento da fábrica” para carregar o relatório do dia.</div>'; return; }
+  el.innerHTML = `<table class="tbl"><thead><tr>
+      <th>Chassi</th><th>Veículo</th><th>Natureza</th><th>Situação</th><th>Fábrica</th><th>Fotos</th><th class="num">Pé da NF</th><th class="num">Custo</th><th></th>
+    </tr></thead><tbody>
+    ${lista.map(v=>{
+      const st = statusPagamento(v);
+      const vend = veicVendido(v);
+      return `<tr>
+        <td><b>${esc(v.chassi)}</b><div class="hint" style="margin:0">${esc(v.anoModelo||'')}</div></td>
+        <td>${esc(v.modelo||'—')}<div class="hint" style="margin:0">${esc(v.cor||'')}${v.diasEstoque!=null?'':' '}</div></td>
+        <td>${badgeNat(v)}</td>
+        <td>${vend?'<span class="tag t-parcial">Vendido</span>':'<span class="tag t-quitado">Disponível</span>'}</td>
+        <td>${badgePag(st)}</td>
+        <td>${galeriaMini(v.fotos)}</td>
+        <td class="num">${brl(v.peNF)}</td>
+        <td class="num">${brl(custoFabrica(v))}</td>
+        <td style="white-space:nowrap">
+          ${pode('estoque','edit')?`<button class="b sm sec" onclick="formVeiculo('${v.chassi}')" title="Editar">✏️</button>`:''}
+          ${pode('pagamentos','edit')?`<button class="b sm sec" onclick="gerirBoletos('${v.chassi}')" title="Boletos à fábrica">🏭</button>`:''}
+          ${pode('estoque','del')?`<button class="b sm dang" onclick="excluirVeiculo('${v.chassi}')" title="Excluir">🗑</button>`:''}
+        </td></tr>`;
+    }).join('')}</tbody></table>
+    <div class="hint">${lista.length} veículo(s). Fábrica: ${badgePag({k:'quitado',l:'Quitado'})} ${badgePag({k:'parcial',l:'Parcialmente pago'})} ${badgePag({k:'aberto',l:'Em aberto'})} ${badgePag({k:'vencido',l:'Vencido'})}</div>`;
+}
+
+/* ---------- boletos do veículo ---------- */
+function gerirBoletos(chassi){
+  const v = DB.veiculos.find(x=>x.chassi===chassi); if(!v) return;
+  const bol = boletosDoVeic(chassi);
+  const pago = pagoFabrica(chassi), saldo = saldoFabrica(v);
+  modal('Boletos à fábrica · '+esc(chassi), `
+    <p class="hint" style="margin:0 0 12px">${esc(v.modelo||'')} · Custo ${brl(custoFabrica(v))} · Pago ${brl(pago)} · <b class="${saldo>0.005?'amb':'pos'}">Saldo ${brl(saldo)}</b></p>
+    ${bol.length ? `<table class="tbl"><thead><tr><th>Boleto</th><th>Vencimento</th><th class="num">Valor</th><th>Situação</th><th></th></tr></thead><tbody>
+      ${bol.map(r=>{
+        const atr = !boletoPago(r) && r.vencimento && diasAte(r.vencimento) < 0;
+        const sit = boletoPago(r) ? `<span class="tag t-quitado">Pago ${fmt(r.dataPagamento)}</span>`
+          : atr ? `<span class="tag t-vencido">Vencido há ${-diasAte(r.vencimento)}d</span>`
+          : `<span class="tag t-aberto">Vence ${fmt(r.vencimento)}</span>`;
+        return `<tr><td>${esc(r.numero||'—')}</td><td>${fmt(r.vencimento)}</td>
+          <td class="num">${brl(r.valor)}</td><td>${sit}</td>
+          <td style="white-space:nowrap">
+            ${!boletoPago(r)&&pode('pagamentos','edit')?`<button class="b sm ok" onclick="fechar();pagarBoleto('${r.id}')">💸 Baixar</button>`:''}
+            ${pode('pagamentos','del')?`<button class="b sm dang" onclick="excluirBoleto('${r.id}');setTimeout(()=>gerirBoletos('${chassi}'),120)">🗑</button>`:''}
+          </td></tr>`;
+      }).join('')}</tbody></table>`
+      : '<div class="empty" style="padding:18px">Nenhum boleto lançado.</div>'}
+    <div class="mfoot">
+      <button class="b sec" onclick="fechar()">Fechar</button>
+      ${pode('pagamentos','edit')?`<button class="b" onclick="fechar();formBoleto('${chassi}')">＋ Novo boleto</button>`:''}
+    </div>`, null, true);
+}
+
+/* ============================================================
+   IMPORTAÇÃO DO FATURAMENTO DA FÁBRICA
+   ============================================================ */
+const _esc2 = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function _inflar(u8){
+  if(typeof DecompressionStream === 'undefined') return null;
+  for(const corte of [0,1,2,3,4,6,8]){
+    const dado = corte ? u8.subarray(0, Math.max(0, u8.length - corte)) : u8;
+    for(const fmt of ['deflate','deflate-raw']){
+      try{
+        const st = new Blob([dado]).stream().pipeThrough(new DecompressionStream(fmt));
+        const buf = await new Response(st).arrayBuffer();
+        if(buf.byteLength) return new Uint8Array(buf);
+      }catch(e){}
+    }
+  }
+  return null;
+}
+const _desescPDF = s => s.replace(/\\([nrtbf()\\]|[0-7]{1,3})/g, (m,g)=>{
+  if(/^[0-7]+$/.test(g)) return String.fromCharCode(parseInt(g,8));
+  return ({n:'\n',r:'\r',t:'\t',b:'\b',f:'\f','(':'(',')':')','\\':'\\'})[g] || g;
+});
+function _textoDoStream(cs){
+  const out = [];
+  const re = /\(((?:\\.|[^\\()])*)\)\s*(Tj|'|")|\[((?:[^\[\]]|\\.)*)\]\s*TJ/g;
+  let m;
+  while((m = re.exec(cs))){
+    if(m[1] !== undefined) out.push(_desescPDF(m[1]));
+    else {
+      const partes = (m[3] || '').match(/\((?:\\.|[^\\()])*\)/g) || [];
+      out.push(partes.map(p=>_desescPDF(p.slice(1,-1))).join(''));
+    }
+  }
+  return out.join('\n');
+}
+async function extrairTextoPDF(arrayBuffer){
+  const u8 = new Uint8Array(arrayBuffer);
+  const latin = new TextDecoder('latin1').decode(u8);
+  const blocos = [];
+  let idx = 0;
+  while(true){
+    const s = latin.indexOf('stream', idx);
+    if(s < 0) break;
+    if(latin.slice(Math.max(0,s-3), s) === 'end'){ idx = s + 6; continue; }
+    let p = s + 6;
+    if(latin[p] === '\r') p++;
+    if(latin[p] === '\n') p++;
+    const e = latin.indexOf('endstream', p);
+    if(e < 0) break;
+    let fim = e;
+    const dict = latin.slice(Math.max(0, s - 400), s);
+    const mLen = dict.match(/\/Length\s+(\d+)(?!\s+\d+\s+R)/);
+    if(mLen){ const n = parseInt(mLen[1],10); if(n > 0 && p + n <= latin.length) fim = p + n; }
+    const inf = await _inflar(u8.subarray(p, fim));
+    const txt = new TextDecoder('latin1').decode(inf || u8.subarray(p, fim));
+    if(/\bTJ?\b|Tj/.test(txt) && txt.indexOf('Tf') >= 0) blocos.push(_textoDoStream(txt));
+    idx = e + 9;
+  }
+  return blocos.join('\n');
+}
+const _numBR = s => {
+  if(s == null) return 0;
+  const t = String(s).replace(/[^\d,.-]/g,'').trim();
+  if(!t) return 0;
+  if(t.includes(',')) return parseFloat(t.replace(/\./g,'').replace(',','.')) || 0;
+  return parseFloat(t) || 0;
+};
+const _dataBR = s => {
+  const m = String(s||'').match(/(\d{2})\/(\d{2})\/(\d{2,4})/);
+  if(!m) return '';
+  let a = m[3]; if(a.length === 2) a = '20'+a;
+  return `${a}-${m[2]}-${m[1]}`;
+};
+const ROTULOS_FICHA = ['COD.COR.EXT.','COD.COR.INT.','VLR TOTAL N.F','BASE ICM RET','BASE RETIDO',
+  'CODIGO VIN','TIPO/CHASSI','MOD/VER/SER','NOTA FISCAL','DATA EMISSAO','BASE ICMS','BASE IPI',
+  'VLR BONUS','F.PAG','PEDIDO','MOTOR','RENAVAM','ICMS','IPI','CLIENTE','DESCRICAO','Codigo FCI','TIPO MERCADO'
+].sort((a,b)=>b.length-a.length);
+function camposFicha(txt){
+  const texto = String(txt).replace(/\r/g,'');
+  const mapa = {};
+  const re = new RegExp('(' + ROTULOS_FICHA.map(r=>r.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|') + ')\\s*:\\s*', 'gi');
+  const achados = [];
+  let m;
+  while((m = re.exec(texto))) achados.push({rotulo:m[1].toUpperCase().replace(/\s+/g,' '), ini:m.index, fim:re.lastIndex});
+  achados.forEach((a,i)=>{
+    const lim = texto.indexOf('\n', a.fim);
+    const prox = achados[i+1] ? achados[i+1].ini : texto.length;
+    const fimV = Math.min(prox, lim < 0 ? texto.length : lim);
+    const valor = texto.slice(a.fim, fimV).replace(/\s+/g,' ').trim();
+    if(mapa[a.rotulo] === undefined) mapa[a.rotulo] = valor;
+    else if(Array.isArray(mapa[a.rotulo])) mapa[a.rotulo].push(valor);
+    else mapa[a.rotulo] = [mapa[a.rotulo], valor];
+  });
+  return mapa;
+}
+const _campo = (mapa, rot) => {
+  const v = mapa[rot.toUpperCase()];
+  return Array.isArray(v) ? (v[v.length-1]||'') : (v == null ? '' : String(v).trim());
+};
+/* natureza a partir do TIPO MERCADO da fábrica */
+function naturezaDoMercado(mercado){
+  const m = String(mercado||'').toUpperCase();
+  if(/DIRET/.test(m)) return 'vendaDireta';
+  if(/TEST/.test(m)) return 'testDrive';
+  return 'estoque';
+}
+function parseFaturamentoFiat(texto){
+  const linhas = String(texto).replace(/\r/g,'').split('\n');
+  const blocos = [];
+  let atual = null;
+  for(const l of linhas){
+    if(/FIASA\s+VE[IÍ]CULOS\s+FATURADO/i.test(l)){
+      if(atual) blocos.push(atual);
+      atual = {linhas:[], cabecalho:l};
+      continue;
+    }
+    if(!atual) continue;
+    if(/^-{10,}\s*$/.test(l.trim())) continue;
+    if(!l.trim()) continue;
+    atual.linhas.push(l.trim());
+  }
+  if(atual) blocos.push(atual);
+
+  const veiculos = [], avisos = [];
+  blocos.forEach((b,i)=>{
+    const txt = b.linhas.join('\n');
+    const m = camposFicha(txt);
+    const cab = camposFicha(b.cabecalho);
+    const seqRaw = _campo(cab,'SEQ') || _campo(m,'SEQ');
+    const seq = (String(seqRaw).match(/\d+/)||[String(i+1)])[0];
+    const vin = ((_campo(m,'CODIGO VIN')||'').match(/[A-Z0-9]{11,20}/i)||[''])[0].toUpperCase();
+    const chassiTip = ((_campo(m,'TIPO/CHASSI')||'').match(/[A-Z0-9]{6,20}/i)||[''])[0].toUpperCase();
+    const chassi = vin || chassiTip;
+
+    if(!chassi){
+      const sobra = b.linhas.filter(l=>!/^(DATA EMISSAO|TIPO MERCADO|CLIENTE|MOD\/VER\/SER|MOTOR|NOTA FISCAL|BASE IPI|BASE ICM RET|Codigo FCI)\s*:/i.test(l));
+      if(veiculos.length && sobra.length){
+        const alvo = veiculos[veiculos.length-1];
+        alvo.opcionais = [alvo.opcionais, sobra.join(' ')].filter(Boolean).join(' ').replace(/\s+/g,' ').trim();
+      } else {
+        avisos.push(`SEQ ${seq}: bloco sem chassi — ignorado`);
+      }
+      return;
+    }
+
+    const desc = (txt.match(/DESCRICAO\s*:\s*([\s\S]*)$/i)||[])[1] || '';
+    const dl = desc.replace(/\s+/g,' ').trim();
+    let modelo = '', cor = '', rev = '', extras = '';
+    const mM = dl.match(/^(.+?)\s+(\d{2})\s*PASSAGEIROS/i);
+    modelo = mM ? mM[1].trim() : (dl.split(/\s{2,}/)[0] || '');
+    modelo = modelo.replace(/\s*\/\s*/g,'/').replace(/\s+/g,' ').trim().toUpperCase();
+    const mFab = dl.match(/FAB\s*(\d{4})/i), mMod = dl.match(/MOD-?\s*(\d{4})/i);
+    const mCor = dl.match(/COR-([A-ZÀ-Ú0-9 ]+?)(?=\s+(?:REV-|[A-Z0-9]{2,4}-)|$)/i);
+    if(mCor) cor = mCor[1].trim().toUpperCase();
+    const mRev = dl.match(/REV-([\s\S]*?)(?=\s+[A-Z0-9]{2,4}-|$)/i);
+    if(mRev){
+      rev = mRev[1].trim();
+      const p = dl.toUpperCase().indexOf('REV-'+mRev[1].toUpperCase());
+      extras = p >= 0 ? dl.slice(p + 4 + mRev[1].length).trim() : '';
+    }
+    if(!extras && mCor){
+      const p = dl.toUpperCase().indexOf('COR-'+mCor[1].toUpperCase());
+      extras = p >= 0 ? dl.slice(p + 4 + mCor[1].length).trim() : '';
+      extras = extras.replace(/^REV-[\s\S]*?(?=\s+[A-Z0-9]{2,4}-|$)/i,'').trim();
+    }
+    const datas = (txt.match(/DATA EMISSAO\s*:\s*[\d\/]+/gi)||[]).map(x=>_dataBR(x));
+    const mercado = _campo(m,'TIPO MERCADO').toUpperCase();
+    const fpag = _campo(m,'F.PAG').toUpperCase();
+    const condSug = /FL\.?\s*PLAN/.test(fpag) ? 'floorPlan' : (/A\s*VISTA/.test(fpag) ? 'avista' : 'fdic');
+
+    veiculos.push({
+      seq, chassi, modelo, cor,
+      opcionais: (extras || rev).replace(/\s+/g,' ').trim().toUpperCase(),
+      anoModelo: (mFab && mMod) ? `${mFab[1]}/${mMod[1]}` : '',
+      dataFaturamento: datas[0] || hoje(), dataNF: datas[1] || '',
+      nf: ((_campo(m,'NOTA FISCAL')||'').match(/\d+/)||[''])[0],
+      pedido: ((_campo(m,'PEDIDO')||'').match(/\d+/)||[''])[0],
+      motor: ((_campo(m,'MOTOR')||'').match(/\d+/)||[''])[0],
+      renavam: ((_campo(m,'RENAVAM')||'').match(/\d+/)||[''])[0],
+      clienteDoc: ((_campo(m,'CLIENTE')||'').match(/\d+/)||[''])[0],
+      mercado, fpag,
+      natureza: naturezaDoMercado(mercado),
+      condicao: condSug,
+      peNF: _numBR(_campo(m,'VLR TOTAL N.F')),
+      bonusFabrica: _numBR(_campo(m,'VLR BONUS')),
+      icms: _numBR(_campo(m,'ICMS')), ipi: _numBR(_campo(m,'IPI')),
+      baseICMS: _numBR(_campo(m,'BASE ICMS')), baseIPI: _numBR(_campo(m,'BASE IPI')),
+      avisos: []
+    });
+  });
+  return {veiculos, avisos};
+}
+
+let IMP = {lista:[], sel:new Set()};
+function abrirImportFabricante(){
+  if(!precisaPermissao('estoque','edit')) return;
+  IMP = {lista:[], sel:new Set()};
+  modal('Importar faturamento da fábrica', `
+    <p class="hint" style="margin:0 0 12px">Aceita o PDF que a fábrica envia (FIASA), TXT ou o texto colado.
+    A leitura é feita no próprio navegador — o arquivo não sai do seu computador.</p>
+    <div class="fld full" style="margin-bottom:10px">
+      <label>Arquivo(s) da fábrica</label>
+      <input type="file" id="if-file" accept=".pdf,.txt" multiple onchange="lerFabricante(this.files)">
+    </div>
+    <div class="fld full">
+      <label>…ou cole aqui o texto do relatório</label>
+      <textarea id="if-texto" rows="4"></textarea>
+      <button class="b sec sm" style="margin-top:8px" onclick="analisarTextoFabricante()">Analisar texto</button>
+    </div>
+    <div id="if-preview" class="full" style="margin-top:14px"></div>
+    <div class="mfoot"><button class="b sec" onclick="fechar()">Fechar</button></div>`, null, true);
+}
+async function lerFabricante(files){
+  const lista = [...(files||[])];
+  if(!lista.length) return;
+  let texto = '';
+  for(const f of lista){
+    try{
+      if(/\.pdf$/i.test(f.name)) texto += '\n' + await extrairTextoPDF(await f.arrayBuffer());
+      else texto += '\n' + await f.text();
+    }catch(e){ alert('Não consegui ler '+f.name+': '+e.message); }
+  }
+  aplicarTextoFabricante(texto);
+}
+function analisarTextoFabricante(){
+  const t = val('if-texto');
+  if(!t.trim()) return alert('Cole o texto do relatório.');
+  aplicarTextoFabricante(t);
+}
+function aplicarTextoFabricante(texto){
+  const r = parseFaturamentoFiat(texto);
+  if(!r.veiculos.length){
+    document.getElementById('if-preview').innerHTML = '<div class="empty">Nenhum veículo encontrado no arquivo. Confira se é o relatório de faturamento (FIASA).</div>';
+    return;
+  }
+  IMP.lista = r.veiculos;
+  IMP.sel = new Set(r.veiculos.map((_,i)=>i));
+  pintarPreviewFabricante(r.avisos);
+}
+function pintarPreviewFabricante(avisos){
+  const el = document.getElementById('if-preview'); if(!el) return;
+  const novos = IMP.lista.filter(v=>!DB.veiculos.some(x=>x.chassi===v.chassi));
+  const repetidos = IMP.lista.length - novos.length;
+  el.innerHTML = `
+    ${avisos && avisos.length ? `<div class="hint" style="color:var(--warn);margin-bottom:8px">${avisos.map(a=>_esc2(a)).join('<br>')}</div>`:''}
+    <p class="hint" style="margin:0 0 8px"><b>${IMP.lista.length}</b> veículo(s) no arquivo · <b class="pos">${novos.length} novo(s)</b>${repetidos?` · <b class="amb">${repetidos} já cadastrado(s)</b>`:''}</p>
+    <table class="tbl"><thead><tr><th><input type="checkbox" checked onchange="selTodosFab(this.checked)" style="width:16px;height:16px"></th>
+      <th>Chassi</th><th>Veículo</th><th>Natureza</th><th>Faturamento</th><th class="num">Pé da NF</th><th>Cadastro</th></tr></thead><tbody>
+      ${IMP.lista.map((v,i)=>{
+        const ex = DB.veiculos.some(x=>x.chassi===v.chassi);
+        return `<tr style="opacity:${IMP.sel.has(i)?1:.45}">
+          <td><input type="checkbox" ${IMP.sel.has(i)?'checked':''} onchange="selFab(${i},this.checked)" style="width:16px;height:16px"></td>
+          <td><b>${_esc2(v.chassi)}</b></td>
+          <td>${_esc2(v.modelo)}<div class="hint" style="margin:0">${_esc2(v.cor)} ${_esc2(v.anoModelo)}</div></td>
+          <td>${badgeNat(v)}<div class="hint" style="margin:0">${_esc2(v.mercado||'')}</div></td>
+          <td>${fmt(v.dataFaturamento)}</td>
+          <td class="num">${brl(v.peNF)}</td>
+          <td>${ex?'<span class="tag t-parcial">já existe</span>':'<span class="tag t-quitado">novo</span>'}</td></tr>`;
+      }).join('')}</tbody></table>
+    <div class="bar" style="margin-top:12px">
+      <button class="b ok" onclick="confirmarImportFabricante()">✅ Importar ${IMP.sel.size} selecionado(s)</button>
+      <span class="hint" style="margin:0">Reimportar o mesmo arquivo atualiza o veículo (o chassi é único).</span>
+    </div>`;
+}
+function selFab(i, on){ on ? IMP.sel.add(i) : IMP.sel.delete(i); pintarPreviewFabricante(); }
+function selTodosFab(on){ IMP.sel = on ? new Set(IMP.lista.map((_,i)=>i)) : new Set(); pintarPreviewFabricante(); }
+
+function confirmarImportFabricante(){
+  const sel = IMP.lista.filter((_,i)=>IMP.sel.has(i));
+  if(!sel.length) return alert('Selecione ao menos um veículo.');
+  let novos = 0, atualizados = 0, vendasCriadas = 0;
+  sel.forEach(v=>{
+    const ex = DB.veiculos.find(x=>x.chassi===v.chassi);
+    const dados = {
+      chassi: v.chassi, modelo: v.modelo, cor: v.cor, anoModelo: v.anoModelo,
+      nf: v.nf, pedido: v.pedido, motor: v.motor, renavam: v.renavam,
+      dataFaturamento: v.dataFaturamento, dataNF: v.dataNF,
+      peNF: v.peNF, bonusFabrica: v.bonusFabrica, icms: v.icms, ipi: v.ipi,
+      baseICMS: v.baseICMS, baseIPI: v.baseIPI,
+      mercado: v.mercado, fpag: v.fpag, natureza: v.natureza,
+      condicao: v.condicao, inicioJuros: inicioJurosCond(v.condicao, v.dataFaturamento),
+      opcionais: v.opcionais, clienteDoc: v.clienteDoc
+    };
+    if(ex){ Object.assign(ex, dados); atualizados++; }
+    else { DB.veiculos.push(Object.assign({id:uid(), fotos:[], descontoNF:0}, dados)); novos++; }
+
+    // venda direta: já entra vendida
+    if(v.natureza === 'vendaDireta' && !DB.vendas.some(x=>x.chassi===v.chassi)){
+      DB.vendas.push({id:uid(), chassi:v.chassi, veiculo:v.modelo, data:v.dataFaturamento||hoje(),
+        valorVenda:0, cliente:'', doc:v.clienteDoc||'', vendedor:'', nf:v.nf,
+        obs:'Venda direta — faturamento da fábrica em '+fmt(v.dataFaturamento)});
+      vendasCriadas++;
+    }
+  });
+  save(); fechar();
+  const det = [
+    novos ? novos+' novo(s)' : '',
+    atualizados ? atualizados+' atualizado(s)' : '',
+    vendasCriadas ? vendasCriadas+' venda(s) direta(s)' : ''
+  ].filter(Boolean).join(' · ');
+  setTimeout(()=>{
+    alert('Importação concluída: '+det+'.\n\nConfira as fotos e a condição de pagamento de cada veículo no Estoque.');
+    document.querySelector('nav button[data-v=estoque]').click();
+  }, 80);
+}
+function exportarEstoque(){
+  const lista = estoqueFiltrado();
+  const cols = ['chassi','modelo','cor','anoModelo','natureza','nf','dataFaturamento','peNF','bonusFabrica','custo','situacaoFabrica','situacaoVenda','vencFabrica'];
+  const linhas = [cols.join(';')].concat(lista.map(v=>[
+    v.chassi, v.modelo||'', v.cor||'', v.anoModelo||'', natLabel(v), v.nf||'', fmt(v.dataFaturamento),
+    (+v.peNF||0).toFixed(2).replace('.',','), (+v.bonusFabrica||0).toFixed(2).replace('.',','),
+    custoFabrica(v).toFixed(2).replace('.',','), statusPagamento(v).l,
+    veicVendido(v)?'Vendido':'Disponível', fmt(vencFabrica(v))
+  ].map(x=>`"${String(x).replace(/"/g,'""')}"`).join(';')));
+  const blob = new Blob(['\ufeff'+linhas.join('\r\n')], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'estoque-'+hoje()+'.csv'; a.click();
+}
+
+/* ============================================================
+   CLIENTE COM FOTOS (sobrescreve o cadastro simples)
+   ============================================================ */
+function renderClientes(){
+  const el = document.getElementById('tbl-clientes'); if(!el) return;
+  el.innerHTML = DB.clientes.length ? `<table class="tbl"><thead><tr><th>Cliente</th><th>CPF/CNPJ</th><th>Telefone</th><th>Fotos</th><th class="num">Compras</th><th class="num">Em aberto</th><th></th></tr></thead><tbody>
+    ${DB.clientes.map((c,i)=>{
+      const vs = DB.vendas.filter(v=>v.cliente===c.nome);
+      return `<tr><td><b>${esc(c.nome)}</b></td><td>${esc(c.doc||'—')}</td><td>${esc(c.tel||'—')}</td>
+      <td>${galeriaMini(c.fotos)}</td>
+      <td class="num">${vs.length}</td><td class="num">${brl(vs.reduce((s,v)=>s+saldoVenda(v.id),0))}</td>
+      <td style="white-space:nowrap">${pode('cadastros','edit')?`<button class="b sm sec" onclick="formCliente(${i})">✏️</button>`:''}
+      ${pode('cadastros','del')?`<button class="b sm dang" onclick="excluirCliente(${i})">🗑</button>`:''}</td></tr>`;
+    }).join('')}</tbody></table>`
+    : '<div class="empty">Nenhum cliente cadastrado. Os nomes digitados nas vendas aparecem na hora de digitar.</div>';
+}
+function formCliente(i){
+  if(!precisaPermissao('cadastros','edit')) return;
+  const c = (i!=null && i>=0) ? DB.clientes[i]||{} : {};
+  FOTOS_TMP = (c.fotos||[]).slice();
+  modal(i!=null&&i>=0?'Editar cliente':'Novo cliente', `<div class="grid">
+    <div class="fld full"><label>Nome *</label><input id="m-nome" value="${esc(c.nome||'')}"></div>
+    <div class="fld"><label>CPF/CNPJ</label><input id="m-doc" value="${esc(c.doc||'')}"></div>
+    <div class="fld"><label>Telefone</label><input id="m-tel" value="${esc(c.tel||'')}"></div>
+    <div class="fld full"><label>E-mail</label><input id="m-mail" type="email" value="${esc(c.mail||'')}"></div>
+    <div class="fld full"><label>Endereço</label><input id="m-end" value="${esc(c.end||'')}"></div>
+    ${fotosEditorHTML()}
+  </div>`, ()=>{
+    const nome = val('m-nome').trim(); if(!nome) return alert('Informe o nome.');
+    const dados = {nome, doc:val('m-doc').trim(), tel:val('m-tel').trim(), mail:val('m-mail').trim(),
+      end:val('m-end').trim(), fotos:FOTOS_TMP.slice()};
+    if(i!=null && i>=0) Object.assign(DB.clientes[i], dados);
+    else DB.clientes.push(Object.assign({id:uid()}, dados));
+    save(); fechar(); renderAll();
+  }, true);
+  setTimeout(pintarFotos, 0);
+}
+
+/* ============================================================
+   DASHBOARD DEFINITIVO
+   ============================================================ */
+function renderDashDef(){
+  const kk = document.getElementById('dashd-kpis'); if(!kk) return;
+  const disp = DB.veiculos.filter(veicDisponivel);
+  const vendidos = DB.veiculos.filter(v=>veicVendido(v));
+  const valorEstoque = disp.reduce((s,v)=>s+(+v.peNF||0),0);
+  const custoEstoque = disp.reduce((s,v)=>s+custoFabrica(v),0);
+
+  const saldoFabTodos = DB.veiculos.reduce((s,v)=>s+saldoFabrica(v),0);
+  const vencFab = DB.veiculos.filter(v=>atrasoFabrica(v)>0).reduce((s,v)=>s+saldoFabrica(v),0);
+  const fabVendido = vendidos.reduce((s,v)=>s+saldoFabrica(v),0);
+
+  const aReceber = DB.vendas.reduce((s,v)=>s+saldoVenda(v.id),0);
+  const recebidoMes = DB.recebimentos.filter(r=>concOk(r) && (r.data||'').slice(0,7)===hoje().slice(0,7))
+    .reduce((s,r)=>s+(+r.valor||0),0);
+  const vendidosEmAberto = DB.vendas.filter(v=>saldoVenda(v.id)>0.005);
+
+  kk.innerHTML = `
+    <div class="kpi"><div class="l">Valor do estoque (pé da NF)</div><div class="v inf">${brl0(valorEstoque)}</div><div class="s">${disp.length} veículo(s) · ${brl0(custoEstoque)} com juros e bônus</div></div>
+    <div class="kpi"><div class="l">A pagar à fábrica</div><div class="v amb">${brl0(saldoFabTodos)}</div><div class="s">${DB.veiculos.filter(v=>saldoFabrica(v)>0.005).length} veículo(s) com saldo</div></div>
+    <div class="kpi"><div class="l">Vencido à fábrica</div><div class="v neg">${brl0(vencFab)}</div><div class="s">${DB.veiculos.filter(v=>atrasoFabrica(v)>0).length} boleto(s) em atraso</div></div>
+    <div class="kpi"><div class="l">Vendido e não pago à fábrica</div><div class="v amb">${brl0(fabVendido)}</div><div class="s">${vendidos.filter(v=>saldoFabrica(v)>0.005).length} carro(s) vendidos com saldo</div></div>
+    <div class="kpi"><div class="l">Falta receber (vendidos)</div><div class="v inf">${brl0(aReceber)}</div><div class="s">${vendidosEmAberto.length} venda(s) em aberto</div></div>
+    <div class="kpi"><div class="l">Recebido no mês</div><div class="v pos">${brl0(recebidoMes)}</div><div class="s">${new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</div></div>`;
+
+  // estoque por natureza
+  const elNat = document.getElementById('dashd-estoque');
+  if(elNat){
+    const g = {};
+    disp.forEach(v=>{ const n = natDe(v); g[n] = g[n] || {n:0,valor:0}; g[n].n++; g[n].valor += (+v.peNF||0); });
+    const arr = Object.entries(g).map(([k,d])=>({k, l:NAT[k].l, c:NAT[k].c, ...d}));
+    const max = Math.max(1, ...arr.map(x=>x.valor));
+    elNat.innerHTML = arr.length ? arr.map(x=>`
+      <div class="hbar"><div class="nm">${x.l}</div>
+        <div class="tr"><div class="fl" style="width:${pct(x.valor,max)}%;background:${x.c}"></div></div>
+        <div class="vl">${brl0(x.valor)} <span class="hint" style="margin:0">(${x.n})</span></div></div>`).join('')
+      : '<div class="empty" style="padding:18px">Nenhum veículo no estoque.</div>';
+  }
+
+  // o que falta receber dos vendidos
+  const elRec = document.getElementById('dashd-receber');
+  if(elRec){
+    const porTipo = {};
+    // percorre as VENDAS (o título aponta para a venda, não para o veículo)
+    DB.vendas.forEach(vd=>{
+      titulosDaVenda(vd.id).forEach(t=>{
+        const s = saldoTitulo(t); if(s <= 0.005) return;
+        const k = t.tipoNome || 'Outro';
+        porTipo[k] = (porTipo[k]||0) + s;
+      });
+    });
+    const arr = Object.entries(porTipo).map(([l,valor])=>({l,valor})).sort((a,b)=>b.valor-a.valor).slice(0,8);
+    const max = Math.max(1, ...arr.map(x=>x.valor));
+    elRec.innerHTML = arr.length ? arr.map(x=>`
+      <div class="hbar"><div class="nm" title="${esc(x.l)}">${esc(x.l)}</div>
+        <div class="tr"><div class="fl" style="width:${pct(x.valor,max)}%;background:#3b82f6"></div></div>
+        <div class="vl">${brl0(x.valor)}</div></div>`).join('')
+      : '<div class="empty" style="padding:18px">Nada a receber — todos os vendidos estão quitados.</div>';
+  }
+
+  // vendido e nao pago a fabrica
+  const elFV = document.getElementById('dashd-fab-vend');
+  if(elFV){
+    const lista = vendidos.filter(v=>saldoFabrica(v)>0.005).sort((a,b)=>saldoFabrica(b)-saldoFabrica(a));
+    elFV.innerHTML = lista.length ? `<table class="tbl"><thead><tr><th>Chassi</th><th>Veículo</th><th>Venda</th>
+        <th class="num">Custo fábrica</th><th class="num">Pago</th><th class="num">Saldo</th><th>Vencimento</th><th>Situação</th></tr></thead><tbody>
+      ${lista.map(v=>{
+        const vd = DB.vendas.find(x=>x.chassi===v.chassi) || {};
+        return `<tr><td><b>${esc(v.chassi)}</b></td><td>${esc(v.modelo||'—')}</td>
+          <td>${fmt(vd.data)}${vd.cliente?'<div class="hint" style="margin:0">'+esc(vd.cliente)+'</div>':''}</td>
+          <td class="num">${brl(custoFabrica(v))}</td><td class="num">${brl(pagoFabrica(v.chassi))}</td>
+          <td class="num"><b>${brl(saldoFabrica(v))}</b></td>
+          <td>${fmt(vencFabrica(v))}</td><td>${badgePag(statusPagamento(v))}</td></tr>`;
+      }).join('')}</tbody></table>
+      <div class="hint">Carros que já saíram mas ainda têm boleto à fábrica em aberto — atenção ao juro correndo.</div>`
+      : '<div class="empty" style="padding:18px">Nenhum veículo vendido com saldo à fábrica. Todos quitados.</div>';
+  }
+}
+
+/* ============================================================
+   PERMISSÕES E RENDER
+   ============================================================ */
+/* renderAll ampliado */
+function renderAll(){
+  renderDash();  renderDashDef(); renderEstoque();
+  renderVendas(); renderTitulos();
+  renderTipos(); renderPagadores(); renderClientes(); renderVendedores(); renderDados();
+  renderPagar(); renderJuros();
+  if(typeof renderConciliacao==='function'){ renderConciliacao(); atualizarBadgeConc(); }
+  if(typeof renderUsuarios==='function') renderUsuarios();
+  renderPeriodoHint();
+}
+
+/* ============================================================
+   RELATÓRIO DE COBRANÇA (documento formal por cliente)
+   ============================================================ */
+function cobrancaPorCliente(){
+  /* agrupa os títulos em aberto por cliente (ou pagador quando o cliente não existe) */
+  const mapa = {};
+  DB.titulos.forEach(t=>{
+    const saldo = saldoTitulo(t);
+    if(saldo <= 0.005) return;
+    const v = venda(t.vendaId) || {};
+    const quem = (v.cliente || '').trim() || (t.pagador || '').trim() || '— sem cliente —';
+    mapa[quem] = mapa[quem] || {cliente:quem, doc:v.doc||'', itens:[], total:0, vencido:0};
+    mapa[quem].itens.push({t, v});
+    mapa[quem].total += saldo;
+    if(vencidoTitulo(t)) mapa[quem].vencido += saldo;
+  });
+  return Object.values(mapa).sort((a,b)=>b.total-a.total);
+}
+
+function relCobranca(){
+  if(!precisaPermissao('relatorios','ver')) return;
+  const grupos = cobrancaPorCliente();
+  if(!grupos.length){
+    repHeader('Relatório de cobrança', 'Posição em '+fmt(hoje()));
+    document.getElementById('rep-body').innerHTML = '<div class="empty">Nenhum valor em aberto para cobrar. Carteira zerada.</div>';
+    return;
+  }
+  repHeader('Relatório de cobrança', `Posição em ${fmt(hoje())} · ${grupos.length} cliente(s) com saldo · total ${brl(grupos.reduce((s,g)=>s+g.total,0))}`);
+  const linhas = [['Cliente','Documento','Chassi','Tipo de recebimento','Pagador','Vencimento','Valor','Recebido','Saldo','Dias de atraso']];
+  let html = `<div class="bar no-print" style="margin-bottom:14px">
+      <label class="hint" style="margin:0">Cliente</label>
+      <select id="cob-cli" onchange="cobrancaDetalhe()" style="min-width:220px">
+        ${grupos.map((g,i)=>`<option value="${i}">${esc(g.cliente)} — ${brl(g.total)}${g.vencido?' (vencido)':''}</option>`).join('')}
+      </select>
+      <button class="b" onclick="cobrancaCarta()">📄 Emitir carta de cobrança</button>
+      <button class="b sec" onclick="cobrancaTodos()">🖨 Imprimir todos</button>
+    </div>
+    <div id="cob-detalhe"></div>`;
+  grupos.forEach(g=>{
+    g.itens.forEach(({t,v})=>{
+      linhas.push([g.cliente,g.doc,v.chassi||'',t.tipoNome||'',t.pagador||'',t.vencimento,
+        (+t.valor||0).toFixed(2), recebidoTitulo(t.id).toFixed(2), saldoTitulo(t).toFixed(2), atraso(t)||0]);
+    });
+  });
+  REP_CSV = {nome:'cobranca-'+hoje(), linhas};
+  document.getElementById('rep-body').innerHTML = html;
+  COBRANCA_GRUPOS = grupos;
+  cobrancaDetalhe();
+}
+
+let COBRANCA_GRUPOS = [];
+function cobrancaDetalhe(){
+  const sel = document.getElementById('cob-cli');
+  const g = COBRANCA_GRUPOS[+((sel||{}).value||0)];
+  const el = document.getElementById('cob-detalhe'); if(!el) return;
+  if(!g){ el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div><h2 style="font-size:16px;margin:0">${esc(g.cliente)}</h2>
+          <div class="hint" style="margin:2px 0 0">${g.doc?'CPF/CNPJ '+esc(g.doc)+' · ':''}${g.itens.length} título(s) em aberto</div></div>
+        <div style="text-align:right"><div class="hint" style="margin:0">Total a receber</div>
+          <div style="font-size:22px;font-weight:700;color:var(--warn)">${brl(g.total)}</div>
+          ${g.vencido?`<div class="hint neg" style="margin:0">${brl(g.vencido)} vencido</div>`:''}</div>
+      </div>
+    </div>
+    <table class="tbl"><thead><tr><th>Vencimento</th><th>Veículo</th><th>Tipo</th><th>Pagador</th>
+      <th class="num">Valor</th><th class="num">Recebido</th><th class="num">Saldo</th><th>Atraso</th></tr></thead><tbody>
+      ${g.itens.map(({t,v})=>{ const at = atraso(t);
+        return `<tr><td>${fmt(t.vencimento)}</td>
+          <td>${esc(v.chassi||'—')}<div class="hint" style="margin:0">${esc(v.veiculo||'')}</div></td>
+          <td>${esc(t.tipoNome||'—')}</td><td>${esc(t.pagador||'—')}</td>
+          <td class="num">${brl(t.valor)}</td><td class="num pos">${brl(recebidoTitulo(t.id))}</td>
+          <td class="num"><b>${brl(saldoTitulo(t))}</b></td>
+          <td class="num ${at?'neg':''}">${at?at+'d':'—'}</td></tr>`;}).join('')}
+    </tbody><tfoot><tr style="background:var(--panel2);font-weight:700">
+      <td colspan="6">Total do cliente</td><td class="num">${brl(g.total)}</td><td></td></tr></tfoot></table>`;
+}
+
+function cobrancaCarta(){
+  const sel = document.getElementById('cob-cli');
+  const g = COBRANCA_GRUPOS[+((sel||{}).value||0)];
+  if(!g) return;
+  const w = window.open('', '_blank');
+  if(!w) return alert('Permita pop-ups para emitir a carta.');
+  const atrasados = g.itens.filter(({t})=>vencidoTitulo(t));
+  w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
+  <title>Cobrança · ${esc(g.cliente)}</title>
+  <style>
+    @page{margin:18mm}
+    body{font-family:Arial,Helvetica,sans-serif;color:#111;font-size:12px;line-height:1.55}
+    .hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #222;padding-bottom:10px;margin-bottom:22px}
+    .logo{font-size:19px;font-weight:800;letter-spacing:.5px}
+    .logo span{color:#3b82f6}
+    .mut{color:#666;font-size:11px}
+    h1{font-size:15px;margin:20px 0 10px;text-transform:uppercase;letter-spacing:.6px}
+    table{width:100%;border-collapse:collapse;margin:12px 0 20px}
+    th,td{border:1px solid #bbb;padding:7px 8px;font-size:11px;text-align:left}
+    th{background:#eee}
+    .r{text-align:right}
+    .box{border:1px solid #bbb;border-radius:6px;padding:12px 14px;margin:16px 0}
+    .total{background:#f4f4f4;font-weight:700}
+    .assin{margin-top:52px;border-top:1px solid #444;width:280px;padding-top:5px;font-size:11px;color:#444}
+    .venc{color:#b91c1c;font-weight:700}
+  </style></head><body>
+  <div class="hd">
+    <div><div class="logo">ICAVEL<span>.</span></div>
+      <div class="mut">Grupo Icavel · concessionárias Fiat e Chevrolet</div></div>
+    <div class="mut" style="text-align:right">
+      <b>${esc(hoje().split('-').reverse().join('/'))}</b><br>Departamento de Cobrança
+    </div>
+  </div>
+
+  <h1>Comunicado de valores em aberto</h1>
+  <p>Prezado(a) <b>${esc(g.cliente)}</b>${g.doc?'<br><span class="mut">CPF/CNPJ '+esc(g.doc)+'</span>':''},</p>
+  <p>Constam em nosso sistema os valores abaixo em aberto referentes à aquisição de veículo junto ao
+  Grupo Icavel. Solicitamos a gentileza de verificar e providenciar a regularização até a data de vencimento
+  de cada parcela.</p>
+
+  <table><thead><tr><th>Vencimento</th><th>Veículo / chassi</th><th>Tipo de recebimento</th>
+    <th class="r">Valor</th><th class="r">Recebido</th><th class="r">Saldo</th></tr></thead><tbody>
+    ${g.itens.map(({t,v})=>{
+      const at = atraso(t), dt = fmt(t.vencimento);
+      return `<tr><td class="${at?'venc':''}">${dt}${at?` <span class="mut">(${at} dias)</span>`:''}</td>
+        <td>${esc(v.chassi||'—')}${v.veiculo?' · '+esc(v.veiculo):''}</td>
+        <td>${esc(t.tipoNome||'—')}</td>
+        <td class="r">${brl(t.valor)}</td>
+        <td class="r">${brl(recebidoTitulo(t.id))}</td>
+        <td class="r"><b>${brl(saldoTitulo(t))}</b></td></tr>`;}).join('')}
+    <tr class="total"><td colspan="5">TOTAL EM ABERTO</td><td class="r">${brl(g.total)}</td></tr>
+  </tbody></table>
+
+  ${atrasados.length?`<p class="mut">Há ${atrasados.length} parcela(s) vencida(s), no valor de
+    <b>${brl(atrasados.reduce((s,{t})=>s+saldoTitulo(t),0))}</b>. Pedimos prioridade sobre elas.</p>`:''}
+
+  <div class="box">
+    <b>Como regularizar</b><br>
+    Solicite o boleto atualizado pelo nosso departamento financeiro ou compareça a uma de nossas lojas.
+    Informe o número do chassi ao efetuar o pagamento, para identificação imediata.
+  </div>
+
+  <p class="mut">Caso o pagamento já tenha sido realizado, desconsidere este comunicado e nos envie o
+  comprovante para a baixa no sistema.</p>
+
+  <p style="margin-top:26px">Atenciosamente,</p>
+  <div class="assin">Departamento Financeiro · Grupo Icavel</div>
+
+  <p class="mut" style="margin-top:30px;font-size:10px;border-top:1px solid #ddd;padding-top:8px">
+    Documento gerado pelo sistema de Contas a Receber de Veículos · Icavel · ${esc(fmt(hoje()))}</p>
+  </body></html>`);
+  w.document.close();
+  setTimeout(()=>{ w.focus(); w.print(); }, 400);
+}
+
+function cobrancaTodos(){
+  const w = window.open('', '_blank');
+  if(!w) return alert('Permita pop-ups para imprimir.');
+  w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
+  <title>Cobrança por cliente</title>
+  <style>
+    @page{margin:16mm}
+    body{font-family:Arial,sans-serif;font-size:11.5px;color:#111}
+    h1{font-size:15px;border-bottom:2px solid #222;padding-bottom:8px}
+    h2{font-size:12.5px;margin:22px 0 6px;page-break-after:avoid}
+    table{width:100%;border-collapse:collapse;margin-bottom:14px}
+    th,td{border:1px solid #bbb;padding:6px 7px;font-size:10.5px;text-align:left}
+    th{background:#eee} .r{text-align:right}
+    .tot{background:#f4f4f4;font-weight:700}
+    .mut{color:#666;font-size:10px}
+  </style></head><body>
+  <h1>Posição de cobrança · ${esc(fmt(hoje()))}</h1>
+  <p class="mut">Total geral em aberto: <b>${brl(COBRANCA_GRUPOS.reduce((s,g)=>s+g.total,0))}</b>
+    · ${COBRANCA_GRUPOS.length} cliente(s)</p>
+  ${COBRANCA_GRUPOS.map(g=>`
+    <h2>${esc(g.cliente)}${g.doc?' · '+esc(g.doc):''} — ${brl(g.total)}${g.vencido?' <span style="color:#b91c1c">(vencido)</span>':''}</h2>
+    <table><thead><tr><th>Vencimento</th><th>Chassi</th><th>Tipo</th><th class="r">Valor</th><th class="r">Recebido</th><th class="r">Saldo</th></tr></thead><tbody>
+    ${g.itens.map(({t,v})=>`<tr><td>${fmt(t.vencimento)}</td><td>${esc(v.chassi||'—')}</td>
+      <td>${esc(t.tipoNome||'—')}</td><td class="r">${brl(t.valor)}</td>
+      <td class="r">${brl(recebidoTitulo(t.id))}</td><td class="r"><b>${brl(saldoTitulo(t))}</b></td></tr>`).join('')}
+    <tr class="tot"><td colspan="5">Total</td><td class="r">${brl(g.total)}</td></tr></tbody></table>`).join('')}
+  <p class="mut" style="margin-top:24px">Documento gerado pelo sistema de Contas a Receber de Veículos · Icavel</p>
+  </body></html>`);
+  w.document.close();
+  setTimeout(()=>{ w.focus(); w.print(); }, 400);
+}
+
+/* ============================================================
+   ICAVEL · LEITOR DE PLANILHA .XLSX (inclusive com senha)
+   Abre o arquivo no próprio navegador:
+     OLE2 → decifra (AES/SHA-512 do Excel) → ZIP → XML da aba
+   Nada é enviado para fora: o arquivo não sai do computador.
+
+   Depois lê a aba "Estoque" e devolve os veículos.
+   ============================================================ */
+var XLSX_ICA = (function(){
+'use strict';
+
+/* ---------------- bytes ---------------- */
+const u16 = (b,o) => b[o] | (b[o+1]<<8);
+const u32 = (b,o) => (b[o] | (b[o+1]<<8) | (b[o+2]<<16) | (b[o+3]<<24)) >>> 0;
+const u64 = (b,o) => u32(b,o) + u32(b,o+4)*4294967296;
+const TD = new TextDecoder('utf-8');
+const dec = b => TD.decode(b);
+
+/* ---------------- SHA-512 ---------------- */
+function hexBytes(h){
+  const out = new Uint8Array(h.length/2);
+  for(let i=0;i<out.length;i++) out[i] = parseInt(h.substr(i*2,2),16);
+  return out;
+}
+async function hash(algo, bytes){
+  if(!(globalThis.crypto && globalThis.crypto.subtle))
+    throw new Error('Este navegador não permite ler planilha com senha. Abra no Chrome ou no Edge.');
+  const d = await globalThis.crypto.subtle.digest(algo, bytes);
+  return new Uint8Array(d);
+}
+const HASH_ALGO = {'SHA512':'SHA-512','SHA256':'SHA-256','SHA1':'SHA-1','SHA384':'SHA-384'};
+
+/* ---------------- AES (decifração) ---------------- */
+const SBOX = new Uint8Array(256), ISBOX = new Uint8Array(256);
+const M9 = new Uint8Array(256), M11 = new Uint8Array(256), M13 = new Uint8Array(256), M14 = new Uint8Array(256);
+(function montarTabelas(){
+  const xt = a => ((a<<1) ^ ((a&0x80) ? 0x1b : 0)) & 0xff;
+  const mul = (a,b) => { let p=0; for(let i=0;i<8;i++){ if(b&1) p^=a; const hi=a&0x80; a=(a<<1)&0xff; if(hi) a^=0x1b; b>>=1; } return p&0xff; };
+  const rot8 = (x,n) => ((x<<n)|(x>>(8-n)))&0xff;
+  for(let i=0;i<256;i++){
+    let inv = 0;
+    if(i) for(let j=1;j<256;j++) if(mul(i,j)===1){ inv=j; break; }
+    SBOX[i] = (inv ^ rot8(inv,1) ^ rot8(inv,2) ^ rot8(inv,3) ^ rot8(inv,4) ^ 0x63) & 0xff;
+    M9[i]=mul(i,9); M11[i]=mul(i,11); M13[i]=mul(i,13); M14[i]=mul(i,14);
+  }
+  for(let i=0;i<256;i++) ISBOX[SBOX[i]] = i;
+})();
+
+function expandirChave(key){
+  const Nk = key.length/4, Nr = Nk + 6;
+  const w = new Uint32Array(4*(Nr+1));
+  for(let i=0;i<Nk;i++) w[i] = ((key[4*i]<<24)|(key[4*i+1]<<16)|(key[4*i+2]<<8)|key[4*i+3])>>>0;
+  let rcon = 1;
+  for(let i=Nk;i<w.length;i++){
+    let t = w[i-1];
+    if(i % Nk === 0){
+      t = ((t<<8)|(t>>>24))>>>0;
+      t = ((SBOX[(t>>>24)&255]<<24)|(SBOX[(t>>>16)&255]<<16)|(SBOX[(t>>>8)&255]<<8)|SBOX[t&255])>>>0;
+      t = (t ^ ((rcon<<24)>>>0))>>>0;
+      rcon = ((rcon<<1) ^ ((rcon&0x80)?0x1b:0)) & 0xff;
+    } else if(Nk > 6 && i % Nk === 4){
+      t = ((SBOX[(t>>>24)&255]<<24)|(SBOX[(t>>>16)&255]<<16)|(SBOX[(t>>>8)&255]<<8)|SBOX[t&255])>>>0;
+    }
+    w[i] = (w[i-Nk] ^ t)>>>0;
+  }
+  return {w, Nr};
+}
+
+function decifrarBloco(src, off, dst, doff, rk, Nr){
+  const st = new Uint8Array(16);
+  for(let i=0;i<16;i++) st[i] = src[off+i];
+  const addRK = (r) => { for(let i=0;i<16;i++) st[i] ^= (rk[r*4 + (i>>2)] >>> (24 - 8*(i&3))) & 0xff; };
+  const invShift = () => {
+    for(let r=1;r<4;r++){
+      const t = [st[r], st[r+4], st[r+8], st[r+12]];
+      st[r]      = t[(0 - r + 4) % 4];
+      st[r+4]    = t[(1 - r + 4) % 4];
+      st[r+8]    = t[(2 - r + 4) % 4];
+      st[r+12]   = t[(3 - r + 4) % 4];
+    }
+  };
+  const invSub = () => { for(let i=0;i<16;i++) st[i] = ISBOX[st[i]]; };
+  const invMix = () => {
+    for(let c=0;c<4;c++){
+      const i = c*4;
+      const a0=st[i], a1=st[i+1], a2=st[i+2], a3=st[i+3];
+      st[i]   = M14[a0]^M11[a1]^M13[a2]^M9[a3];
+      st[i+1] = M9[a0]^M14[a1]^M11[a2]^M13[a3];
+      st[i+2] = M13[a0]^M9[a1]^M14[a2]^M11[a3];
+      st[i+3] = M11[a0]^M13[a1]^M9[a2]^M14[a3];
+    }
+  };
+  addRK(Nr);
+  for(let round=Nr-1; round>=1; round--){ invShift(); invSub(); addRK(round); invMix(); }
+  invShift(); invSub(); addRK(0);
+  for(let i=0;i<16;i++) dst[doff+i] = st[i];
+}
+
+/* decifra em CBC sem remover preenchimento */
+function aesCbcDecifrar(dados, chave, iv){
+  const {w, Nr} = expandirChave(chave);
+  const out = new Uint8Array(dados.length);
+  let ant = iv.slice(0,16);
+  for(let off=0; off<dados.length; off+=16){
+    const bloco = new Uint8Array(16);
+    decifrarBloco(dados, off, bloco, 0, w, Nr);
+    for(let i=0;i<16;i++) out[off+i] = bloco[i] ^ ant[i];
+    ant = dados.slice(off, off+16);
+  }
+  return out;
+}
+
+/* ---------------- OLE2 / CFB ---------------- */
+function cfLerStreams(buf){
+  const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  if(u32(b,0) !== 0xE011CFD0) throw new Error('O arquivo não é uma planilha do Excel.');
+  const secSize  = 1 << u16(b,0x1E);
+  const miniSize = 1 << u16(b,0x20);
+  const dirStart = u32(b,0x30);
+  const miniCut  = u32(b,0x38);
+  const miniFatS = u32(b,0x3C);
+  const difatS   = u32(b,0x44);
+  const difatQtd = u32(b,0x48);
+  const headSize = Math.max(512, secSize);
+  const secOff = s => headSize + s*secSize;
+
+  /* DIFAT -> lista de setores da FAT */
+  const fatSecs = [];
+  for(let i=0;i<109;i++){
+    const s = u32(b, 0x4C + i*4);
+    if(s === 0xFFFFFFFF) break;
+    fatSecs.push(s);
+  }
+  let ds = difatS;
+  for(let n=0; n<difatQtd && ds !== 0xFFFFFFFE && ds !== 0xFFFFFFFF; n++){
+    const off = secOff(ds);
+    const porSetor = secSize/4 - 1;
+    for(let i=0;i<porSetor;i++){
+      const s = u32(b, off + i*4);
+      if(s === 0xFFFFFFFF) break;
+      fatSecs.push(s);
+    }
+    ds = u32(b, off + porSetor*4);
+  }
+  /* FAT */
+  const fat = [];
+  fatSecs.forEach(s=>{
+    const off = secOff(s);
+    for(let i=0;i<secSize/4;i++) fat.push(u32(b, off + i*4));
+  });
+  const cadeia = (ini, tabela) => {
+    const out = []; let s = ini, guarda = 0;
+    while(s !== 0xFFFFFFFE && s !== 0xFFFFFFFF && s < tabela.length && guarda++ < 200000){ out.push(s); s = tabela[s]; }
+    return out;
+  };
+  const lerSetores = (ini, tamanho) => {
+    const secs = cadeia(ini, fat);
+    const out = new Uint8Array(secs.length*secSize);
+    secs.forEach((s,i)=> out.set(b.subarray(secOff(s), secOff(s)+secSize), i*secSize));
+    return tamanho != null ? out.subarray(0, tamanho) : out;
+  };
+
+  /* diretório */
+  const dirBytes = lerSetores(dirStart, null);
+  const entradas = [];
+  for(let off=0; off+128 <= dirBytes.length; off+=128){
+    const nomeLen = u16(dirBytes, off+0x40);
+    if(!nomeLen || nomeLen > 64) { entradas.push(null); continue; }
+    let nome = '';
+    for(let i=0;i<nomeLen-2;i+=2) nome += String.fromCharCode(u16(dirBytes, off+i));
+    entradas.push({
+      nome, tipo: dirBytes[off+0x42],
+      ini: u32(dirBytes, off+0x74), tam: u64(dirBytes, off+0x78)
+    });
+  }
+  const raiz = entradas.find(e=>e && e.tipo === 5);
+  /* mini-FAT e o fluxo pequeno */
+  const miniFat = [];
+  if(miniFatS !== 0xFFFFFFFE && miniFatS !== 0xFFFFFFFF){
+    const mf = lerSetores(miniFatS, null);
+    for(let i=0;i<mf.length/4;i++) miniFat.push(u32(mf, i*4));
+  }
+  const miniFluxo = raiz ? lerSetores(raiz.ini, raiz.tam) : new Uint8Array(0);
+  const lerMini = (ini, tamanho) => {
+    const secs = cadeia(ini, miniFat);
+    const out = new Uint8Array(secs.length*miniSize);
+    secs.forEach((s,i)=>{
+      const p = s*miniSize;
+      out.set(miniFluxo.subarray(p, p+miniSize), i*miniSize);
+    });
+    return out.subarray(0, tamanho);
+  };
+
+  const streams = {};
+  entradas.forEach(e=>{
+    if(!e || e.tipo !== 2) return;
+    streams[e.nome.toLowerCase()] = e.tam < miniCut && e.tam > 0 ? lerMini(e.ini, e.tam) : lerSetores(e.ini, e.tam);
+  });
+  return streams;
+}
+
+/* ---------------- decifrar planilha com senha (Agile) ---------------- */
+const BLK_VERIFICADOR = hexBytes('FEA7D2763B4B9E79');
+const BLK_HASH_VERIF  = hexBytes('D7AA0F6D3061344E');
+const BLK_CHAVE       = hexBytes('146E0BE7ABACD0D6');
+
+function juntar(a, b){
+  const out = new Uint8Array(a.length + b.length);
+  out.set(a,0); out.set(b,a.length);
+  return out;
+}
+function le32(n){
+  const b = new Uint8Array(4);
+  b[0]=n&255; b[1]=(n>>>8)&255; b[2]=(n>>>16)&255; b[3]=(n>>>24)&255;
+  return b;
+}
+function ajustar(buf, n, pad){
+  if(buf.length === n) return buf;
+  const out = new Uint8Array(n); out.fill(pad||0);
+  out.set(buf.subarray(0, Math.min(buf.length,n)));
+  return out;
+}
+function b64(txt){
+  const bin = atob(String(txt||'').replace(/\s+/g,''));
+  const out = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function lerAtrib(xml, tag, attr){
+  const re = new RegExp('<'+tag+'\\b[^>]*\\b'+attr+'\\s*=\\s*"([^"]*)"', 'i');
+  const m = xml.match(re);
+  return m ? m[1] : '';
+}
+
+async function decifrarPacote(streams, senha){
+  const infoRaw = streams['encryptioninfo'];
+  const pacote  = streams['encryptedpackage'];
+  if(!infoRaw || !pacote) throw new Error('A planilha não parece protegida no formato esperado.');
+
+  let xml = dec(infoRaw);
+  const p = xml.indexOf('<?xml');
+  if(p < 0) throw new Error('Formato de proteção não reconhecido (use Excel 2010 ou mais novo).');
+  xml = xml.slice(p);
+
+  if(!/<encryption[\s>]/i.test(xml))
+    throw new Error('A planilha usa um tipo antigo de proteção. Abra no Excel e salve de novo com senha.');
+
+  const hashAlg  = (lerAtrib(xml,'keyData','hashAlgorithm') || 'SHA512').toUpperCase();
+  const algo     = HASH_ALGO[hashAlg] || 'SHA-512';
+  const saltChave = b64(lerAtrib(xml,'keyData','saltValue'));
+  const keyBits  = +lerAtrib(xml,'keyData','keyBits') || 256;
+
+  const spin     = +lerAtrib(xml,'p:encryptedKey','spinCount') || 100000;
+  const saltPwd  = b64(lerAtrib(xml,'p:encryptedKey','saltValue'));
+  const verifIn  = b64(lerAtrib(xml,'p:encryptedKey','encryptedVerifierHashInput'));
+  const verifHsh = b64(lerAtrib(xml,'p:encryptedKey','encryptedVerifierHashValue'));
+  const chaveEnc = b64(lerAtrib(xml,'p:encryptedKey','encryptedKeyValue'));
+
+  /* senha em UTF-16LE */
+  const pwd = new Uint8Array(senha.length*2);
+  for(let i=0;i<senha.length;i++){
+    const c = senha.charCodeAt(i);
+    pwd[i*2] = c & 255; pwd[i*2+1] = (c>>8) & 255;
+  }
+
+  /* derivação iterada do Excel (não é PBKDF2) */
+  let h = await hash(algo, juntar(saltPwd, pwd));
+  for(let i=0;i<spin;i++) h = await hash(algo, juntar(le32(i), h));
+
+  const derivar = async blockKey => (await hash(algo, juntar(h, blockKey))).subarray(0, keyBits/8);
+
+  const k1 = await derivar(BLK_VERIFICADOR);
+  const k2 = await derivar(BLK_HASH_VERIF);
+  const k3 = await derivar(BLK_CHAVE);
+
+  const ivPwd = ajustar(saltPwd, 16, 0x36);
+  const vIn  = aesCbcDecifrar(verifIn,  k1, ivPwd);
+  const vHsh = aesCbcDecifrar(verifHsh, k2, ivPwd);
+  const esperado = await hash(algo, vIn);
+  let igual = true;
+  const cmp = Math.min(esperado.length, vHsh.length);
+  for(let i=0;i<cmp;i++) if(esperado[i] !== vHsh[i]){ igual = false; break; }
+  if(!igual) throw new Error('Senha da planilha incorreta.');
+
+  const segredo = aesCbcDecifrar(chaveEnc, k3, ivPwd).subarray(0, keyBits/8);
+
+  /* pacote: 8 bytes de tamanho + blocos de 4096, cada um com IV próprio */
+  const tamTotal = u64(pacote, 0);
+  const dados = pacote.subarray(8);
+  const SEG = 4096;
+  const out = new Uint8Array(tamTotal);
+  let escrito = 0;
+  for(let i=0; escrito < tamTotal; i++){
+    const ini = i*SEG;
+    if(ini >= dados.length) break;
+    const bloco = dados.subarray(ini, Math.min(ini+SEG, dados.length));
+    const ivBase = await hash(algo, juntar(saltChave, le32(i)));
+    const plano = aesCbcDecifrar(bloco, segredo, ivBase.subarray(0,16));
+    const qtd = Math.min(plano.length, tamTotal - escrito);
+    out.set(plano.subarray(0, qtd), escrito);
+    escrito += qtd;
+  }
+  return out;
+}
+
+/* ---------------- ZIP ---------------- */
+async function inflar(dados){
+  if(typeof DecompressionStream === 'undefined')
+    throw new Error('Este navegador não descompacta a planilha. Use o Chrome ou o Edge.');
+  const ds = new DecompressionStream('deflate-raw');
+  const stream = new Blob([dados]).stream().pipeThrough(ds);
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+async function abrirZip(buf){
+  const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  /* fim do diretório central */
+  let eocd = -1;
+  for(let i=b.length-22; i>=Math.max(0, b.length-70000); i--){
+    if(u32(b,i) === 0x06054b50){ eocd = i; break; }
+  }
+  if(eocd < 0) throw new Error('O arquivo não é uma planilha .xlsx válida.');
+  const qtd  = u16(b, eocd+10);
+  const iniC = u32(b, eocd+16);
+  const arquivos = {};
+  let p = iniC;
+  for(let n=0; n<qtd; n++){
+    if(u32(b,p) !== 0x02014b50) break;
+    const metodo  = u16(b, p+10);
+    const compTam = u32(b, p+20);
+    const nomeLen = u16(b, p+28);
+    const extraLen= u16(b, p+30);
+    const comLen  = u16(b, p+32);
+    const local   = u32(b, p+42);
+    const nome    = dec(b.subarray(p+46, p+46+nomeLen));
+    if(u32(b,local) === 0x04034b50){
+      const nLen = u16(b, local+26), eLen = u16(b, local+28);
+      const dados = b.subarray(local+30+nLen+eLen, local+30+nLen+eLen+compTam);
+      arquivos[nome] = metodo === 0 ? dados : await inflar(dados);
+    }
+    p += 46 + nomeLen + extraLen + comLen;
+  }
+  return arquivos;
+}
+
+/* ---------------- abrir a planilha ---------------- */
+async function abrirArquivo(buffer, senha){
+  const b = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  let zipBytes = b;
+  if(u32(b,0) === 0xE011CFD0){                       // OLE2 = protegida
+    if(!senha) throw new Error('A planilha está protegida por senha. Informe a senha.');
+    const streams = cfLerStreams(b);
+    zipBytes = await decifrarPacote(streams, senha);
+  }
+  return await abrirZip(zipBytes);
+}
+
+/* ---------------- XML ---------------- */
+function entidades(t){
+  return String(t).replace(/&(#x?[0-9a-fA-F]+|amp|lt|gt|quot|apos);/g, (m,g)=>{
+    if(g === 'amp') return '&';
+    if(g === 'lt') return '<';
+    if(g === 'gt') return '>';
+    if(g === 'quot') return '"';
+    if(g === 'apos') return "'";
+    if(g[1] === 'x' || g[1] === 'X') return String.fromCodePoint(parseInt(g.slice(2),16));
+    if(g[1] === '#') return String.fromCodePoint(parseInt(g.slice(1),10));
+    return m;
+  });
+}
+function lerShared(xml){
+  const out = [];
+  if(!xml) return out;
+  const re = /<si\b[^>]*>([\s\S]*?)<\/si>/g;
+  let m;
+  while((m = re.exec(xml))){
+    let txt = '';
+    const rt = /<t\b[^>]*>([\s\S]*?)<\/t>/g;
+    let t;
+    while((t = rt.exec(m[1]))) txt += entidades(t[1]);
+    out.push(txt);
+  }
+  return out;
+}
+const colNum = ref => {
+  const s = String(ref).match(/^([A-Z]+)/i);
+  if(!s) return 0;
+  let n = 0;
+  for(const ch of s[1].toUpperCase()) n = n*26 + (ch.charCodeAt(0)-64);
+  return n;
+};
+/* devolve {linhas: Map<num, {col: valor}>, maxCol} */
+function celulasDaAba(xml, shared){
+  const linhas = new Map();
+  let maxCol = 0;
+  const reC = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
+  let m;
+  while((m = reC.exec(xml))){
+    const attrs = m[1] || '', dentro = m[2] || '';
+    const rRef = (attrs.match(/\br\s*=\s*"([^"]+)"/)||[])[1];
+    if(!rRef) continue;
+    const t = (attrs.match(/\bt\s*=\s*"([^"]+)"/)||[])[1] || '';
+    let v = '';
+    if(t === 'inlineStr'){
+      const rt = /<t\b[^>]*>([\s\S]*?)<\/t>/g; let x;
+      while((x = rt.exec(dentro))) v += entidades(x[1]);
+    } else {
+      const mv = dentro.match(/<v\b[^>]*>([\s\S]*?)<\/v>/);
+      v = mv ? entidades(mv[1]) : '';
+      if(t === 's' && v !== '') v = shared[+v] != null ? shared[+v] : '';
+    }
+    const letras = (rRef.match(/^([A-Z]+)/i)||[])[1] || '';
+    const linha  = +(rRef.match(/(\d+)$/)||[])[1];
+    const col = colNum(letras);
+    if(!linha || !col) continue;
+    if(!linhas.has(linha)) linhas.set(linha, {});
+    linhas.get(linha)[col] = v;
+    if(col > maxCol) maxCol = col;
+  }
+  return {linhas, maxCol};
+}
+const escXml = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+/* ---------------- API ---------------- */
+async function lerAbaEstoque(buffer, senha, nomeAba){
+  const arqs = await abrirArquivo(buffer, senha);
+  const wb  = dec(arqs['xl/workbook.xml'] || new Uint8Array(0));
+  const rel = dec(arqs['xl/_rels/workbook.xml.rels'] || new Uint8Array(0));
+  if(!wb) throw new Error('Planilha sem conteúdo (workbook.xml não encontrado).');
+
+  const destinos = {};
+  const reR = /<Relationship\b[^>]*>/g; let mr;
+  while((mr = reR.exec(rel))){
+    const id = lerAtrib(mr[0],'Relationship','Id');
+    const tg = lerAtrib(mr[0],'Relationship','Target');
+    if(id && tg) destinos[id] = tg.replace(/^\/?xl\//,'').replace(/^\//,'');
+  }
+  const abas = [];
+  const reS = /<sheet\b[^>]*>/g; let ms;
+  while((ms = reS.exec(wb))){
+    const nome = entidades(lerAtrib(ms[0],'sheet','name'));
+    const rid  = (ms[0].match(/r:id\s*=\s*"([^"]+)"/)||[])[1];
+    abas.push({nome, caminho: destinos[rid] ? 'xl/'+destinos[rid] : ''});
+  }
+  const alvo = (nomeAba && abas.find(a=>a.nome.toLowerCase() === String(nomeAba).toLowerCase()))
+            || abas.find(a=>/^estoque$/i.test(a.nome))
+            || abas.find(a=>/estoque/i.test(a.nome))
+            || abas[0];
+  if(!alvo) throw new Error('Não achei nenhuma aba na planilha.');
+  const xmlAba = arqs[alvo.caminho];
+  if(!xmlAba) throw new Error('Não consegui abrir a aba "'+alvo.nome+'".');
+
+  const shared = lerShared(dec(arqs['xl/sharedStrings.xml'] || new Uint8Array(0)));
+  const {linhas, maxCol} = celulasDaAba(dec(xmlAba), shared);
+  return {nomeAba: alvo.nome, abas: abas.map(a=>a.nome), linhas, maxCol};
+}
+
+/* ---------------- data do Excel ---------------- */
+function dataExcel(serial){
+  if(serial == null) return '';
+  const txt = String(serial).trim();
+  /* data escrita como texto */
+  const m = txt.match(/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})$/);
+  if(m){
+    let a = m[3]; if(a.length === 2) a = '20'+a;
+    const d = new Date(Date.UTC(+a, +m[2]-1, +m[1]));
+    return isNaN(d.getTime()) ? '' : d.toISOString().slice(0,10);
+  }
+  const n = Number(serial);
+  if(!isFinite(n) || n <= 0) return '';
+  const ms = Math.round(n*86400000);
+  const d = new Date(Date.UTC(1899,11,30) + ms);
+  if(isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0,10);
+}
+function numBR(txt){
+  if(txt == null || txt === '') return 0;
+  if(typeof txt === 'number') return txt;
+  let s = String(txt).trim().replace(/\s|R\$/g,'');
+  if(!s) return 0;
+  if(s.includes(',')) s = s.replace(/\./g,'').replace(',', '.');
+  const v = parseFloat(s);
+  return isFinite(v) ? v : 0;
+}
+const semAcento = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+
+/* ---------------- extrair veículos da aba Estoque ---------------- */
+const ALIAS = {
+  chassi:    ['chassi'],
+  modelo:    ['veiculo','veículo'],
+  cor:       ['cor'],
+  opcionais: ['opcionais'],
+  ano:       ['ano/mod','ano'],
+  custo:     ['custo'],
+  ajustado:  ['preco ajustado','preço ajustado'],
+  bonus:     ['bonus','bônus'],
+  dataFat:   ['data fat.','data fat. ','data fat','data faturamento'],
+  venc:      ['vencimento'],
+  inj:       ['inicio dos juros','início dos juros'],
+  dias:      ['dias estoque'],
+  dataPag:   ['data pag.','data pag'],
+  loja:      ['e']
+};
+function mapearColunas(cab, maxCol){
+  const mapa = {};
+  const usados = {};
+  for(let c=1;c<=maxCol;c++){
+    const h = semAcento(cab[c] || '');
+    if(!h) continue;
+    for(const campo in ALIAS){
+      if(mapa[campo]) continue;
+      if(ALIAS[campo].some(a => semAcento(a) === h)){
+        /* "custo" e "bonus" repetem; fica com a 1ª ocorrência */
+        mapa[campo] = c; usados[c] = campo;
+        break;
+      }
+    }
+  }
+  return mapa;
+}
+function extrairVeiculos(aba){
+  const {linhas, maxCol} = aba;
+  const nums = [...linhas.keys()].sort((a,b)=>a-b);
+
+  /* linha de cabeçalho = a que tem "chassi" */
+  let linhaCab = 0, cab = null;
+  for(const r of nums){
+    const obj = linhas.get(r) || {};
+    for(const c in obj){
+      if(semAcento(obj[c]) === 'chassi'){ linhaCab = r; cab = obj; break; }
+    }
+    if(linhaCab) break;
+  }
+  if(!linhaCab) throw new Error('Não achei a coluna "Chassi" na aba '+aba.nomeAba+'. Confira se é a planilha do Icavel.');
+
+  const col = mapearColunas(cab, maxCol);
+  if(!col.chassi) throw new Error('A coluna de chassi não foi reconhecida.');
+  /* condição: a coluna imediatamente antes do chassi (sem cabeçalho próprio) */
+  if(!col.cond) col.cond = col.chassi - 1;
+  col.condAlt = 3;                      // coluna "Total", onde também vem PAGO/FDIC
+  /* loja (M/F): cabeçalho "E"; se não veio, 9 colunas antes do chassi */
+  if(!col.loja) col.loja = col.chassi - 9;
+
+  const veiculos = [], avisos = [];
+  const vistos = {};
+  for(const r of nums){
+    if(r <= linhaCab) continue;
+    const obj = linhas.get(r) || {};
+    const bruto = String(obj[col.chassi] || '').trim().toUpperCase().replace(/\s+/g,'');
+    if(!/^[A-Z0-9]{5,17}$/.test(bruto)) continue;      // ignora totais, vazios e cabeçalhos
+    if(!/[A-Z]/.test(bruto)) continue;                  // chassi tem letras
+    if(!/\d{2}/.test(bruto)) continue;                  // e tem números (corta "ESTOQUE", "PLACA")
+    if(/^(CHASSI|PLACA|TOTAL|VEICULO|ESTOQUE)$/.test(bruto)) continue;
+    /* fora da tabela principal: linha sem custo E sem modelo é de outro bloco */
+    if(!numBR(obj[col.custo]) && !numBR(obj[col.ajustado]) && !String(obj[col.modelo]||'').trim()) continue;
+    if(vistos[bruto]){ avisos.push('Chassi '+bruto+' aparece repetido na planilha (linha '+r+').'); continue; }
+    vistos[bruto] = true;
+
+    const custo    = numBR(obj[col.custo]);
+    const ajustado = numBR(obj[col.ajustado]);
+    /* a condição aparece em DUAS colunas: a de "Total" (C) e a do lado do
+       chassi (L). Numa delas pode vir "PAGO" e na outra "FDIC" — as duas
+       precisam ser lidas. */
+    const condTxt  = [String(obj[col.cond] || '').trim(), String(obj[col.condAlt] || '').trim()]
+                       .filter(Boolean).join(' · ');
+    const condNorm = semAcento(condTxt);
+    const pagoNaPlanilha = /\bpago\b|a\s*vista|avista/.test(condNorm);
+    let condicao = '';
+    if(/floor|fl\.?\s*plan/.test(condNorm)) condicao = 'floorPlan';
+    else if(/fdic|fidic|fundao/.test(condNorm)) condicao = 'fdic';
+    else if(pagoNaPlanilha) condicao = 'avista';
+
+    const loja = String(obj[col.loja] || '').trim().toUpperCase();
+    const modelo = String(obj[col.modelo] || '').trim();
+    const v = {
+      linha: r,
+      chassi: bruto,
+      modelo: /^FIAT[\/ ]/i.test(modelo) ? modelo.toUpperCase() : ('FIAT/' + modelo.toUpperCase()).trim(),
+      cor: String(obj[col.cor] || '').trim(),
+      opcionais: String(obj[col.opcionais] || '').trim(),
+      anoModelo: String(obj[col.ano] || '').trim(),
+      peNF: custo > 0 ? custo : ajustado,
+      custoEstimado: !(custo > 0) && ajustado > 0,   // veio do "Preço Ajustado"
+      bonusFabrica: numBR(obj[col.bonus]),
+      condicao,
+      condicaoTxt: condTxt.replace(/\s*·\s*/g,' · '),
+      dataFaturamento: dataExcel(obj[col.dataFat]),
+      vencPagamento: dataExcel(obj[col.venc]),
+      inicioJurosExcel: dataExcel(obj[col.inj]),
+      diasEstoque: numBR(obj[col.dias]) || null,
+      loja: /^[MF]$/.test(loja) ? loja : '',
+      pagoNaPlanilha
+    };
+    if(!v.peNF) avisos.push('Chassi '+bruto+' está sem custo na planilha.');
+    if(!v.modelo || v.modelo === 'FIAT/') avisos.push('Chassi '+bruto+' está sem o modelo.');
+    veiculos.push(v);
+  }
+
+  /* total declarado pela própria planilha — só serve para CONFIRMAR.
+     A planilha soma faixas diferentes (há subtotais por bloco), então
+     divergência não é erro: não alarmamos o usuário por isso. */
+  const soma = veiculos.reduce((s,v)=>s+(+v.peNF||0),0);
+  const totais = [];
+  for(const r of nums){
+    const obj = linhas.get(r) || {};
+    let temTotal = false;
+    for(const c in obj) if(semAcento(obj[c]) === 'total'){ temTotal = true; break; }
+    if(!temTotal) continue;
+    const tc = numBR(obj[col.custo]);
+    if(tc > 1000) totais.push(tc);
+  }
+  let confere = false, totalPlanilha = 0;
+  for(const t of totais){
+    if(Math.abs(soma - t) <= Math.max(1, t*0.005)){ confere = true; totalPlanilha = t; break; }
+  }
+  if(!totalPlanilha && totais.length) totalPlanilha = totais[0];
+  return {veiculos, avisos, soma, totalPlanilha, confere, linhaCab};
+}
+
+return {abrirArquivo, lerAbaEstoque, extrairVeiculos, dataExcel, numBR, semAcento};
+
+})();
+
+/* ============================================================
+   IMPORTAR A ABA "ESTOQUE" DA PLANILHA .XLSX
+   Atualiza o estoque do sistema com o que está na planilha:
+     · veículo que não existe  → entra no estoque
+     · veículo que já existe   → atualiza custo, condição, datas
+   O chassi é a chave. A planilha traz o chassi curto (7–8 dígitos,
+   o final do chassi completo), então o casamento aceita isso.
+   Preserva sempre: fotos, boletos, vendas, desconto e juros manuais.
+   ============================================================ */
+
+/* mesma identidade de chassi: igual ou um é o final do outro */
+function mesmoChassi(a, b){
+  const x = String(a||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const y = String(b||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(!x || !y) return false;
+  if(x === y) return true;
+  const menor = x.length <= y.length ? x : y;
+  const maior = x.length <= y.length ? y : x;
+  if(menor.length < 6) return false;
+  return maior.endsWith(menor);
+}
+function acharVeiculoChassi(cod){
+  return DB.veiculos.find(v => mesmoChassi(v.chassi, cod)) || null;
+}
+
+let IP = {arq:null, lista:[], sel:new Set(), avisos:[], aba:'', soma:0, outros:[]};
+
+function abrirImportPlanilha(){
+  if(!precisaPermissao('estoque','edit')) return;
+  IP = {arq:null, lista:[], sel:new Set(), avisos:[], aba:'', soma:0, outros:[]};
+  modal('Importar planilha de estoque', `
+    <p class="hint" style="margin:0 0 12px">Leia direto a planilha do Icavel (<b>.xlsx</b>). A aba <b>Estoque</b> é localizada sozinha,
+    e a leitura acontece dentro do seu computador — o arquivo não é enviado para lugar nenhum.</p>
+    <div class="fld full"><label>Planilha</label>
+      <input type="file" id="ip-file" accept=".xlsx,.xlsm" onchange="lerPlanilhaEstoque(this.files)">
+    </div>
+    <div class="fld full"><label>Senha da planilha</label>
+      <input id="ip-senha" type="password" placeholder="deixe em branco se a planilha não tiver senha">
+      <div class="hint" style="margin:2px 0 0">A mesma senha com que o arquivo abre no Excel. Ela não fica guardada.</div>
+    </div>
+    <div class="full" style="margin:6px 0 0">
+      <label style="display:flex;gap:8px;align-items:center;font-weight:600">
+        <input type="checkbox" id="ip-atualizar" checked style="width:16px;height:16px">
+        Atualizar também os veículos que já estão cadastrados
+      </label>
+      <div class="hint" style="margin:2px 0 0 24px">Desmarcado, o sistema só inclui os veículos novos e não mexe em nenhum existente.</div>
+    </div>
+    <div id="ip-preview" class="full" style="margin-top:14px"></div>`, null, true);
+}
+
+function relerPlanilhaEstoque(){
+  if(IP.arq) processarPlanilhaEstoque(IP.arq);
+  else alert('Escolha a planilha primeiro.');
+}
+
+async function lerPlanilhaEstoque(files){
+  const f = (files||[])[0];
+  if(!f) return;
+  IP.arq = f;
+  await processarPlanilhaEstoque(f);
+}
+
+async function processarPlanilhaEstoque(f){
+  const el = document.getElementById('ip-preview');
+  if(!el) return;
+  el.innerHTML = '<div class="hint" style="margin:0">Lendo a planilha… isso pode levar alguns segundos.</div>';
+  try{
+    const buf = await f.arrayBuffer();
+    const senha = (val('ip-senha')||'').trim();
+    const aba  = await XLSX_ICA.lerAbaEstoque(buf, senha);
+    const r    = XLSX_ICA.extrairVeiculos(aba);
+    if(!r.veiculos.length){
+      el.innerHTML = '<div class="empty">Nenhum veículo encontrado na aba “'+esc(aba.nomeAba)+'”. Confira se a planilha é a do Icavel.</div>';
+      return;
+    }
+    IP.lista  = r.veiculos;
+    IP.avisos = r.avisos || [];
+    IP.aba    = aba.nomeAba;
+    IP.soma   = r.soma;
+    IP.sel    = new Set(r.veiculos.map((_,i)=>i));
+    IP.arquivoNome = f.name;
+    pintarPreviewPlanilha();
+  }catch(e){
+    const msg = String(e && e.message || e);
+    el.innerHTML = `<div class="empty" style="border-color:var(--danger)">
+      <b>Não consegui ler a planilha.</b><br>${esc(msg)}
+      ${/senha/i.test(msg) ? '<div class="hint" style="margin-top:8px">Digite a senha no campo acima e use “Ler de novo”.</div>' : ''}
+    </div>
+    <div class="bar" style="margin-top:10px"><button class="b sec" onclick="relerPlanilhaEstoque()">Ler de novo</button></div>`;
+  }
+}
+
+/* campos que este importador usa para comparar/atualizar */
+const CAMPOS_PLANILHA = [
+  {k:'modelo',          l:'Veículo'},
+  {k:'cor',             l:'Cor'},
+  {k:'opcionais',       l:'Opcionais'},
+  {k:'anoModelo',       l:'Ano/modelo'},
+  {k:'peNF',            l:'Custo',        num:true},
+  {k:'bonusFabrica',    l:'Bônus',        num:true},
+  {k:'condicao',        l:'Condição'},
+  {k:'dataFaturamento', l:'Faturamento'},
+  {k:'vencPagamento',   l:'Vencimento'}
+];
+const nomeCond = c => (COND_PAG[c] ? COND_PAG[c].rotulo : '—');
+
+function diferencasPlanilha(ex, v){
+  const mud = [];
+  CAMPOS_PLANILHA.forEach(c=>{
+    const novo = v[c.k];
+    if(novo === '' || novo == null || (c.num && !+novo)) return;   // planilha vazia não apaga nada
+    const atual = ex[c.k];
+    if(c.num){ if(Math.abs((+atual||0) - (+novo||0)) > 0.005) mud.push(c.l); }
+    else if(String(atual||'').trim().toUpperCase() !== String(novo||'').trim().toUpperCase()) mud.push(c.l);
+  });
+  return mud;
+}
+
+/* a planilha marca alguns carros como PAGO à fábrica: lança a baixa
+   correspondente, para o saldo e o status não ficarem errados.
+   Só lança o que ainda falta — reimportar não duplica. */
+function garantirPagamentoPlanilha(veic, dataRef){
+  if(!veic || !veic.chassi) return false;
+  const quando = dataRef || veic.dataFaturamento || hoje();
+  /* marca a data de pagamento antes, para os juros pararem nela */
+  if(!veic.dataPagamentoFabrica) veic.dataPagamentoFabrica = quando;
+  const custo  = typeof custoFabrica === 'function' ? custoFabrica(veic) : (+veic.peNF||0);
+  const jaPago = typeof pagoFabricaBruto === 'function' ? pagoFabricaBruto(veic.chassi) : 0;
+  const falta  = (+custo||0) - jaPago;
+  if(falta <= 0.005) return false;
+  DB.pagamentosFabrica = DB.pagamentosFabrica || [];
+  DB.pagamentosFabrica.push({
+    id: uid(), chassi: veic.chassi, valor: Math.round(falta*100)/100,
+    vencimento: quando, pago: true, dataPagamento: quando,
+    numero: 'Baixa pela planilha', conc: 'conciliado',
+    criadoPor: (usuarioAtual()||{}).nome || '',
+    obs: 'Carro marcado como PAGO na planilha de estoque'
+  });
+  return true;
+}
+
+function pintarPreviewPlanilha(){
+  const el = document.getElementById('ip-preview'); if(!el) return;
+  const novos = IP.lista.filter(v=>!acharVeiculoChassi(v.chassi)).length;
+  const exist = IP.lista.length - novos;
+
+  el.innerHTML = `
+    <div class="bar" style="margin:0 0 10px;padding:10px 12px;background:var(--bg2);border-radius:10px">
+      <b>${esc(IP.arquivoNome||'')}</b>
+      <span class="hint" style="margin:0">aba <b>${esc(IP.aba)}</b> · <b>${IP.lista.length}</b> veículo(s) ·
+        <b class="pos">${novos} novo(s)</b>${exist?` · <b class="amb">${exist} já cadastrado(s)</b>`:''} ·
+        soma dos custos <b>${brl(IP.soma)}</b></span>
+    </div>
+    ${IP.avisos.length ? `<div class="hint" style="color:var(--warn);margin:0 0 8px">${IP.avisos.map(a=>esc(a)).join('<br>')}</div>`:''}
+    <div style="max-height:46vh;overflow:auto">
+    <table class="tbl"><thead><tr>
+      <th style="width:34px"><input type="checkbox" checked onchange="selTodosPlanilha(this.checked)" style="width:16px;height:16px"></th>
+      <th>Chassi</th><th>Veículo</th><th>Cor</th><th>Ano</th><th>Condição</th>
+      <th class="num">Custo</th><th>Faturamento</th><th>Situação</th></tr></thead><tbody>
+      ${IP.lista.map((v,i)=>{
+        const ex = acharVeiculoChassi(v.chassi);
+        const mud = ex ? diferencasPlanilha(ex, v) : [];
+        const sit = !ex ? '<span class="tag t-quitado">novo</span>'
+          : mud.length ? `<span class="tag t-parcial">atualiza</span><div class="hint" style="margin:0">${esc(mud.join(', '))}</div>`
+          : '<span class="tag t-aberto">igual</span>';
+        return `<tr style="opacity:${IP.sel.has(i)?1:.45}">
+          <td><input type="checkbox" ${IP.sel.has(i)?'checked':''} onchange="selPlanilha(${i},this.checked)" style="width:16px;height:16px"></td>
+          <td><b>${esc(v.chassi)}</b>${ex?`<div class="hint" style="margin:0">${esc(ex.chassi)}</div>`:''}</td>
+          <td>${esc(v.modelo)}<div class="hint" style="margin:0">${esc(v.opcionais||'')}</div></td>
+          <td>${esc(v.cor||'—')}</td>
+          <td>${esc(v.anoModelo||'—')}</td>
+          <td>${esc(nomeCond(v.condicao))}${v.pagoNaPlanilha?' <span class="tag t-quitado">pago</span>':''}${v.condicaoTxt && !v.condicao?`<div class="hint" style="margin:0">${esc(v.condicaoTxt)}</div>`:''}</td>
+          <td class="num">${brl(v.peNF)}${v.custoEstimado?'<div class="hint" style="margin:0">ajustado</div>':''}</td>
+          <td>${fmt(v.dataFaturamento)}</td>
+          <td>${sit}</td></tr>`;
+      }).join('')}
+    </tbody></table></div>
+    <div class="bar" style="margin-top:12px">
+      <button class="b ok" onclick="confirmarImportPlanilha()">✅ Importar ${IP.sel.size} selecionado(s)</button>
+      <button class="b sec" onclick="relerPlanilhaEstoque()">🔄 Ler de novo</button>
+      <span class="hint" style="margin:0">O chassi é a chave: reimportar a mesma planilha atualiza, não duplica.</span>
+    </div>`;
+}
+function selPlanilha(i, on){ on ? IP.sel.add(i) : IP.sel.delete(i); pintarPreviewPlanilha(); }
+function selTodosPlanilha(on){ IP.sel = on ? new Set(IP.lista.map((_,i)=>i)) : new Set(); pintarPreviewPlanilha(); }
+
+function confirmarImportPlanilha(){
+  if(!precisaPermissao('estoque','edit')) return;
+  const sel = IP.lista.filter((_,i)=>IP.sel.has(i));
+  if(!sel.length) return alert('Selecione ao menos um veículo.');
+  const caixa = document.getElementById('ip-atualizar');
+  const atualizar = caixa ? caixa.checked : true;
+
+  let novos = 0, atualizados = 0, iguais = 0, baixas = 0;
+  sel.forEach(v=>{
+    const ex = acharVeiculoChassi(v.chassi);
+    if(ex){
+      if(!atualizar){ iguais++; return; }
+      const mud = diferencasPlanilha(ex, v);
+      if(!mud.length){ iguais++; return; }
+      CAMPOS_PLANILHA.forEach(c=>{
+        const novo = v[c.k];
+        if(novo === '' || novo == null || (c.num && !+novo)) return;
+        if(c.num){ if(Math.abs((+ex[c.k]||0) - (+novo||0)) <= 0.005) return; }
+        else if(String(ex[c.k]||'').trim().toUpperCase() === String(novo||'').trim().toUpperCase()) return;
+        ex[c.k] = novo;
+      });
+      ex.loja = v.loja || ex.loja || '';
+      if(v.diasEstoque != null) ex.diasEstoque = v.diasEstoque;
+      if(v.custoEstimado) ex.custoEstimado = true;
+      if(v.condicao){
+        ex.condicao = v.condicao;
+        if(!ex.inicioJuros) ex.inicioJuros = inicioJurosCond(ex.condicao, ex.dataFaturamento);
+      }
+      if(v.pagoNaPlanilha && garantirPagamentoPlanilha(ex, ex.dataFaturamento)) baixas++;
+      atualizados++;
+      return;
+    }
+    /* novo veículo */
+    const novo = {
+      id: uid(), chassi: v.chassi, natureza: 'estoque',
+      modelo: v.modelo, cor: v.cor, opcionais: v.opcionais, anoModelo: v.anoModelo,
+      peNF: v.peNF, descontoNF: 0, bonusFabrica: v.bonusFabrica || 0,
+      condicao: v.condicao || '',
+      dataFaturamento: v.dataFaturamento || '',
+      vencPagamento: v.vencPagamento || '',
+      inicioJuros: v.inicioJurosExcel || inicioJurosCond(v.condicao, v.dataFaturamento),
+      diasEstoque: v.diasEstoque || null,
+      loja: v.loja || '',
+      origem: 'planilha estoque',
+      fotos: []
+    };
+    if(v.custoEstimado) novo.custoEstimado = true;
+    DB.veiculos.push(novo);
+    if(v.pagoNaPlanilha && garantirPagamentoPlanilha(novo, novo.dataFaturamento)) baixas++;
+    novos++;
+  });
+
+  save();
+  logAcao('Importou planilha de estoque', 'estoque',
+    (IP.arquivoNome||'') + ' · ' + novos + ' novo(s) · ' + atualizados + ' atualizado(s)');
+  renderAll();
+  fechar();
+  alert(`Planilha importada.\n\n${novos} veículo(s) novo(s) no estoque\n${atualizados} atualizado(s)\n${iguais} sem diferença`
+    + (baixas? `\n${baixas} baixa(s) à fábrica lançada(s) (carros marcados como PAGO na planilha)`:''));
+}
 
 </script>
 </body>
