@@ -384,7 +384,7 @@
 
   <section class="view" id="v-dados">
     <h1>Dados</h1>
-    <p class="sub">Os dados ficam no seu navegador (localStorage). Use backup JSON para não perder e CSV para integrar com planilhas.</p>
+    <p class="sub">Backup e restauração da base. “Zerar a base” apaga veículos, vendas, títulos, recebimentos, boletos e histórico — e mantém os usuários.</p>
     <div class="bar">
       <button class="b" data-perm="dados:ver" onclick="backup()">⬇️ Baixar backup JSON</button>
       <button class="b sec" data-perm="dados:edit" onclick="document.getElementById('f-backup').click()">⬆️ Restaurar backup</button>
@@ -394,7 +394,7 @@
     </div>
     <div class="card" id="dados-resumo"></div>
     <div class="bar" style="margin-top:18px">
-      <button class="b dang" data-perm="dados:del" onclick="zerar()">🗑️ Zerar todos os dados</button>
+      <button class="b dang" data-perm="dados:del" onclick="zerar()">🗑️ Zerar a base (mantém os usuários)</button>
     </div>
   </section>
 
@@ -3093,12 +3093,39 @@ function renderDados(){
     </div>
     <div class="hint" style="margin-top:14px">Último salvamento automático no navegador. Faça backup JSON semanalmente — é o arquivo que restaura tudo em outro computador.</div>`;
 }
+/* ---------- ZERAR A BASE ----------
+   Apaga TUDO que é movimento/cadastro e mantém apenas os USUÁRIOS.
+   Os tipos de recebimento e os pagadores voltam ao padrão de fábrica
+   (o próprio normalize() os recria), então o sistema já nasce utilizável. */
 function zerar(){
   if(!precisaPermissao('dados','del')) return;
-  if(!confirm('Apagar TODOS os dados (vendas, títulos, recebimentos)? Os cadastros de tipos permanecem.')) return;
-  if(!confirm('Confirmar exclusão definitiva?')) return;
-  DB = {vendas:[], titulos:[], recebimentos:[], tipos:DB.tipos, pagadores:DB.pagadores, clientes:DB.clientes, vendedores:DB.vendedores, usuarios:DB.usuarios, log:DB.log, pagamentosFabrica:[], juros:DB.juros};
+  const usuarios = (DB.usuarios||[]).slice();
+  const resumo = [
+    ['veículos em estoque', (DB.veiculos||[]).length],
+    ['vendas', (DB.vendas||[]).length],
+    ['títulos', (DB.titulos||[]).length],
+    ['recebimentos', (DB.recebimentos||[]).length],
+    ['boletos à fábrica', (DB.pagamentosFabrica||[]).length],
+    ['clientes', (DB.clientes||[]).length],
+    ['vendedores', (DB.vendedores||[]).length],
+    ['conciliações no histórico', (DB.concLog||[]).length],
+    ['linhas de auditoria', (DB.log||[]).length]
+  ].filter(x=>x[1] > 0);
+
+  if(!confirm('ZERAR a base?\n\nSerá apagado:\n' +
+      (resumo.length ? resumo.map(x=>'  · '+x[1]+' '+x[0]).join('\n') : '  (nada, a base já está vazia)') +
+      '\n\nSerão MANTIDOS os ' + usuarios.length + ' usuário(s) cadastrado(s).')) return;
+  if(!confirm('Confirmar exclusão definitiva? Não há como desfazer.\n\nDica: se quiser uma cópia, cancele e use "Baixar backup JSON" primeiro.')) return;
+
+  DB = {
+    veiculos: [], vendas: [], titulos: [], recebimentos: [], pagamentosFabrica: [],
+    clientes: [], vendedores: [], tipos: [], pagadores: [],
+    usuarios,                       // <-- único dado preservado
+    log: [], concLog: [], juros: DB.juros || {}
+  };
+  normalize();                      // recria tipos e pagadores padrão
   save(); renderAll();
+  alert('Base zerada.\n\nMantidos: ' + usuarios.length + ' usuário(s).\nOs tipos de recebimento e pagadores voltaram ao padrão.\n\nA limpeza chega à nuvem em alguns segundos.');
 }
 
 /* ================= RENDER ALL ================= */
