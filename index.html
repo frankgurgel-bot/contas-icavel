@@ -283,6 +283,13 @@
         <option value="aberto">Em aberto</option>
         <option value="vencido">Com vencido</option>
       </select>
+      <select id="f-venda-p" onchange="renderPagar()">
+        <option value="">Estoque e vendidos</option>
+        <option value="vendido">Só veículos vendidos</option>
+        <option value="vendido-aberto">Vendidos com saldo a pagar</option>
+        <option value="vendido-vencido">Vendidos fora do prazo da fábrica</option>
+        <option value="estoque">Só no estoque (não vendidos)</option>
+      </select>
       <button class="b sec" onclick="exportarPagamentos()">📤 CSV</button>
       <button class="b sec" onclick="window.print()">🖨 PDF</button>
     </div>
@@ -347,6 +354,7 @@
       <button data-c="clientes">👥 Clientes</button>
       <button data-c="vendedores">🧑‍💼 Vendedores</button>
       <button data-c="juros">％ Juros Floor Plan / FDIC</button>
+      <button data-c="prazo">📅 Prazo da fábrica</button>
     </div>
     <div class="ctab on" id="c-tipos">
       <div class="bar"><button class="b" data-perm="cadastros:edit" onclick="formTipo()">＋ Novo tipo</button></div>
@@ -367,6 +375,10 @@
     <div class="ctab" id="c-juros">
       <div class="bar"><button class="b" data-perm="cadastros:edit" onclick="formJuros()">✏️ Editar taxas</button></div>
       <div id="tbl-juros"></div>
+    </div>
+    <div class="ctab" id="c-prazo">
+      <div class="bar"><button class="b" data-perm="cadastros:edit" onclick="formPrazoFab()">✏️ Atualizar prazo</button></div>
+      <div id="tbl-prazo"></div>
     </div>
   </section>
 
@@ -1136,6 +1148,13 @@ function diasCorridos(de, ate){
   const a = new Date(de+'T12:00'), b = new Date((ate||hoje())+'T12:00');
   return Math.max(0, Math.round((b-a)/86400000));
 }
+/* dias até uma data: negativo quando já passou (usado no prazo da fábrica) */
+function diasAteData(alvo){
+  if(!alvo) return 0;
+  const a = new Date(hoje()+'T12:00'), b = new Date(alvo+'T12:00');
+  if(isNaN(b.getTime())) return 0;
+  return Math.round((b-a)/86400000);
+}
 // início dos juros conforme a condição
 function inicioJurosCond(cond, faturamento){
   const c = COND_PAG[cond];
@@ -1264,13 +1283,80 @@ function statusPagamento(v){
 }
 const badgePag = s => `<span class="tag t-${s.k}">${s.l}</span>`;
 
+/* ------------------------------------------------------------------
+   PRAZO DA FÁBRICA PARA O CARRO VENDIDO
+   A fábrica informa, todo início de mês, quantos dias ela dá para o
+   pagamento de um veículo que foi vendido. Hoje são 11 dias.
+   O prazo conta do dia 1º do mês corrente e é configurável em
+   Cadastros → Prazo da fábrica (dias).
+   ------------------------------------------------------------------ */
+function cfgPrazoFab(){
+  DB.prazoFab = DB.prazoFab || {};
+  if(DB.prazoFab.dias === undefined || DB.prazoFab.dias === null || DB.prazoFab.dias === '')
+    DB.prazoFab.dias = 11;
+  DB.prazoFab.base = DB.prazoFab.base || 'mes';        // 'mes' = dia 1º do mês corrente
+  return DB.prazoFab;
+}
+/* Data limite para pagar um carro vendido.
+   A fábrica informa os dias todo início de mês, então o vencimento é o
+   dia (dias) do mês. Se o carro foi vendido depois desse dia, o prazo
+   passa para o mês seguinte — nunca antes da própria venda. */
+/* limite do mês (só a data do prazo, sem deslocar) — usado no cadastro */
+function prazoFabDoMes(ref){
+  const cfg = cfgPrazoFab();
+  const dias = +cfg.dias || 0;
+  if(!dias) return '';
+  const base = ref ? new Date(ref+'T12:00') : new Date(hoje()+'T12:00');
+  if(isNaN(base.getTime())) return '';
+  const d = new Date(base.getFullYear(), base.getMonth(), 1, 12);
+  d.setDate(d.getDate() + (dias - 1));
+  return d.toISOString().slice(0,10);
+}
+/* limite para um veículo vendido: se vendeu depois do prazo do mês,
+   passa para o mês seguinte — nunca vence antes da própria venda */
+function prazoFabData(ref){
+  const cfg = cfgPrazoFab();
+  const dias = +cfg.dias || 0;
+  if(!dias) return '';
+  const base = ref ? new Date(ref+'T12:00') : new Date(hoje()+'T12:00');
+  if(isNaN(base.getTime())) return '';
+  const doMes = prazoFabDoMes(ref);
+  if(!doMes) return '';
+  if(base.getTime() <= new Date(doMes+'T12:00').getTime()) return doMes;
+  const prox = new Date(base.getFullYear(), base.getMonth()+1, 1, 12);
+  return prazoFabDoMes(prox.toISOString().slice(0,10));
+}
+
+/* a venda do veículo, se houver */
+function vendaDoVeiculo(v){
+  if(!v) return null;
+  return (DB.vendas||[]).find(x=>x.chassi === v.chassi) || null;
+}
+
+/* situação do veículo vendido quanto ao prazo da fábrica */
+function prazoVeiculo(v){
+  const vd = vendaDoVeiculo(v);
+  if(!vd) return null;
+  const limite = prazoFabData(vd.data);
+  if(!limite) return null;
+  const dias = diasAteData(limite);                   // negativo = passou do prazo
+  const saldo = saldoFabrica(v);
+  return {venda: vd, limite, dias, vencido: dias < 0 && saldo > 0.005, saldo};
+}
+
 /* ---------------- tela: pagamento à fábrica ---------------- */
 function renderPagar(){
   const el = document.getElementById('tbl-pagar');
   if(!el) return;
   const busca = (val('f-busca-p')||'').toLowerCase();
   const st = val('f-status-p');
+  const fv = val('f-venda-p') || '';
   let lista = DB.veiculos.slice();
+  /* filtro por venda: a fábrica costuma ser paga depois que o carro é vendido */
+  if(fv === 'vendido')          lista = lista.filter(v=>!!vendaDoVeiculo(v));
+  else if(fv === 'vendido-aberto') lista = lista.filter(v=>!!vendaDoVeiculo(v) && saldoFabrica(v) > 0.005);
+  else if(fv === 'vendido-vencido') lista = lista.filter(v=>{ const p = prazoVeiculo(v); return p && p.vencido; });
+  else if(fv === 'estoque')     lista = lista.filter(v=>!vendaDoVeiculo(v));
   if(busca) lista = lista.filter(v=>[v.chassi, veicRotulo(v), v.fornecedor, v.condicaoPagamento].join(' ').toLowerCase().includes(busca));
   if(st === 'vencido') lista = lista.filter(v=>atrasoFabrica(v)>0);
   else if(st) lista = lista.filter(v=>{
@@ -1306,10 +1392,11 @@ function renderPagar(){
         <div class="s">${brl0(lista.reduce((s,v)=>s+(+v.jurosAjuste||0),0))} de diferença</div></div>
       <div class="kpi"><div class="l">Vencido</div><div class="v neg">${brl0(totVenc)}</div><div class="s">${lista.filter(v=>atrasoFabrica(v)>0).length} veículo(s) em atraso</div></div>
     </div>
+    <div style="overflow-x:auto">
     <table class="tbl"><thead><tr>
-      <th>Chassi</th><th>Veículo</th><th>Condição</th><th>Faturamento</th><th>Início juros</th>
+      <th>Chassi</th><th>Veículo</th><th>Cond.</th><th>Fatur.</th>
       <th class="num">Pé da NF</th><th class="num">Juros</th><th class="num">Custo</th>
-      <th class="num">Pago</th><th class="num">Saldo</th><th>Vencimento</th><th style="min-width:120px">Situação</th><th></th>
+      <th class="num">Pago</th><th class="num">Saldo</th><th>Venda / prazo fábrica</th><th>Situação</th><th></th>
     </tr></thead><tbody>
     ${lista.map(v=>{
       const c = COND_PAG[v.condicao||''] || null;
@@ -1319,8 +1406,7 @@ function renderPagar(){
         <td><b>${esc(v.chassi||'—')}</b></td>
         <td>${esc(veicRotulo(v)||'—')}</td>
         <td>${c? `<span style="color:${c.cor};font-weight:700">${c.rotulo}</span>`:'<span class="hint">manual</span>'}</td>
-        <td>${fmt(v.dataFaturamento||v.dataCompra)}</td>
-        <td>${ini? fmt(ini):'<span class="hint">—</span>'}</td>
+        <td>${fmt(v.dataFaturamento||v.dataCompra)}${ini?`<div class="hint" style="margin:0">juros ${fmt(ini)}</div>`:''}</td>
         <td class="num">${brl(v.peNF)}${(+v.descontoNF)?`<div class="hint" style="margin:0">+${brl(v.descontoNF)} desc.</div>`:''}${(+v.bonusFabrica)?`<div class="hint" style="margin:0">−${brl(v.bonusFabrica)} bônus</div>`:''}</td>
         <td class="num">${brl(jurosFabrica(v))}${saldoJurosFabrica(v)>0.005&&pagoFabrica(v.chassi)>0.005?`<div class="hint amb" style="margin:0">falta ${brl(saldoJurosFabrica(v))}</div>`:''}</td>
         <td class="num"><b>${brl(custoFabrica(v))}</b><div class="hint" style="margin:0">total ${brl(totalFabrica(v))}</div></td>
@@ -1328,18 +1414,30 @@ function renderPagar(){
           (DB.pagamentosFabrica||[]).some(p=>p.chassi===v.chassi && estaPendente(p))
             ? '<div class="hint amb" style="margin:0">+'+brl(pagoFabricaBruto(v.chassi)-pagoFabrica(v.chassi))+' aguard. conciliação</div>' : ''}</td>
         <td class="num ${saldoFabrica(v)>0.005?'amb':'pos'}"><b>${brl(saldoFabrica(v))}</b></td>
-        <td>${vencFabrica(v)? fmt(vencFabrica(v)) : (saldoFabrica(v)>0.005
-              ? `<button class="b sm sec" style="font-size:11px;padding:3px 8px" onclick="formBoleto('${esc(v.chassi)}')" title="Lançar boleto com vencimento">lançar boleto</button>`
-              : '—')}
-            ${at?`<div class="hint neg" style="margin:0">${at}d atraso</div>`:''}</td>
-        <td>${badgePag(s)}</td>
+        <td style="min-width:132px">${(()=>{ const pz = prazoVeiculo(v);
+          if(!pz) return '<span class="hint">no estoque</span>';
+          const ddmm = d => d ? d.slice(8,10)+'/'+d.slice(5,7) : '';
+          const pago = saldoFabrica(v) <= 0.005;
+          const tag = pago ? 't-quitado' : (pz.vencido ? 't-vencido' : 't-aberto');
+          let quando;
+          if(pago) quando = 'pago';
+          else if(pz.vencido) quando = 'passou ' + (-pz.dias) + 'd';
+          else if(pz.dias === 0) quando = 'último dia';
+          else quando = 'faltam ' + pz.dias + 'd';
+          return `<span class="tag ${tag}">vend. ${ddmm(pz.venda.data)}</span>
+            <div class="hint ${pz.vencido?'neg':''}" style="margin:0;white-space:normal">${quando}<br>limite ${ddmm(pz.limite)}</div>`;
+        })()}</td>
+        <td>${badgePag(s)}
+            ${at?`<div class="hint neg" style="margin:0">${at}d atraso</div>`:''}
+            ${vencFabrica(v)?`<div class="hint" style="margin:0">venc. ${fmt(vencFabrica(v))}</div>`
+              :(saldoFabrica(v)>0.005?`<button class="b sm sec" style="font-size:10.5px;padding:2px 6px;margin-top:2px" onclick="formBoleto('${esc(v.chassi)}')" title="Lançar boleto com vencimento">boleto</button>`:'')}</td>
         <td>
           ${pode('pagamentos','edit')?`<button class="b sm ok" onclick="formPagamento('${esc(v.chassi)}')" title="Registrar pagamento">💸</button>`:''}
           ${pode('pagamentos','edit')?`<button class="b sm sec" onclick="formCusto('${esc(v.chassi)}')" title="Custo e condição">✏️</button>`:''}
           <button class="b sm sec" onclick="gerirPagamentosFab('${esc(v.chassi)}')" title="Ver pagamentos">📄 ${(DB.pagamentosFabrica||[]).filter(p=>p.chassi===v.chassi).length||''}</button>
         </td></tr>`;
     }).join('')}
-    </tbody></table>
+    </tbody></table></div>
     <div class="hint">${lista.length} veículo(s) · custo ${brl(totCusto)} · pago ${brl(totPago)} · <b>saldo ${brl(totSaldo)}</b> · vencido ${brl(totVenc)}</div>`;
 }
 
@@ -1765,6 +1863,81 @@ function relAgingPagar(){
       <td class="num">${brl(custoFabrica(v))}</td><td class="num pos">${brl(pagoFabrica(v.chassi))}</td>
       <td class="num"><b>${brl(saldoFabrica(v))}</b></td><td class="num ${at?'neg':''}">${at?at+'d':'—'}</td></tr>`;}).join('')}
     </tbody></table>`;
+}
+
+/* ---------------- prazo da fábrica (cadastro) ---------------- */
+function renderPrazoFab(){
+  const el = document.getElementById('tbl-prazo'); if(!el) return;
+  const cfg = cfgPrazoFab();
+  const hojeStr = hoje();
+  const limiteAtual = prazoFabDoMes(hojeStr);
+  const limiteProx = (()=>{
+    const d = new Date(hojeStr+'T12:00');
+    const prox = new Date(d.getFullYear(), d.getMonth()+1, 1, 12);
+    return prazoFabDoMes(prox.toISOString().slice(0,10));
+  })();
+  el.innerHTML = `
+    <div class="cards" style="margin-bottom:14px">
+      <div class="kpi"><div class="l">Prazo atual</div><div class="v">${(+cfg.dias||0)} dias</div>
+        <div class="s">contados do dia 1º do mês</div></div>
+      <div class="kpi"><div class="l">Limite deste mês</div><div class="v inf" style="font-size:16px">${fmt(limiteAtual)}</div>
+        <div class="s">${diasAte(limiteAtual)>=0? 'faltam '+diasAte(limiteAtual)+' dia(s)' : 'passou há '+(-diasAte(limiteAtual))+' dia(s)'}</div></div>
+      <div class="kpi"><div class="l">Limite do mês que vem</div><div class="v" style="font-size:16px">${fmt(limiteProx)}</div>
+        <div class="s">recalculado automaticamente</div></div>
+    </div>
+    <table class="tbl"><thead><tr><th>Regra</th><th>Como funciona</th><th></th></tr></thead><tbody>
+      <tr><td><b>Prazo da fábrica</b></td>
+        <td>A fábrica informa, todo início de mês, quantos dias você tem para pagar um veículo <b>já vendido</b>.
+        O prazo conta do <b>dia 1º do mês corrente</b>: com ${(+cfg.dias||0)} dias, o limite deste mês é <b>${fmt(limiteAtual)}</b>.</td>
+        <td>${pode('cadastros','edit')?`<button class="b sm sec" onclick="formPrazoFab()">✏️</button>`:''}</td></tr>
+      <tr><td><b>Onde aparece</b></td>
+        <td>Na tela <b>Pagamento à fábrica</b>, na coluna “Venda / prazo fábrica”, e no filtro
+        “Vendidos fora do prazo da fábrica”.</td><td></td></tr>
+      <tr><td><b>Carro no estoque</b></td>
+        <td>Enquanto não é vendido, não tem prazo de fábrica — o vencimento é o do boleto.</td><td></td></tr>
+    </tbody></table>
+    <div class="hint">Quando a fábrica mudar o prazo (ex.: de 11 para 15 dias), atualize aqui uma vez — vale para todos os veículos.</div>`;
+}
+function formPrazoFab(){
+  if(!precisaPermissao('cadastros','edit')) return;
+  const cfg = cfgPrazoFab();
+  modal('Prazo da fábrica para carro vendido', `<div class="grid">
+    <div class="fld"><label>Dias de prazo *</label>
+      <input id="m-dias" type="number" min="1" max="31" step="1" value="${(+cfg.dias||11)}">
+      <div class="hint">Quantidade de dias que a fábrica informa todo início de mês.</div></div>
+    <div class="fld"><label>Contar a partir de</label>
+      <select id="m-base">
+        <option value="mes" ${cfg.base==='mes'?'selected':''}>Dia 1º do mês corrente</option>
+        <option value="faturamento" ${cfg.base==='faturamento'?'selected':''}>Data do faturamento do veículo</option>
+      </select>
+      <div class="hint">O padrão da fábrica é o dia 1º do mês.</div></div>
+    <div class="fld full"><div id="m-prazo-prev" class="hint"></div></div>
+  </div>`, ()=>{
+    const dias = +val('m-dias');
+    if(!dias || dias < 1) return alert('Informe a quantidade de dias.');
+    DB.prazoFab = {dias, base: val('m-base') || 'mes', atualizadoEm: new Date().toISOString(),
+      atualizadoPor: (usuarioAtual()||{}).nome || ''};
+    save();
+    logAcao('Atualizou prazo da fábrica', 'cadastros', dias + ' dias · base ' + DB.prazoFab.base);
+    fechar(); renderAll();
+    alert('Prazo atualizado para ' + dias + ' dias.\n\nLimite deste mês: ' + fmt(prazoFabDoMes(hoje())));
+  });
+  const prev = document.getElementById('m-prazo-prev');
+  const atualizar = ()=>{
+    const d = +((document.getElementById('m-dias')||{}).value)||0;
+    const b = (document.getElementById('m-base')||{}).value;
+    if(!d) { if(prev) prev.innerHTML=''; return; }
+    const salvo = DB.prazoFab;
+    DB.prazoFab = {dias:d, base:b};
+    const lim = prazoFabDoMes(hoje());
+    DB.prazoFab = salvo;
+    if(prev) prev.innerHTML = `Com <b>${d} dias</b>, o limite deste mês fica em <b>${fmt(lim)}</b>.`;
+  };
+  setTimeout(()=>{
+    const i = document.getElementById('m-dias'), sel = document.getElementById('m-base');
+    if(i) i.oninput = atualizar; if(sel) sel.onchange = atualizar;
+    atualizar();
+  }, 0);
 }
 
 /* ============================================================
@@ -3342,6 +3515,7 @@ function renderAll(){
   renderDash(); renderVendas(); renderTitulos();
   renderTipos(); renderPagadores(); renderClientes(); renderVendedores(); renderDados();
   renderPagar(); renderJuros();
+  if(typeof renderPrazoFab === 'function') renderPrazoFab();
   if(typeof renderConciliacao==='function'){ renderConciliacao(); atualizarBadgeConc(); }
   if(typeof renderUsuarios==='function') renderUsuarios();
   renderPeriodoHint();
