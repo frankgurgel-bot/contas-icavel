@@ -1142,26 +1142,86 @@ function inicioJurosCond(cond, faturamento){
   if(!c || c.dias == null) return '';
   return somarDiasData(faturamento, c.dias);
 }
-/* Juros do veículo: manual (v.jurosCusto) prevalece; senão calcula pela taxa
-   da condição, do início dos juros até a data de pagamento ou hoje. */
-function jurosFabrica(v){
+/* ------------------------------------------------------------------
+   JUROS FDIC / FLOOR PLAN — CONTROLADOS À PARTE
+   O juro NÃO é mais somado ao custo do veículo. Ele tem conta própria,
+   separada da conta do carro:
+     · custoFabrica(v)   = pé da NF + desconto em NF − bônus   (só o carro)
+     · jurosFabrica(v)   = juro acumulado, do início até o pagamento (ou hoje)
+     O pagamento à fábrica quita PRIMEIRO o carro e, o que passar disso,
+     abate os juros. Assim o valor pago pode ser maior que o custo do
+     veículo sem erro — que é justamente o caso de FDIC/Floor Plan.
+   Registros antigos com o juro embutido continuam fechando, porque a
+   quitação é conferida pelo TOTAL (custo + juros).
+   ------------------------------------------------------------------ */
+
+/* carro + desconto − bônus: o que a fábrica cobra pelo veículo */
+function custoFabrica(v){
   if(!v) return 0;
-  if(+v.jurosCusto > 0) return +v.jurosCusto;
+  return (+v.peNF||0) + (+v.descontoNF||0) - (+v.bonusFabrica||0);
+}
+
+/* --- juro APURADO: o que a fábrica cobra de juros pelo veículo ---
+   Calculado do início dos juros até a data do pagamento (congelado nessa
+   data) ou até hoje, se ainda não pagou. NÃO depende de quanto foi pago. */
+function juroApurado(v){
+  if(!v) return 0;
   const cond = v.condicao || (v.tipoJuros === 'floorPlan' ? 'floorPlan' : v.tipoJuros === 'fdic' ? 'fdic' : '');
   const c = COND_PAG[cond];
-  const cfg = cfgJuros();
-  const taxa = c && c.tipo ? cfg[c.tipo] : null;
-  if(!taxa || !+taxa.pct) return 0;
+  if(!c || c.dias == null) return 0;                 // à vista: sem juros
+
+  /* valor fechado à mão pelo banco/fábrica prevalece */
+  if(+v.jurosCusto > 0) return +v.jurosCusto;
+
+  /* já apurado na quitação: não muda mais */
+  if(v.jurosCongelado !== undefined && v.jurosCongelado !== null && v.jurosCongelado !== '')
+    return +v.jurosCongelado || 0;
+
   const ini = v.inicioJuros || inicioJurosCond(cond, v.dataFaturamento||v.dataCompra);
   if(!ini) return 0;
+  const cfg = cfgJuros();
+  const taxa = c.tipo ? cfg[c.tipo] : null;
+  if(!taxa || !+taxa.pct) return 0;
   const fim = v.dataPagamentoFabrica || hoje();
   const d = diasCorridos(ini, fim);
   const fator = taxa.periodo === 'dia' ? d : d/30;
   return (+v.peNF||0) * (+taxa.pct)/100 * fator;
 }
-function custoFabrica(v){
+
+/* --- juro da conta: o apurado pela fábrica (nunca inflado pelo excedente) --- */
+function jurosFabrica(v){
+  return juroApurado(v);
+}
+
+/* --- juro já pago: o que passou do valor do carro abate o juro,
+       mas só até o juro apurado. O resto é excedente, não é juro. --- */
+function jurosPagoFabrica(chassi){
+  const v = DB.veiculos.find(x=>x.chassi===chassi);
   if(!v) return 0;
-  return (+v.peNF||0) + (+v.descontoNF||0) + jurosFabrica(v);
+  const sobra = pagoFabrica(chassi) - custoFabrica(v);
+  if(sobra <= 0.005) return 0;
+  const apurado = juroApurado(v);
+  if(apurado <= 0.005) return 0;
+  return Math.min(sobra, apurado);
+}
+
+/* --- juro em aberto --- */
+function saldoJurosFabrica(v){
+  if(!v) return 0;
+  const carroEmAberto = custoFabrica(v) - pagoFabrica(v.chassi);
+  if(carroEmAberto > 0.005) return Math.max(0, juroApurado(v));   // carro em aberto: juro todo em aberto
+  return Math.max(0, juroApurado(v) - jurosPagoFabrica(v.chassi));
+}
+
+/* --- excedente pago a maior: acima de carro + juros --- */
+function excedenteFabrica(v){
+  if(!v) return 0;
+  return Math.max(0, pagoFabrica(v.chassi) - custoFabrica(v) - juroApurado(v));
+}
+
+/* custo + juros: o total que sai do caixa da empresa */
+function totalFabrica(v){
+  return custoFabrica(v) + jurosFabrica(v);
 }
 function pagoFabrica(chassi){
   return (DB.pagamentosFabrica||[]).filter(p=>p.chassi===chassi && concOk(p)).reduce((s,p)=>s+ +p.valor, 0);
@@ -1170,8 +1230,10 @@ function pagoFabrica(chassi){
 function pagoFabricaBruto(chassi){
   return (DB.pagamentosFabrica||[]).filter(p=>p.chassi===chassi).reduce((s,p)=>s+ +p.valor, 0);
 }
+/* total ainda devido à fábrica: carro em aberto + juro ainda em aberto */
 function saldoFabrica(v){
-  return Math.max(0, custoFabrica(v) - pagoFabrica(v.chassi));
+  if(!v) return 0;
+  return Math.max(0, totalFabrica(v) - pagoFabrica(v.chassi));
 }
 /* Vencimento real do pagamento à fábrica.
    Só existe se informado pelo usuário — não presumimos, para não acusar
@@ -1193,7 +1255,7 @@ function atrasoFabrica(v){
   return d > 0 ? d : 0;
 }
 function statusPagamento(v){
-  const custo = custoFabrica(v), pago = pagoFabrica(v.chassi), saldo = saldoFabrica(v);
+  const custo = totalFabrica(v), pago = pagoFabrica(v.chassi), saldo = saldoFabrica(v);
   if(custo <= 0.005) return {k:'div', l:'Sem custo'};
   if(saldo <= 0.005) return {k:'quitado', l:'Pago'};
   if(atrasoFabrica(v) > 0) return {k:'vencido', l:'Vencido há '+atrasoFabrica(v)+'d'};
@@ -1226,16 +1288,22 @@ function renderPagar(){
   }
   if(!lista.length){ el.innerHTML = '<div class="empty">Nenhum veículo com esse filtro.</div>'; return; }
 
-  const totCusto = lista.reduce((s,v)=>s+custoFabrica(v),0);
+  const totCarro = lista.reduce((s,v)=>s+custoFabrica(v),0);
+  const totJuros = lista.reduce((s,v)=>s+jurosFabrica(v),0);
+  const totCusto = totCarro + totJuros;
   const totPago  = lista.reduce((s,v)=>s+pagoFabrica(v.chassi),0);
   const totSaldo = lista.reduce((s,v)=>s+saldoFabrica(v),0);
+  const totSaldoJuros = lista.reduce((s,v)=>s+saldoJurosFabrica(v),0);
   const totVenc  = lista.filter(v=>atrasoFabrica(v)>0).reduce((s,v)=>s+saldoFabrica(v),0);
 
   el.innerHTML = `
     <div class="cards">
-      <div class="kpi"><div class="l">Custo total</div><div class="v inf">${brl0(totCusto)}</div><div class="s">pé da NF + desconto + juros</div></div>
-      <div class="kpi"><div class="l">Pago à fábrica</div><div class="v pos">${brl0(totPago)}</div><div class="s">${pct(totPago,totCusto).toFixed(0)}% do custo</div></div>
+      <div class="kpi"><div class="l">Valor dos veículos</div><div class="v inf">${brl0(totCarro)}</div><div class="s">pé da NF + desconto − bônus</div></div>
+      <div class="kpi"><div class="l">Juros FDIC / Floor Plan</div><div class="v amb">${brl0(totJuros)}</div><div class="s">conta separada · ${brl0(totSaldoJuros)} ainda em aberto</div></div>
+      <div class="kpi"><div class="l">Pago à fábrica</div><div class="v pos">${brl0(totPago)}</div><div class="s">${pct(totPago,totCusto).toFixed(0)}% do total</div></div>
       <div class="kpi"><div class="l">Saldo a pagar</div><div class="v amb">${brl0(totSaldo)}</div><div class="s">${lista.filter(v=>saldoFabrica(v)>0.005).length} veículo(s)</div></div>
+      <div class="kpi"><div class="l">Juros ajustados</div><div class="v ${lista.some(v=>Math.abs(+v.jurosAjuste||0)>0.005)?'amb':''}">${lista.filter(v=>Math.abs(+v.jurosAjuste||0)>0.005).length}</div>
+        <div class="s">${brl0(lista.reduce((s,v)=>s+(+v.jurosAjuste||0),0))} de diferença</div></div>
       <div class="kpi"><div class="l">Vencido</div><div class="v neg">${brl0(totVenc)}</div><div class="s">${lista.filter(v=>atrasoFabrica(v)>0).length} veículo(s) em atraso</div></div>
     </div>
     <table class="tbl"><thead><tr>
@@ -1253,9 +1321,9 @@ function renderPagar(){
         <td>${c? `<span style="color:${c.cor};font-weight:700">${c.rotulo}</span>`:'<span class="hint">manual</span>'}</td>
         <td>${fmt(v.dataFaturamento||v.dataCompra)}</td>
         <td>${ini? fmt(ini):'<span class="hint">—</span>'}</td>
-        <td class="num">${brl(v.peNF)}${(+v.descontoNF)?`<div class="hint" style="margin:0">+${brl(v.descontoNF)} desc.</div>`:''}</td>
-        <td class="num">${brl(jurosFabrica(v))}</td>
-        <td class="num"><b>${brl(custoFabrica(v))}</b></td>
+        <td class="num">${brl(v.peNF)}${(+v.descontoNF)?`<div class="hint" style="margin:0">+${brl(v.descontoNF)} desc.</div>`:''}${(+v.bonusFabrica)?`<div class="hint" style="margin:0">−${brl(v.bonusFabrica)} bônus</div>`:''}</td>
+        <td class="num">${brl(jurosFabrica(v))}${saldoJurosFabrica(v)>0.005&&pagoFabrica(v.chassi)>0.005?`<div class="hint amb" style="margin:0">falta ${brl(saldoJurosFabrica(v))}</div>`:''}</td>
+        <td class="num"><b>${brl(custoFabrica(v))}</b><div class="hint" style="margin:0">total ${brl(totalFabrica(v))}</div></td>
         <td class="num pos">${brl(pagoFabrica(v.chassi))}${
           (DB.pagamentosFabrica||[]).some(p=>p.chassi===v.chassi && estaPendente(p))
             ? '<div class="hint amb" style="margin:0">+'+brl(pagoFabricaBruto(v.chassi)-pagoFabrica(v.chassi))+' aguard. conciliação</div>' : ''}</td>
@@ -1360,6 +1428,16 @@ function formPagamento(chassi){
     <div class="fld"><label>Valor pago (R$) *</label><input id="m-pvalor" type="number" step="0.01" oninput="pagPreview()"></div>
     <div class="fld"><label>Forma</label><select id="m-pforma"><option>TED</option><option>Débito em conta</option><option>Boleto</option><option>FIDC</option><option>Cheque</option><option>Financiamento de fábrica</option><option>Outro</option></select></div>
     <div class="fld"><label>Banco / conta</label><input id="m-pconta" placeholder="ex.: Banco Fiat · conta crédito"></div>
+    <div class="fld full" style="border-top:1px solid var(--line);padding-top:12px">
+      <label>Juros reais cobrados pela fábrica (R$)</label>
+      <input id="m-pjuros" type="number" step="0.01" oninput="pagPreview()">
+      <div class="hint" style="margin:2px 0 0">
+        Calculado pelo sistema até a data do pagamento: <b id="m-pjcalc">—</b>.
+        <button type="button" class="b sec sm" style="padding:2px 8px;font-size:11px" onclick="pagUsarCalculado()">usar o calculado</button>
+        <br>Se a fábrica/banco cobrou diferente, digite o valor real — o ajuste fica registrado.
+      </div></div>
+    <div class="fld full"><label>Motivo do ajuste dos juros</label>
+      <input id="m-pjmotivo" placeholder="opcional · ex.: juro fechado pelo banco, acordo, desconto"></div>
     <div class="fld full"><label>Observação</label><input id="m-pobs" placeholder="referência, parcela, comprovante…"></div>
     <div class="fld full"><div id="m-ppreview" class="hint"></div></div>
   </div>`, ()=>{
@@ -1367,12 +1445,40 @@ function formPagamento(chassi){
     if(!ch) return alert('Escolha o veículo.');
     if(!valor || valor <= 0) return alert('Informe o valor pago.');
     const v = DB.veiculos.find(x=>x.chassi===ch); if(!v) return;
-    if(valor > saldoFabrica(v) + 0.01)
-      return alert('O valor ('+brl(valor)+') é maior que o saldo a pagar ('+brl(saldoFabrica(v))+').');
+    const totalDevido = saldoFabrica(v);
+    /* aceita valor maior: o excedente é o juro FDIC/Floor Plan, que tem conta própria */
+    if(valor > totalDevido + 0.01){
+      const excedente = valor - totalDevido;
+      if(!confirm('O valor (' + brl(valor) + ') é maior que o total ainda devido (' + brl(totalDevido) + ').\n\n' +
+          'Excedente de ' + brl(excedente) + '.\n\n' +
+          'Esse excedente será lançado como JURO PAGO (FDIC / Floor Plan), na conta de juros do veículo — separada da conta do carro.\n\nConfirmar?'))
+        return;
+    }
     DB.pagamentosFabrica = DB.pagamentosFabrica || [];
+
+    /* juro informado pelo usuário prevalece sobre o calculado */
+    const calcJ = juroApurado(v);
+    const campoJ = document.getElementById('m-pjuros');
+    const jInformado = campoJ && campoJ.value !== '' ? (+campoJ.value||0) : calcJ;
+    const ajusteJ = +(jInformado - calcJ).toFixed(2);
+
     const novoPag = {id:uid(), chassi:ch, data:val('m-pdata'), valor,
       forma:val('m-pforma'), conta:val('m-pconta').trim(), obs:val('m-pobs').trim(),
+      jurosInformado: Math.round(jInformado*100)/100,
+      jurosCalculado: Math.round(calcJ*100)/100,
+      jurosAjuste: ajusteJ,
+      jurosMotivo: (val('m-pjmotivo')||'').trim(),
       usuario: (usuarioAtual()||{}).nome || '', criadoPor: (usuarioAtual()||{}).nome || ''};
+
+    /* o ajuste passa a valer como juro do veículo, dali em diante */
+    if(Math.abs(ajusteJ) > 0.005){
+      v.jurosCusto = Math.round(jInformado*100)/100;
+      v.jurosAjuste = ajusteJ;
+      v.jurosAjusteEm = novoPag.data || hoje();
+      v.jurosAjustePor = novoPag.criadoPor;
+      v.jurosAjusteMotivo = novoPag.jurosMotivo;
+      logAcao('Ajustou juros', 'veiculos', ch + ' · de ' + brl(calcJ) + ' para ' + brl(jInformado) + (novoPag.jurosMotivo? ' · '+novoPag.jurosMotivo : ''));
+    }
     novoPag.conc = isMaster() ? 'conciliado' : 'pendente';
     if(novoPag.conc === 'conciliado'){ novoPag.concPor = novoPag.criadoPor; novoPag.concEm = new Date().toISOString(); }
     DB.pagamentosFabrica.push(novoPag);
@@ -1383,29 +1489,76 @@ function formPagamento(chassi){
     if(novoPag.conc === 'pendente') alert('Pagamento lançado.\n\nEle está AGUARDANDO CONCILIAÇÃO: o master precisa confirmar a movimentação antes de entrar nos saldos.');
   });
   document.getElementById('m-pvalor').value = saldoFabrica(alvo).toFixed(2);
+  document.getElementById('m-pjuros').value = (juroApurado(alvo)||0).toFixed(2);
+  pagPreview();
+}
+/* o campo volta ao valor calculado pelo sistema */
+function pagUsarCalculado(){
+  const v = DB.veiculos.find(x=>x.chassi===val('m-pv')); if(!v) return;
+  const el = document.getElementById('m-pjuros'); if(el) el.value = (juroApurado(v)||0).toFixed(2);
   pagPreview();
 }
 function pagPreview(){
   const el = document.getElementById('m-ppreview'); if(!el) return;
   const v = DB.veiculos.find(x=>x.chassi===val('m-pv')); if(!v) return;
   const valor = +val('m-pvalor')||0;
-  const novo = Math.max(0, saldoFabrica(v) - valor);
-  const custo = custoFabrica(v), pago = pagoFabrica(v.chassi);
-  el.innerHTML = `Custo do veículo <b>${brl(custo)}</b> · já pago ${brl(pago)} · saldo <b>${brl(saldoFabrica(v))}</b>
-    (pé da NF ${brl(v.peNF)} + juros ${brl(jurosFabrica(v))})<br>
-    Após este pagamento: pago ${brl(pago+valor)} · <b>saldo ${brl(novo)}</b>${novo<=0.005?' <span class="pos">→ quitado com a fábrica</span>':''}`;
+
+  /* juro: o informado prevalece; se o campo estiver vazio, usa o calculado */
+  const calc = juroApurado(v);
+  const campoJ = document.getElementById('m-pjuros');
+  const informado = campoJ && campoJ.value !== '' ? (+campoJ.value||0) : calc;
+  const ajustado = campoJ && campoJ.value !== '' && Math.abs(informado - calc) > 0.005;
+
+  const carro = custoFabrica(v);
+  const juros = informado;
+  const total = carro + juros;
+  const pago  = pagoFabrica(v.chassi);
+  const pagoJuros = Math.min(pago, juros);
+
+  const faltaCarro = Math.max(0, carro - pago);
+  const faltaJuros = Math.max(0, juros - pagoJuros);
+  const faltaTotal = faltaCarro + faltaJuros;
+
+  const abateCarro = Math.min(valor, faltaCarro);
+  const abateJuros = Math.min(valor - abateCarro, faltaJuros);
+  const sobra      = Math.max(0, valor - abateCarro - abateJuros);
+
+  const elCalc = document.getElementById('m-pjcalc');
+  if(elCalc) elCalc.textContent = brl(calc);
+
+  el.innerHTML = `
+    <table class="tbl" style="margin:0 0 8px">
+      <thead><tr><th>Conta</th><th class="num">Valor</th><th class="num">Já pago</th><th class="num">Em aberto</th></tr></thead>
+      <tbody>
+        <tr><td><b>Veículo</b> <span class="hint">pé NF ${brl(v.peNF)}${v.descontoNF?' + desc. '+brl(v.descontoNF):''}${v.bonusFabrica?' − bônus '+brl(v.bonusFabrica):''}</span></td>
+            <td class="num">${brl(carro)}</td><td class="num">${brl(Math.min(pago,carro))}</td><td class="num">${brl(faltaCarro)}</td></tr>
+        <tr><td><b>Juros</b> <span class="hint">${ajustado?'ajustado (calculado '+brl(calc)+')':'calculado pelo sistema'}</span></td>
+            <td class="num${ajustado?' amb':''}">${brl(juros)}</td><td class="num">${brl(pagoJuros)}</td><td class="num">${brl(faltaJuros)}</td></tr>
+        <tr style="background:#eef2ff"><td><b>TOTAL à fábrica</b></td><td class="num"><b>${brl(total)}</b></td>
+            <td class="num"><b>${brl(pago)}</b></td><td class="num"><b>${brl(faltaTotal)}</b></td></tr>
+      </tbody></table>
+    ${valor>0.005? `<b>Este pagamento de ${brl(valor)}:</b> ${brl(abateCarro)} no veículo · ${brl(abateJuros)} nos juros
+      ${sobra>0.005?` · <span class="neg">${brl(sobra)} sobra acima do total</span>`:''}
+      ${faltaTotal-valor<=0.005?' <span class="pos">→ quita tudo com a fábrica</span>':''}`:''}
+    ${ajustado?`<div class="hint amb" style="margin-top:6px">O juro foi ajustado de ${brl(calc)} para ${brl(juros)} (${juros>calc?'+':''}${brl(juros-calc)}). O ajuste fica registrado no pagamento.</div>`:''}`;
 }
 function gerirPagamentosFab(chassi){
   const v = DB.veiculos.find(x=>x.chassi===chassi); if(!v) return;
   const ps = (DB.pagamentosFabrica||[]).filter(p=>p.chassi===chassi).sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+  const carro = custoFabrica(v), juros = jurosFabrica(v), pago = pagoFabrica(chassi);
+  const pagoCarro = Math.min(pago, carro), pagoJuros = Math.max(0, pago - carro);
+  const condRot = (COND_PAG[v.condicao||'']||{}).rotulo || 'sem juros';
   const corpo = `
     <div class="cards" style="margin-bottom:14px">
-      <div class="kpi"><div class="l">Custo</div><div class="v" style="font-size:16px">${brl(custoFabrica(v))}</div><div class="s">pé NF ${brl(v.peNF)} + juros ${brl(jurosFabrica(v))}</div></div>
-      <div class="kpi"><div class="l">Pago</div><div class="v pos" style="font-size:16px">${brl(pagoFabrica(chassi))}</div><div class="s">${ps.length} pagamento(s)</div></div>
-      <div class="kpi"><div class="l">Saldo</div><div class="v ${saldoFabrica(v)>0.005?'amb':'pos'}" style="font-size:16px">${brl(saldoFabrica(v))}</div><div class="s">${pc_status}</div></div>
+      <div class="kpi"><div class="l">Conta do veículo</div><div class="v" style="font-size:16px">${brl(carro)}</div>
+        <div class="s">pé NF ${brl(v.peNF)}${v.descontoNF?' + desc '+brl(v.descontoNF):''}${v.bonusFabrica?' − bônus '+brl(v.bonusFabrica):''}<br>pago ${brl(pagoCarro)} · <b>${brl(Math.max(0,carro-pago))} em aberto</b></div></div>
+      <div class="kpi"><div class="l">Juros ${esc(condRot)}</div><div class="v amb" style="font-size:16px">${brl(juros)}</div>
+        <div class="s">conta separada<br>pago ${brl(pagoJuros)} · <b>${brl(saldoJurosFabrica(v))} em aberto</b></div></div>
+      <div class="kpi"><div class="l">Total pago</div><div class="v pos" style="font-size:16px">${brl(pago)}</div><div class="s">${ps.length} pagamento(s)</div></div>
+      <div class="kpi"><div class="l">Total à fábrica</div><div class="v ${saldoFabrica(v)>0.005?'amb':'pos'}" style="font-size:16px">${brl(carro+juros)}</div><div class="s">saldo ${brl(saldoFabrica(v))} · ${pc_status}</div></div>
     </div>
     ${ps.length? `<table class="tbl"><thead><tr><th>Data</th><th class="num">Valor</th><th>Forma</th><th>Conta</th><th>Obs.</th><th></th></tr></thead><tbody>
-      ${ps.map(p=>`<tr><td>${fmt(p.data)}${seloConc(p)}</td><td class="num"><b>${brl(p.valor)}</b></td><td>${esc(p.forma||'—')}</td>
+      ${ps.map(p=>`<tr><td>${fmt(p.data)}${seloConc(p)}</td><td class="num"><b>${brl(p.valor)}</b>${(p.jurosInformado!==undefined)?`<div class="hint ${(+p.jurosAjuste)?'amb':''}" style="margin:0">juros ${brl(p.jurosInformado)}${(+p.jurosAjuste)?' (ajuste '+(p.jurosAjuste>0?'+':'')+brl(p.jurosAjuste)+')':''}</div>`:''}</td><td>${esc(p.forma||'—')}</td>
       <td>${esc(p.conta||'—')}</td><td>${esc(p.obs||'—')}</td>
       <td>${pode('pagamentos','edit')?`<button class="b sm sec" onclick="editarPagFab('${p.id}','${esc(chassi)}')">✏️</button>`:''}
       ${pode('pagamentos','del')?`<button class="b sm dang" onclick="excluirPagFab('${p.id}','${esc(chassi)}')">🗑</button>`:''}</td></tr>`).join('')}
@@ -1454,15 +1607,43 @@ function excluirPagFab(id, chassi){
 function recalcPagFab(chassi){
   const v = DB.veiculos.find(x=>x.chassi===chassi);
   if(!v) return;
-  const quitado = saldoFabrica(v) <= 0.005;
-  if(quitado){
+  const pago = pagoFabrica(chassi);
+  const carro = custoFabrica(v);
+
+  /* o veículo está quitado quando o pago cobre o carro */
+  const carroQuitado = pago >= carro - 0.005;
+  if(carroQuitado){
     if(!v.dataPagamentoFabrica){
       const pagos = (DB.pagamentosFabrica||[]).filter(p=>p.chassi===chassi && concOk(p))
         .sort((a,b)=>(b.data||'').localeCompare(a.data||''));
       v.dataPagamentoFabrica = (pagos[0]||{}).data || hoje();
     }
-  } else if(v.dataPagamentoFabrica){
-    v.dataPagamentoFabrica = '';
+    /* congela o juro apurado na data do pagamento — ele não corre mais */
+    if(v.jurosCongelado === undefined || v.jurosCongelado === null || v.jurosCongelado === ''){
+      const cond = v.condicao || '';
+      const c = COND_PAG[cond];
+      if(c && c.dias != null){
+        const ini = v.inicioJuros || inicioJurosCond(cond, v.dataFaturamento||v.dataCompra);
+        const cfg = cfgJuros();
+        const taxa = c.tipo ? cfg[c.tipo] : null;
+        if(+v.jurosCusto > 0){
+          v.jurosCongelado = +v.jurosCusto;
+        } else if(ini && taxa && +taxa.pct){
+          const d = diasCorridos(ini, v.dataPagamentoFabrica);
+          const fator = taxa.periodo === 'dia' ? d : d/30;
+          v.jurosCongelado = (+v.peNF||0) * (+taxa.pct)/100 * fator;
+        } else {
+          v.jurosCongelado = 0;
+        }
+      }
+    }
+  } else {
+    if(v.dataPagamentoFabrica) v.dataPagamentoFabrica = '';
+    /* voltou a ficar em aberto: o juro volta a correr */
+    if(pago <= carro + 0.005){
+      v.jurosCongelado = null;
+      v.jurosCustoPago = 0;
+    }
   }
 }
 
@@ -2543,14 +2724,34 @@ function formBaixa(tituloId, vendaId){
     <div class="fld"><label>Valor recebido (R$) *</label><input id="m-valor" type="number" step="0.01" oninput="baixaPreview()"></div>
     <div class="fld"><label>Forma</label><select id="m-forma"><option>PIX</option><option>TED</option><option>Boleto</option><option>Financiamento (repasse banco)</option><option>Cheque</option><option>Dinheiro</option><option>Cartão</option><option>Consórcio</option><option>Outro</option></select></div>
     <div class="fld"><label>Banco / conta</label><input id="m-conta" placeholder="ex.: Itaú c/ 1234-5"></div>
+    <div class="fld full" style="border-top:1px solid var(--line);padding-top:12px">
+      <label>Juros / multa / desconto cobrados do cliente (R$)</label>
+      <input id="m-acrescimo" type="number" step="0.01" value="0" oninput="baixaPreview()">
+      <div class="hint" style="margin:2px 0 0">
+        Positivo = juros/multa cobrados a mais · Negativo = desconto concedido.
+        O valor entra no recebido e o ajuste fica registrado no título.
+      </div></div>
+    <div class="fld"><label>Motivo do ajuste</label><input id="m-motivo" placeholder="opcional · ex.: atraso, acordo, desconto"></div>
     <div class="fld full"><label>Observação</label><input id="m-obs" placeholder="comprovante, parcela, referência…"></div>
     <div class="fld full"><div id="m-preview" class="hint"></div></div>
   </div>`, ()=>{
     const id = val('m-titulo'), v = +val('m-valor');
     if(!id) return alert('Escolha o título.');
     if(!v || v <= 0) return alert('Informe o valor recebido.');
-    if(v > saldoTitulo(titulo(id)) + 0.01) return alert('O valor ('+brl(v)+') é maior que o saldo do título ('+brl(saldoTitulo(titulo(id)))+').');
-    const novoRec = {id:uid(), tituloId:id, data:val('m-data'), valor:v, forma:val('m-forma'), conta:val('m-conta').trim(), obs:val('m-obs').trim()};
+    const acrescimo = +val('m-acrescimo') || 0;
+    const t = titulo(id);
+    const saldo = saldoTitulo(t);
+    const base = v - acrescimo;              // quanto abate do título
+    if(acrescimo <= 0.005 && v > saldo + 0.01)
+      return alert('O valor ('+brl(v)+') é maior que o saldo do título ('+brl(saldo)+').\n\nSe a diferença é juros ou multa cobrados do cliente, informe no campo "Juros / multa / desconto".');
+    if(acrescimo > 0.005 && base > saldo + 0.01)
+      return alert('Além dos juros/multa de '+brl(acrescimo)+', o valor abateria '+brl(base)+' do título, mas o saldo é '+brl(saldo)+'. Reduza o valor ou o acréscimo.');
+    const novoRec = {id:uid(), tituloId:id, data:val('m-data'), valor:v, forma:val('m-forma'), conta:val('m-conta').trim(), obs:val('m-obs').trim(),
+      acrescimo: Math.round(acrescimo*100)/100, motivoAjuste: (val('m-motivo')||'').trim()};
+    if(Math.abs(acrescimo) > 0.005){
+      t.acrescimoTotal = Math.round(((+t.acrescimoTotal||0) + acrescimo)*100)/100;
+      logAcao('Ajustou recebimento', 'titulos', (t.tipoNome||'') + ' · ' + (acrescimo>0?'juros/multa ':'desconto ') + brl(Math.abs(acrescimo)) + (novoRec.motivoAjuste?' · '+novoRec.motivoAjuste:''));
+    }
     novoRec.criadoPor = (usuarioAtual()||{}).nome || '';
     novoRec.conc = isMaster() ? 'conciliado' : 'pendente';
     if(novoRec.conc === 'conciliado'){ novoRec.concPor = novoRec.criadoPor; novoRec.concEm = new Date().toISOString(); }
@@ -2572,10 +2773,16 @@ function baixaPreview(){
   const sel = document.getElementById('m-titulo'); if(!sel) return;
   const t = titulo(sel.value); if(!t) return;
   const v = +val('m-valor');
+  const ac = +val('m-acrescimo') || 0;
   const el = document.getElementById('m-preview'); if(!el) return;
-  const novo = Math.max(0, saldoTitulo(t) - (v||0));
+  const abate = Math.max(0, (v||0) - ac);
+  const novo = Math.max(0, saldoTitulo(t) - abate);
+  const ajuste = Math.abs(ac) > 0.005
+    ? `<div class="hint ${ac>0?'amb':'pos'}" style="margin-top:4px">${ac>0?'Juros/multa cobrados':'Desconto concedido'}: <b>${brl(Math.abs(ac))}</b> — abate ${brl(abate)} do título.</div>`
+    : '';
   el.innerHTML = `Título de <b>${brl(t.valor)}</b> · já recebido ${brl(recebidoTitulo(t.id))} · saldo hoje <b>${brl(saldoTitulo(t))}</b><br>
-    Após este recebimento: recebido ${brl(recebidoTitulo(t.id)+(v||0))} · <b>saldo ${brl(novo)}</b> ${novo<=0.005?'<span class="pos">→ título quitado</span>':''}`;
+    Após este recebimento: recebido ${brl(recebidoTitulo(t.id)+abate)} · <b>saldo ${brl(novo)}</b> ${novo<=0.005?'<span class="pos">→ título quitado</span>':''}
+    ${ajuste}`;
 }
 function gerirBaixas(tituloId){
   const t = titulo(tituloId); if(!t) return;
@@ -3275,12 +3482,14 @@ function boletosVencidos(chassi){
 }
 
 /* custo = pé da NF + desconto + juros − bônus da fábrica */
+/* mesma regra do cre-pagar: o juro NÃO entra no custo do veículo */
 function custoFabrica(v){
   if(!v) return 0;
-  return (+v.peNF||0) + (+v.descontoNF||0) + jurosFabrica(v) - (+v.bonusFabrica||0);
+  return (+v.peNF||0) + (+v.descontoNF||0) - (+v.bonusFabrica||0);
 }
 function saldoFabrica(v){
-  return Math.max(0, custoFabrica(v) - pagoFabrica(v.chassi));
+  if(!v) return 0;
+  return Math.max(0, custoFabrica(v) + (typeof jurosFabrica==='function'?jurosFabrica(v):0) - pagoFabrica(v.chassi));
 }
 /* vencimento da fatura = boleto em aberto mais antigo */
 function vencFabrica(v){
@@ -3437,7 +3646,7 @@ function renderEstoque(){
     const valorDisp = disp.reduce((s,v)=>s+(+v.peNF||0),0);
     k.innerHTML = `
       <div class="kpi"><div class="l">Veículos no estoque</div><div class="v">${disp.length}</div><div class="s">disponíveis para venda</div></div>
-      <div class="kpi"><div class="l">Valor do estoque (pé da NF)</div><div class="v inf">${brl0(valorDisp)}</div><div class="s">${brl0(disp.reduce((s,v)=>s+custoFabrica(v),0))} com juros</div></div>
+      <div class="kpi"><div class="l">Valor do estoque (pé da NF)</div><div class="v inf">${brl0(valorDisp)}</div><div class="s">${brl0(disp.reduce((s,v)=>s+custoFabrica(v),0))} no veículo + ${brl0(disp.reduce((s,v)=>s+(typeof jurosFabrica==='function'?jurosFabrica(v):0),0))} de juros</div></div>
       <div class="kpi"><div class="l">Estoque</div><div class="v">${disp.filter(v=>natDe(v)==='estoque').length}</div><div class="s">Rede</div></div>
       <div class="kpi"><div class="l">Venda direta</div><div class="v" style="color:#a78bfa">${DB.veiculos.filter(v=>natDe(v)==='vendaDireta'&&veicDisponivel(v)).length}</div><div class="s">aguardando venda</div></div>
       <div class="kpi"><div class="l">Test-drive</div><div class="v pos">${disp.filter(v=>natDe(v)==='testDrive').length}</div><div class="s">frota da loja</div></div>
@@ -3460,7 +3669,7 @@ function renderEstoque(){
         <td>${badgePag(st)}</td>
         <td>${galeriaMini(v.fotos)}</td>
         <td class="num">${brl(v.peNF)}</td>
-        <td class="num">${brl(custoFabrica(v))}</td>
+        <td class="num">${brl(custoFabrica(v))}${(typeof jurosFabrica==='function' && jurosFabrica(v)>0.005)?`<div class="hint amb" style="margin:0">+ ${brl(jurosFabrica(v))} juros</div>`:''}</td>
         <td style="white-space:nowrap">
           ${(!vend && pode('vendas','edit'))?`<button class="b sm ok" onclick="formVenderVeiculo('${v.chassi}')" title="Vender este veículo">💰 Vender</button>`:''}
           ${vend?`<button class="b sm sec" onclick="dossie(DB.vendas.find(x=>x.chassi==='${v.chassi}').id)" title="Ver a venda">📄</button>`:''}
@@ -3478,7 +3687,8 @@ function gerirBoletos(chassi){
   const bol = boletosDoVeic(chassi);
   const pago = pagoFabrica(chassi), saldo = saldoFabrica(v);
   modal('Boletos à fábrica · '+esc(chassi), `
-    <p class="hint" style="margin:0 0 12px">${esc(v.modelo||'')} · Custo ${brl(custoFabrica(v))} · Pago ${brl(pago)} · <b class="${saldo>0.005?'amb':'pos'}">Saldo ${brl(saldo)}</b></p>
+    <p class="hint" style="margin:0 0 12px">${esc(v.modelo||'')} · Veículo ${brl(custoFabrica(v))} + juros ${brl(typeof jurosFabrica==='function'?jurosFabrica(v):0)} ·
+      Pago ${brl(pago)} · <b class="${saldo>0.005?'amb':'pos'}">Saldo ${brl(saldo)}</b></p>
     ${bol.length ? `<table class="tbl"><thead><tr><th>Boleto</th><th>Vencimento</th><th class="num">Valor</th><th>Situação</th><th></th></tr></thead><tbody>
       ${bol.map(r=>{
         const atr = !boletoPago(r) && r.vencimento && diasAte(r.vencimento) < 0;
