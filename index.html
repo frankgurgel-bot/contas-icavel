@@ -151,6 +151,7 @@
   <div class="logo-sub">Contas a Receber · v3.1</div>
   <button data-v="dash">📊 Dashboard</button>
   <button data-v="estoque">🏷 Estoque de veículos</button>
+  <button data-v="pedidos">📝 Pedidos de venda direta</button>
   <button data-v="vendas">🚗 Carros vendidos</button>
   <button data-v="titulos">🧾 Títulos a receber</button>
   <button data-v="pagar">🏭 Pagamento à fábrica</button>
@@ -227,6 +228,26 @@
       <button class="b ok" data-perm="vendas:edit" onclick="escolherVeiculoParaVender()">💰 Vender um carro</button>
     </div>
     <div id="tbl-estoque"></div>
+  </section>
+
+  <section class="view" id="v-pedidos">
+    <h1>Pedidos de venda direta</h1>
+    <p class="sub">O pedido é registrado pelo vendedor <b>antes</b> do faturamento da fábrica. Aqui ficam os carros pedidos que a fábrica
+    ainda não faturou e as <b>antecipações</b> que o cliente já pagou. Quando a fábrica fatura, o carro vai para “Carros vendidos”,
+    já com o histórico do que o cliente pagou.</p>
+    <div class="cards" id="pd-kpis"></div>
+    <div class="bar">
+      <button class="b ok" data-perm="vendas:edit" onclick="formPedido()">＋ Novo pedido</button>
+      <input id="f-busca-pd" placeholder="Buscar cliente, doc, veículo, vendedor…" oninput="renderPedidos()" style="flex:1;min-width:180px">
+      <select id="f-sit-pd" onchange="renderPedidos()">
+        <option value="pedido">Aguardando faturamento</option>
+        <option value="faturado">Já faturados</option>
+        <option value="cancelado">Cancelados</option>
+        <option value="todos">Todos</option>
+      </select>
+      <button class="b sec" onclick="window.print()">🖨 PDF</button>
+    </div>
+    <div id="tbl-pedidos"></div>
   </section>
 
   <section class="view" id="v-vendas">
@@ -341,6 +362,8 @@
       <button onclick="relAgingPagar()"><b>8 · Vencidos à fábrica</b><span>Saldo a pagar por faixa de atraso e por fornecedor</span></button>
       <button onclick="relConciliacoes()"><b>9 · Conciliações</b><span>Movimentos pendentes, confirmados e rejeitados, com autor e data</span></button>
       <button onclick="relCobranca()"><b>10 · Cobrança por cliente</b><span>Carta de cobrança formal por cliente, com os títulos em aberto e o total</span></button>
+      <button onclick="relAntecipacoes()"><b>11 · Antecipações de venda direta</b><span>O que o cliente já pagou antes do faturamento, por pedido</span></button>
+      <button onclick="relVendaDireta()"><b>12 · Venda direta — faturado x falta faturar</b><span>Pedidos aguardando a fábrica, já faturados e antecipações</span></button>
     </div>
     <div id="rep-out"><div class="empty">Escolha um relatório acima.</div></div>
   </section>
@@ -448,7 +471,7 @@ const ACOES = [{k:'ver', l:'Ver'}, {k:'edit', l:'Criar/Editar'}, {k:'del', l:'Ex
 
 const SUPA_URL = 'https://ukwfouwxhpxotrwwxxre.supabase.co';
 const SUPA_KEY = 'sb_publishable_c-e_CeLKkPbZ0UzLfXNbug_fhwqjjGt';
-const COLS = ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog'];
+const COLS = ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog','pedidos','recebimentosPedido'];
 
 const CLOUD = {
   sessao: null,        // {access_token, refresh_token, expires_at}
@@ -577,7 +600,7 @@ async function atualizarPerfil(uid, dados){
 async function baixarTudo(){
   const rows = await apiRest('registros?select=tabela,id,payload,atualizado_em&limit=20000');
   DB = {vendas:[], titulos:[], recebimentos:[], veiculos:[], tipos:[], pagadores:[], clientes:[],
-        vendedores:[], usuarios:[], log:[], pagamentosFabrica:[], concLog:[], juros:{}};
+        vendedores:[], usuarios:[], log:[], pagamentosFabrica:[], concLog:[], pedidos:[], recebimentosPedido:[], juros:{}};
   (rows||[]).forEach(r=>{
     if(r.tabela === 'juros'){ DB.juros = r.payload || {}; return; }
     if(!DB[r.tabela]) DB[r.tabela] = [];
@@ -1536,8 +1559,9 @@ function formPagamento(chassi){
       </div></div>
     <div class="fld full"><label>Motivo do ajuste dos juros</label>
       <input id="m-pjmotivo" placeholder="opcional · ex.: juro fechado pelo banco, acordo, desconto"></div>
-    <div class="fld full"><label>Observação</label><input id="m-pobs" placeholder="referência, parcela, comprovante…"></div>
+    <div class="fld full"><label>Observação</label><input id="m-pobs" placeholder="referência, parcela…"></div>
     <div class="fld full"><div id="m-ppreview" class="hint"></div></div>
+    ${typeof blocoComprovante==='function' ? blocoComprovante(null) : ''}
   </div>`, ()=>{
     const ch = val('m-pv'), valor = +val('m-pvalor');
     if(!ch) return alert('Escolha o veículo.');
@@ -1566,6 +1590,7 @@ function formPagamento(chassi){
       jurosCalculado: Math.round(calcJ*100)/100,
       jurosAjuste: ajusteJ,
       jurosMotivo: (val('m-pjmotivo')||'').trim(),
+      comprovantes: (typeof comprovantesDoForm==='function' ? comprovantesDoForm() : []),
       usuario: (usuarioAtual()||{}).nome || '', criadoPor: (usuarioAtual()||{}).nome || ''};
 
     /* o ajuste passa a valer como juro do veículo, dali em diante */
@@ -1656,7 +1681,7 @@ function gerirPagamentosFab(chassi){
       <div class="kpi"><div class="l">Total à fábrica</div><div class="v ${saldoFabrica(v)>0.005?'amb':'pos'}" style="font-size:16px">${brl(carro+juros)}</div><div class="s">saldo ${brl(saldoFabrica(v))} · ${pc_status}</div></div>
     </div>
     ${ps.length? `<table class="tbl"><thead><tr><th>Data</th><th class="num">Valor</th><th>Forma</th><th>Conta</th><th>Obs.</th><th></th></tr></thead><tbody>
-      ${ps.map(p=>`<tr><td>${fmt(p.data)}${seloConc(p)}</td><td class="num"><b>${brl(p.valor)}</b>${(p.jurosInformado!==undefined)?`<div class="hint ${(+p.jurosAjuste)?'amb':''}" style="margin:0">juros ${brl(p.jurosInformado)}${(+p.jurosAjuste)?' (ajuste '+(p.jurosAjuste>0?'+':'')+brl(p.jurosAjuste)+')':''}</div>`:''}</td><td>${esc(p.forma||'—')}</td>
+      ${ps.map(p=>`<tr><td>${fmt(p.data)}${seloConc(p)}${typeof seloComprovante==='function'?seloComprovante(p):''}</td><td class="num"><b>${brl(p.valor)}</b>${(p.jurosInformado!==undefined)?`<div class="hint ${(+p.jurosAjuste)?'amb':''}" style="margin:0">juros ${brl(p.jurosInformado)}${(+p.jurosAjuste)?' (ajuste '+(p.jurosAjuste>0?'+':'')+brl(p.jurosAjuste)+')':''}</div>`:''}</td><td>${esc(p.forma||'—')}</td>
       <td>${esc(p.conta||'—')}</td><td>${esc(p.obs||'—')}</td>
       <td>${pode('pagamentos','edit')?`<button class="b sm sec" onclick="editarPagFab('${p.id}','${esc(chassi)}')">✏️</button>`:''}
       ${pode('pagamentos','del')?`<button class="b sm dang" onclick="excluirPagFab('${p.id}','${esc(chassi)}')">🗑</button>`:''}</td></tr>`).join('')}
@@ -1691,6 +1716,7 @@ function editarPagFab(id, chassi){
       <input id="m-pjmotivo" value="${esc(p.jurosMotivo||'')}" placeholder="opcional · ex.: juro fechado pelo banco"></div>
     <div class="fld full"><label>Observação</label><input id="m-obs" value="${esc(p.obs||'')}"></div>
     <div class="fld full"><div id="m-edprev" class="hint"></div></div>
+    ${typeof blocoComprovante==='function' ? blocoComprovante(p) : ''}
   </div>`, ()=>{
     const novo = +val('m-valor')||0;
     if(!novo || novo <= 0) return alert('Informe o valor pago.');
@@ -1711,7 +1737,8 @@ function editarPagFab(id, chassi){
       jurosInformado: Math.round(jInformado*100)/100,
       jurosCalculado: Math.round(calc*100)/100,
       jurosAjuste: ajusteJ,
-      jurosMotivo: (val('m-pjmotivo')||'').trim()});
+      jurosMotivo: (val('m-pjmotivo')||'').trim(),
+      comprovantes: (typeof comprovantesDoForm==='function' ? comprovantesDoForm() : (p.comprovantes||[]))});
 
     /* o ajuste passa a valer como juro do veículo */
     if(Math.abs(ajusteJ) > 0.005){
@@ -2408,7 +2435,7 @@ const SEED_PAGADORES = [
 ].map((nome,i)=>({id:'p-'+(i+1), nome, tipo: i===0?'Cliente':(i>=9?'Fábrica':'Financeira')}));
 
 function normalize(){
-  ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k]=[]; });
+  ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog','pedidos','recebimentosPedido'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k]=[]; });
   if(!DB.tipos.length) DB.tipos = SEED_TIPOS.map(x=>({...x}));
   if(!DB.pagadores.length) DB.pagadores = SEED_PAGADORES.map(x=>({...x}));
   DB.titulos.forEach(t=>{
@@ -2958,8 +2985,9 @@ function formBaixa(tituloId, vendaId){
         O valor entra no recebido e o ajuste fica registrado no título.
       </div></div>
     <div class="fld"><label>Motivo do ajuste</label><input id="m-motivo" placeholder="opcional · ex.: atraso, acordo, desconto"></div>
-    <div class="fld full"><label>Observação</label><input id="m-obs" placeholder="comprovante, parcela, referência…"></div>
+    <div class="fld full"><label>Observação</label><input id="m-obs" placeholder="parcela, referência…"></div>
     <div class="fld full"><div id="m-preview" class="hint"></div></div>
+    ${typeof blocoComprovante==='function' ? blocoComprovante(null) : ''}
   </div>`, ()=>{
     const id = val('m-titulo'), v = +val('m-valor');
     if(!id) return alert('Escolha o título.');
@@ -2973,7 +3001,8 @@ function formBaixa(tituloId, vendaId){
     if(acrescimo > 0.005 && base > saldo + 0.01)
       return alert('Além dos juros/multa de '+brl(acrescimo)+', o valor abateria '+brl(base)+' do título, mas o saldo é '+brl(saldo)+'. Reduza o valor ou o acréscimo.');
     const novoRec = {id:uid(), tituloId:id, data:val('m-data'), valor:v, forma:val('m-forma'), conta:val('m-conta').trim(), obs:val('m-obs').trim(),
-      acrescimo: Math.round(acrescimo*100)/100, motivoAjuste: (val('m-motivo')||'').trim()};
+      acrescimo: Math.round(acrescimo*100)/100, motivoAjuste: (val('m-motivo')||'').trim(),
+      comprovantes: (typeof comprovantesDoForm==='function' ? comprovantesDoForm() : [])};
     if(Math.abs(acrescimo) > 0.005){
       t.acrescimoTotal = Math.round(((+t.acrescimoTotal||0) + acrescimo)*100)/100;
       logAcao('Ajustou recebimento', 'titulos', (t.tipoNome||'') + ' · ' + (acrescimo>0?'juros/multa ':'desconto ') + brl(Math.abs(acrescimo)) + (novoRec.motivoAjuste?' · '+novoRec.motivoAjuste:''));
@@ -3017,7 +3046,7 @@ function gerirBaixas(tituloId){
   const corpo = `
     <p class="hint" style="margin-bottom:12px"><b>${esc(t.tipoNome)}</b> · ${esc(v.chassi||'')} · ${esc(v.cliente||'')} — valor ${brl(t.valor)} · recebido ${brl(recebidoTitulo(tituloId))} · saldo <b>${brl(saldoTitulo(t))}</b></p>
     ${bs.length?`<table class="tbl"><thead><tr><th>Data</th><th class="num">Valor</th><th>Forma</th><th>Conta</th><th>Obs.</th><th></th></tr></thead><tbody>
-      ${bs.map(r=>`<tr><td>${fmt(r.data)}${seloConc(r)}</td><td class="num"><b>${brl(r.valor)}</b></td><td>${esc(r.forma||'—')}</td>
+      ${bs.map(r=>`<tr><td>${fmt(r.data)}${seloConc(r)}${typeof seloComprovante==='function'?seloComprovante(r):''}</td><td class="num"><b>${brl(r.valor)}</b></td><td>${esc(r.forma||'—')}</td>
         <td>${esc(r.conta||'—')}</td><td>${esc(r.obs||'—')}</td>
         <td>${pode('titulos','edit')?`<button class="b sm sec" onclick="formEditarBaixa('${r.id}')">✏️</button>`:''}
         ${pode('titulos','del')?`<button class="b sm dang" onclick="excluirBaixa('${r.id}','${tituloId}')">🗑</button>`:''}</td></tr>`).join('')}
@@ -3051,6 +3080,7 @@ function formEditarBaixa(id){
     <div class="fld"><label>Motivo do ajuste</label><input id="m-motivo" value="${esc(r.motivoAjuste||'')}" placeholder="opcional"></div>
     <div class="fld full"><label>Observação</label><input id="m-obs" value="${esc(r.obs||'')}"></div>
     <div class="fld full"><div id="m-edprev" class="hint"></div></div>
+    ${typeof blocoComprovante==='function' ? blocoComprovante(r) : ''}
   </div>`, ()=>{
     const valor = +val('m-valor'); if(!valor) return alert('Informe o valor.');
     const ac = +val('m-acrescimo') || 0;
@@ -3067,7 +3097,8 @@ function formEditarBaixa(id){
     if(Math.abs(ac) > 0.005) t.acrescimoTotal = Math.round(((+t.acrescimoTotal||0) + ac)*100)/100;
 
     Object.assign(r, {data:val('m-data'), valor, forma:val('m-forma'), conta:val('m-conta'), obs:val('m-obs'),
-      acrescimo: Math.round(ac*100)/100, motivoAjuste:(val('m-motivo')||'').trim()});
+      acrescimo: Math.round(ac*100)/100, motivoAjuste:(val('m-motivo')||'').trim(),
+      comprovantes: (typeof comprovantesDoForm==='function' ? comprovantesDoForm() : (r.comprovantes||[]))});
 
     if(!isMaster()){ r.conc = 'pendente'; r.concPor=''; r.concEm=''; r.concObs='Alterado pelo financeiro — aguarda nova conciliação'; }
     logAcao('Alterou recebimento', 'titulos', (t.tipoNome||'') + ' · ' + brl(valor) + (Math.abs(ac)>0.005? ' · ajuste '+brl(ac):''));
@@ -3610,6 +3641,7 @@ function renderAll(){
   renderTipos(); renderPagadores(); renderClientes(); renderVendedores(); renderDados();
   renderPagar(); renderJuros();
   if(typeof renderPrazoFab === 'function') renderPrazoFab();
+  if(typeof renderPedidos==='function') renderPedidos();
   if(typeof renderConciliacao==='function'){ renderConciliacao(); atualizarBadgeConc(); }
   if(typeof renderUsuarios==='function') renderUsuarios();
   renderPeriodoHint();
@@ -4263,12 +4295,39 @@ function confirmarImportFabricante(){
     if(ex){ Object.assign(ex, dados); atualizados++; }
     else { DB.veiculos.push(Object.assign({id:uid(), fotos:[], descontoNF:0}, dados)); novos++; }
 
-    // venda direta: já entra vendida
-    if(v.natureza === 'vendaDireta' && !DB.vendas.some(x=>x.chassi===v.chassi)){
-      DB.vendas.push({id:uid(), chassi:v.chassi, veiculo:v.modelo, data:v.dataFaturamento||hoje(),
-        valorVenda:0, cliente:'', doc:v.clienteDoc||'', vendedor:'', nf:v.nf,
-        obs:'Venda direta — faturamento da fábrica em '+fmt(v.dataFaturamento)});
-      vendasCriadas++;
+    /* -------------------- VENDA DIRETA --------------------
+       Já vem faturada em nome do cliente: entra direto em CARROS VENDIDOS,
+       não no estoque. Se havia pedido de venda direta registrado antes do
+       faturamento, ele é ligado aqui — valor, cliente, vendedor e as
+       antecipações que o cliente já pagou passam para a venda. */
+    if(v.natureza === 'vendaDireta'){
+      const pedido = (typeof ligarPedidoAoVeiculo === 'function') ? ligarPedidoAoVeiculo(Object.assign({}, v, {chassi:v.chassi})) : null;
+      const jaVendido = DB.vendas.find(x=>x.chassi===v.chassi);
+      if(!jaVendido){
+        const valor = pedido ? (+pedido.valorVenda||0) : 0;
+        DB.vendas.push({id:uid(), chassi:v.chassi,
+          veiculo: v.modelo,
+          data: v.dataFaturamento || hoje(),
+          valorVenda: valor,
+          cliente: pedido ? pedido.cliente : '',
+          doc: pedido ? pedido.doc : (v.clienteDoc||''),
+          vendedor: pedido ? pedido.vendedor : '',
+          nf: v.nf,
+          pedidoId: pedido ? pedido.id : '',
+          origemPedido: !!pedido,
+          obs: 'Venda direta — faturada pela fábrica em '+fmt(v.dataFaturamento)
+               + (pedido? ' · pedido de '+fmt(pedido.data) : '')});
+        vendasCriadas++;
+      } else if(pedido){
+        /* venda já existia: completa com o pedido e o valor */
+        if(!jaVendido.pedidoId) jaVendido.pedidoId = pedido.id;
+        if(!+jaVendido.valorVenda && +pedido.valorVenda) jaVendido.valorVenda = +pedido.valorVenda;
+        if(!jaVendido.cliente) jaVendido.cliente = pedido.cliente;
+        if(!jaVendido.vendedor) jaVendido.vendedor = pedido.vendedor;
+      }
+      /* marca o veículo como já vendido, para o estoque não o listar como disponível */
+      const veic = DB.veiculos.find(x=>x.chassi===v.chassi);
+      if(veic) veic.natureza = 'vendaDireta';
     }
   });
   save(); fechar();
@@ -5697,6 +5756,593 @@ function escolherVeiculoParaVender(){
     fechar();
     setTimeout(()=>formVenderVeiculo(ch), 120);
   });
+}
+
+/* ============================================================
+   PEDIDOS DE VENDA DIRETA
+   O vendedor cadastra o pedido ANTES do faturamento da fábrica.
+   Serve para controlar:
+     · o que foi pedido e ainda não foi faturado
+     · as antecipações que o cliente já pagou
+   Quando a fábrica fatura, o veículo entra em "Carros vendidos"
+   e o pedido é conciliado com a NF (chassi / pedido / cliente).
+   ============================================================ */
+
+const SIT_PEDIDO = {
+  pedido:     {l:'Pedido feito',        t:'aberto',   d:'Aguardando a fábrica faturar'},
+  faturado:   {l:'Faturado pela fábrica', t:'quitado', d:'NF emitida — virou venda'},
+  cancelado:  {l:'Cancelado',           t:'vencido',  d:'Pedido cancelado'}
+};
+const badgePedido = s => { const c = SIT_PEDIDO[s] || SIT_PEDIDO.pedido;
+  return `<span class="tag t-${c.t}">${c.l}</span>`; };
+
+/* ---------- chaves de ligação entre pedido e faturamento ---------- */
+const normDoc = d => String(d||'').replace(/\D/g,'');
+function pedidoDoVeiculo(chassi){
+  return (DB.pedidos||[]).find(p=>p.situacao !== 'cancelado' &&
+    (mesmoChassiGlobal(p.chassi, chassi) ||
+     (p.pedido && String(p.pedido) === String((DB.veiculos.find(v=>v.chassi===chassi)||{}).pedido||''))));
+}
+function mesmoChassiGlobal(a,b){
+  const x=String(a||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const y=String(b||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(!x||!y) return false;
+  if(x===y) return true;
+  const menor = x.length<=y.length?x:y, maior = x.length<=y.length?y:x;
+  return menor.length>=6 && maior.endsWith(menor);
+}
+
+/* ---------- totais de um pedido ---------- */
+function recebidoPedido(id){
+  return (DB.pedidos||[]).find(p=>p.id===id)
+    ? (DB.recebimentosPedido||[]).filter(r=>r.pedidoId===id && concOk(r)).reduce((s,r)=>s+(+r.valor||0),0)
+    : 0;
+}
+function saldoPedido(p){
+  return Math.max(0, (+p.valorVenda||0) - recebidoPedido(p.id));
+}
+function pctPedido(p){
+  const v = +p.valorVenda||0;
+  return v ? Math.min(100, 100*recebidoPedido(p.id)/v) : 0;
+}
+/* pedidos pendentes (não faturados nem cancelados) */
+const pedidosAbertos = () => (DB.pedidos||[]).filter(p=>p.situacao === 'pedido');
+
+/* ---------- tela: pedidos de venda direta ---------- */
+function renderPedidos(){
+  const el = document.getElementById('tbl-pedidos'); if(!el) return;
+  DB.pedidos = DB.pedidos || [];
+  DB.recebimentosPedido = DB.recebimentosPedido || [];
+
+  const busca = (val('f-busca-pd')||'').toLowerCase();
+  const sit = val('f-sit-pd') || 'pedido';
+  let lista = DB.pedidos.slice();
+  if(sit && sit !== 'todos') lista = lista.filter(p=>p.situacao === sit);
+  if(busca) lista = lista.filter(p=>[p.cliente, p.doc, p.modelo, p.chassi, p.pedido, p.vendedor]
+    .join(' ').toLowerCase().includes(busca));
+  lista.sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+
+  const abertos = pedidosAbertos();
+  const k = document.getElementById('pd-kpis');
+  if(k){
+    const antTotal = (DB.recebimentosPedido||[]).filter(r=>concOk(r)).reduce((s,r)=>s+(+r.valor||0),0);
+    const faltaFaturar = abertos.reduce((s,p)=>s+(+p.valorVenda||0),0);
+    const antAbertos = abertos.reduce((s,p)=>s+recebidoPedido(p.id),0);
+    k.innerHTML = `
+      <div class="kpi"><div class="l">Pedidos aguardando faturamento</div><div class="v">${abertos.length}</div>
+        <div class="s">${brl0(faltaFaturar)} em pedidos</div></div>
+      <div class="kpi"><div class="l">Antecipações recebidas</div><div class="v pos">${brl0(antTotal)}</div>
+        <div class="s">${brl0(antAbertos)} nos pedidos em aberto</div></div>
+      <div class="kpi"><div class="l">Ainda a receber dos pedidos</div><div class="v amb">${brl0(abertos.reduce((s,p)=>s+saldoPedido(p),0))}</div>
+        <div class="s">${abertos.length} pedido(s) em aberto</div></div>
+      <div class="kpi"><div class="l">Faturados pela fábrica</div><div class="v">${(DB.pedidos||[]).filter(p=>p.situacao==='faturado').length}</div>
+        <div class="s">já viraram venda</div></div>`;
+  }
+
+  if(!lista.length){
+    el.innerHTML = `<div class="empty">${sit==='pedido'
+      ? 'Nenhum pedido aguardando faturamento. Use “＋ Novo pedido” para registrar um pedido de venda direta.'
+      : 'Nenhum pedido com esse filtro.'}</div>`;
+    return;
+  }
+
+  el.innerHTML = `<div style="overflow-x:auto">
+    <table class="tbl"><thead><tr>
+      <th>Data</th><th>Cliente</th><th>Veículo</th><th>Vendedor</th>
+      <th class="num">Valor</th><th class="num">Antecipado</th><th class="num">Falta</th>
+      <th>Situação</th><th></th></tr></thead><tbody>
+    ${lista.map(p=>{
+      const rec = recebidoPedido(p.id), saldo = saldoPedido(p), pc = pctPedido(p);
+      return `<tr>
+        <td>${fmt(p.data)}<div class="hint" style="margin:0">${esc(p.pedido?'pedido '+p.pedido:'')}</div></td>
+        <td><b>${esc(p.cliente||'—')}</b><div class="hint" style="margin:0">${esc(p.doc||'')}</div></td>
+        <td>${esc(p.modelo||'—')}<div class="hint" style="margin:0">${esc(p.cor||'')}${p.chassi?' · '+esc(p.chassi):''}</div></td>
+        <td>${esc(p.vendedor||'—')}</td>
+        <td class="num">${brl(p.valorVenda)}</td>
+        <td class="num ${rec>0?'pos':''}">${brl(rec)}${pc>0?`<div class="hint" style="margin:0">${pc.toFixed(0)}%</div>`:''}</td>
+        <td class="num ${saldo>0.005?'amb':'pos'}"><b>${brl(saldo)}</b></td>
+        <td>${badgePedido(p.situacao)}</td>
+        <td style="white-space:nowrap">
+          ${p.situacao==='pedido' && pode('vendas','edit')?`<button class="b sm ok" onclick="formAntecipacao('${p.id}')" title="Registrar antecipação">💵</button>`:''}
+          <button class="b sm sec" onclick="gerirPedido('${p.id}')" title="Ver o pedido">📄</button>
+          ${p.situacao==='pedido' && pode('vendas','edit')?`<button class="b sm sec" onclick="formPedido('${p.id}')" title="Editar">✏️</button>`:''}
+          ${p.situacao==='pedido' && pode('vendas','del')?`<button class="b sm dang" onclick="cancelarPedido('${p.id}')" title="Cancelar">✕</button>`:''}
+        </td></tr>`;
+    }).join('')}</tbody></table></div>
+    <div class="hint">${lista.length} pedido(s) · ${brl(lista.reduce((s,p)=>s+(+p.valorVenda||0),0))} em valor de venda</div>`;
+}
+
+/* ---------- cadastro / edição do pedido ---------- */
+let PED_TMP = null;
+function formPedido(id){
+  if(!precisaPermissao('vendas','edit')) return;
+  const p = id ? (DB.pedidos||[]).find(x=>x.id===id) : null;
+  const n = p || {data: hoje(), situacao:'pedido'};
+  const sugeridos = ['FIAT/MOBI LIKE','FIAT/ARGO DRIVE 1.0','FIAT/STRADA FREEDOM','FIAT/PULSE DRIVE 1.3',
+    'FIAT/CRONOS DRIVE 1.3','FIAT/FASTBACK TURBO 200','FIAT/TORO FREEDOM','FIAT/STRADA RANCH','FIAT/PULSE ABARTH'];
+  modal(id ? 'Editar pedido de venda direta' : 'Novo pedido de venda direta', `
+    <p class="hint" style="margin:0 0 12px">Registre o pedido <b>antes</b> do faturamento da fábrica. As antecipações do cliente
+    ficam controladas aqui e, quando o carro for faturado, o sistema liga o pedido à venda.</p>
+    <div class="grid">
+      <div class="fld"><label>Data do pedido *</label><input id="pd-data" type="date" value="${n.data||hoje()}"></div>
+      <div class="fld"><label>Nº do pedido / proposta</label><input id="pd-num" value="${esc(n.pedido||'')}" placeholder="opcional"></div>
+      <div class="fld"><label>Cliente *</label><input id="pd-cliente" list="dl-pd-cli" value="${esc(n.cliente||'')}">
+        <datalist id="dl-pd-cli">${(DB.clientes||[]).map(c=>`<option value="${esc(c.nome)}">`).join('')}</datalist></div>
+      <div class="fld"><label>CPF/CNPJ</label><input id="pd-doc" value="${esc(n.doc||'')}"></div>
+      <div class="fld"><label>Veículo *</label><input id="pd-modelo" list="dl-pd-mod" value="${esc(n.modelo||'')}"
+          placeholder="FIAT/ARGO DRIVE 1.0" style="text-transform:uppercase">
+        <datalist id="dl-pd-mod">${sugeridos.map(x=>`<option value="${x}">`).join('')}
+          ${[...new Set((DB.veiculos||[]).map(v=>veicRotulo(v)).filter(Boolean))].slice(0,80).map(x=>`<option value="${esc(x)}">`).join('')}</datalist></div>
+      <div class="fld"><label>Cor</label><input id="pd-cor" value="${esc(n.cor||'')}"></div>
+      <div class="fld"><label>Opcionais</label><input id="pd-opc" value="${esc(n.opcionais||'')}"></div>
+      <div class="fld"><label>Vendedor</label><input id="pd-vendedor" list="dl-pd-vend" value="${esc(n.vendedor||'')}">
+        <datalist id="dl-pd-vend">${(DB.vendedores||[]).map(x=>`<option value="${esc(x.nome)}">`).join('')}</datalist></div>
+      <div class="fld"><label>Valor da venda (R$) *</label><input id="pd-valor" type="number" step="0.01" value="${n.valorVenda||''}"></div>
+      <div class="fld"><label>Previsão de faturamento</label><input id="pd-prev" type="date" value="${esc(n.previsao||'')}">
+        <div class="hint">Quando a fábrica deve faturar.</div></div>
+      <div class="fld full"><label>Observações</label><input id="pd-obs" value="${esc(n.obs||'')}"></div>
+    </div>`, ()=>{
+    const cliente = (val('pd-cliente')||'').trim();
+    const modelo = (val('pd-modelo')||'').trim().toUpperCase();
+    const valor = +val('pd-valor')||0;
+    if(!cliente) return alert('Informe o cliente.');
+    if(!modelo) return alert('Informe o veículo.');
+    if(valor <= 0) return alert('Informe o valor da venda.');
+
+    const dados = {
+      data: val('pd-data') || hoje(), pedido: (val('pd-num')||'').trim(),
+      cliente, doc: (val('pd-doc')||'').trim(), modelo,
+      cor: (val('pd-cor')||'').trim(), opcionais: (val('pd-opc')||'').trim(),
+      vendedor: (val('pd-vendedor')||'').trim(), valorVenda: valor,
+      previsao: val('pd-prev'), obs: (val('pd-obs')||'').trim()
+    };
+    if(id){ Object.assign(p, dados); }
+    else {
+      DB.pedidos = DB.pedidos || [];
+      DB.pedidos.push(Object.assign({id:uid(), situacao:'pedido', criadoPor:(usuarioAtual()||{}).nome||'',
+        criadoEm:new Date().toISOString()}, dados));
+    }
+    /* cliente novo entra no cadastro */
+    if(!(DB.clientes||[]).some(c=>String(c.nome||'').toLowerCase()===cliente.toLowerCase())){
+      DB.clientes = DB.clientes || [];
+      DB.clientes.push({id:uid(), nome:cliente, doc:dados.doc, tel:'', obs:''});
+    }
+    save();
+    logAcao(id?'Alterou pedido de venda direta':'Criou pedido de venda direta', 'vendas',
+      cliente + ' · ' + modelo + ' · ' + brl(valor));
+    fechar(); renderAll();
+  }, true);
+}
+
+/* ---------- antecipações do cliente ---------- */
+function formAntecipacao(pedidoId){
+  if(!precisaPermissao('vendas','edit')) return;
+  const p = (DB.pedidos||[]).find(x=>x.id===pedidoId); if(!p) return;
+  const rec = recebidoPedido(p.id), saldo = saldoPedido(p);
+  modal('Antecipação do cliente', `
+    <p class="hint" style="margin:0 0 12px"><b>${esc(p.cliente)}</b> · ${esc(p.modelo)}<br>
+      Valor da venda ${brl(p.valorVenda)} · já antecipado <b class="pos">${brl(rec)}</b> · falta <b class="amb">${brl(saldo)}</b></p>
+    <div class="grid">
+      <div class="fld"><label>Data *</label><input id="an-data" type="date" value="${hoje()}"></div>
+      <div class="fld"><label>Valor (R$) *</label><input id="an-valor" type="number" step="0.01" value="${saldo>0?saldo.toFixed(2):''}"></div>
+      <div class="fld"><label>Forma</label><select id="an-forma"><option>PIX</option><option>TED</option><option>Boleto</option>
+        <option>Dinheiro</option><option>Cheque</option><option>Cartão</option><option>Financiamento (repasse banco)</option><option>Outro</option></select></div>
+      <div class="fld"><label>Banco / conta</label><input id="an-conta" placeholder="ex.: Itaú c/ 1234-5"></div>
+      <div class="fld full"><label>Observação</label><input id="an-obs" placeholder="sinal, parcela, referência…"></div>
+      <div class="fld full"><div id="an-prev" class="hint"></div></div>
+      ${typeof blocoComprovante==='function' ? blocoComprovante(null) : ''}
+    </div>`, ()=>{
+    const v = +val('an-valor')||0;
+    if(v <= 0) return alert('Informe o valor antecipado.');
+    if(v > saldo + 0.01){
+      if(!confirm('O valor ('+brl(v)+') é maior que o que falta ('+brl(saldo)+').\n\n'+
+        'Excedente de '+brl(v-saldo)+'. Registrar assim mesmo?')) return;
+    }
+    DB.recebimentosPedido = DB.recebimentosPedido || [];
+    const novo = {id:uid(), pedidoId, data:val('an-data'), valor:v,
+      forma:val('an-forma'), conta:val('an-conta').trim(), obs:val('an-obs').trim(),
+      comprovantes: (typeof comprovantesDoForm==='function' ? comprovantesDoForm() : []),
+      criadoPor:(usuarioAtual()||{}).nome||''};
+    novo.conc = isMaster() ? 'conciliado' : 'pendente';
+    if(novo.conc === 'conciliado'){ novo.concPor = novo.criadoPor; novo.concEm = new Date().toISOString(); }
+    DB.recebimentosPedido.push(novo);
+    save();
+    logAcao('Antecipação de venda direta', 'vendas', p.cliente + ' · ' + brl(v));
+    fechar(); renderAll();
+    if(novo.conc === 'pendente') alert('Antecipação lançada.\n\nEla está AGUARDANDO CONCILIAÇÃO antes de entrar nos saldos.');
+  });
+  const el = document.getElementById('an-prev');
+  const inp = document.getElementById('an-valor');
+  if(inp && el){
+    const atualizar = ()=>{
+      const v = +inp.value||0;
+      el.innerHTML = `Após esta antecipação: total antecipado <b>${brl(rec+v)}</b> · falta <b>${brl(Math.max(0, saldo-v))}</b>`;
+    };
+    inp.oninput = atualizar; atualizar();
+  }
+}
+
+/* ---------- ver o pedido e suas antecipações ---------- */
+function gerirPedido(id){
+  const p = (DB.pedidos||[]).find(x=>x.id===id); if(!p) return;
+  const rs = (DB.recebimentosPedido||[]).filter(r=>r.pedidoId===id).sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+  const rec = recebidoPedido(id), saldo = saldoPedido(p), pc = pctPedido(p);
+  const veic = p.chassi ? (DB.veiculos||[]).find(v=>v.chassi===p.chassi) : null;
+
+  const corpo = `
+    <div class="cards" style="margin-bottom:14px">
+      <div class="kpi"><div class="l">Valor da venda</div><div class="v" style="font-size:16px">${brl(p.valorVenda)}</div>
+        <div class="s">${esc(p.modelo||'')}</div></div>
+      <div class="kpi"><div class="l">Antecipado</div><div class="v pos" style="font-size:16px">${brl(rec)}</div>
+        <div class="s">${pc.toFixed(0)}% do valor · ${rs.length} lançamento(s)</div></div>
+      <div class="kpi"><div class="l">Falta receber</div><div class="v ${saldo>0.005?'amb':'pos'}" style="font-size:16px">${brl(saldo)}</div>
+        <div class="s">${saldo<=0.005?'cliente quitou':'aguardando'}</div></div>
+      <div class="kpi"><div class="l">Faturamento da fábrica</div><div class="v" style="font-size:14px">${p.situacao==='faturado'?'faturado':(p.previsao?'prev. '+fmt(p.previsao):'aguardando')}</div>
+        <div class="s">${veic? esc(veic.chassi) : 'ainda sem chassi'}</div></div>
+    </div>
+    <div class="prog" style="height:9px;margin-bottom:16px"><i class="${pc<99.9?'p':''}" style="width:${pc}%"></i></div>
+    <p class="hint" style="margin:0 0 12px">
+      <b>${esc(p.cliente||'—')}</b>${p.doc?' ('+esc(p.doc)+')':''} · pedido ${fmt(p.data)}
+      ${p.pedido?' · nº '+esc(p.pedido):''} · vendedor ${esc(p.vendedor||'—')}
+      ${p.cor?' · '+esc(p.cor):''}${p.opcionais?' · '+esc(p.opcionais):''}
+      ${p.obs?'<br>Obs.: '+esc(p.obs):''}</p>
+    ${rs.length ? `<table class="tbl"><thead><tr><th>Data</th><th class="num">Valor</th><th>Forma</th><th>Conta</th><th>Obs.</th><th></th></tr></thead><tbody>
+      ${rs.map(r=>`<tr><td>${fmt(r.data)}${seloConc(r)}${typeof seloComprovante==='function'?seloComprovante(r):''}</td><td class="num"><b>${brl(r.valor)}</b></td>
+        <td>${esc(r.forma||'—')}</td><td>${esc(r.conta||'—')}</td><td>${esc(r.obs||'—')}</td>
+        <td>${pode('vendas','del')?`<button class="b sm dang" onclick="excluirAntecipacao('${r.id}','${id}')">🗑</button>`:''}</td></tr>`).join('')}
+      </tbody><tfoot><tr style="background:var(--panel2);font-weight:700"><td>Total antecipado</td>
+        <td class="num">${brl(rs.reduce((s,r)=>s+(+r.valor||0),0))}</td><td colspan="4"></td></tr></tfoot></table>`
+      : '<div class="empty" style="padding:18px">Nenhuma antecipação registrada ainda.</div>'}
+    <div class="mfoot" style="justify-content:space-between">
+      ${p.situacao==='pedido' && pode('vendas','edit')?`<button class="b ok" onclick="formAntecipacao('${id}')">💵 Nova antecipação</button>`:'<span class="hint" style="margin:0">Pedido encerrado.</span>'}
+      <button class="b sec" onclick="fechar()">Fechar</button>
+    </div>`;
+  document.getElementById('mbox-in').className = 'modal wide';
+  document.getElementById('mbox-body').innerHTML = `<h2>Pedido de venda direta · ${esc(p.cliente||'')}</h2>${corpo}`;
+  document.getElementById('mbox').classList.add('on');
+}
+
+function excluirAntecipacao(id, pedidoId){
+  if(!precisaPermissao('vendas','del')) return;
+  const r = (DB.recebimentosPedido||[]).find(x=>x.id===id); if(!r) return;
+  if(!confirm('Excluir a antecipação de '+brl(r.valor)+' de '+fmt(r.data)+'?')) return;
+  DB.recebimentosPedido = DB.recebimentosPedido.filter(x=>x.id!==id);
+  save(); renderAll(); gerirPedido(pedidoId);
+}
+function cancelarPedido(id){
+  if(!precisaPermissao('vendas','del')) return;
+  const p = (DB.pedidos||[]).find(x=>x.id===id); if(!p) return;
+  const rs = (DB.recebimentosPedido||[]).filter(r=>r.pedidoId===id);
+  if(!confirm('Cancelar o pedido de '+esc(p.cliente)+' ('+esc(p.modelo)+')?'+
+    (rs.length? '\n\nATENÇÃO: há '+rs.length+' antecipação(ões) de '+brl(rs.reduce((s,r)=>s+(+r.valor||0),0))+
+    ' que continuam registradas. Cancele o pedido só se vai devolver o dinheiro ao cliente.':''))) return;
+  p.situacao = 'cancelado'; p.canceladoEm = new Date().toISOString();
+  save(); logAcao('Cancelou pedido de venda direta','vendas', p.cliente+' · '+p.modelo);
+  renderAll();
+}
+
+/* ---------- ligação automática pedido x faturamento ---------- */
+/* chamada quando um veículo entra no estoque (importações) */
+function ligarPedidoAoVeiculo(v){
+  if(!v) return null;
+  DB.pedidos = DB.pedidos || [];
+  const aberto = DB.pedidos.find(p=>p.situacao==='pedido' && (
+    (v.chassi && mesmoChassiGlobal(p.chassi, v.chassi)) ||
+    (p.pedido && v.pedido && String(p.pedido) === String(v.pedido)) ||
+    (normDoc(p.doc) && normDoc(p.doc) === normDoc(v.clienteDoc))
+  ));
+  if(!aberto) return null;
+  aberto.chassi = v.chassi;
+  aberto.situacao = 'faturado';
+  aberto.faturadoEm = v.dataFaturamento || hoje();
+  aberto.nf = v.nf || '';
+  return aberto;
+}
+
+/* ---------- relatórios de venda direta ---------- */
+function relAntecipacoes(){
+  const ini = val('rep-ini'), fim = val('rep-fim');
+  const todos = (DB.pedidos||[]).slice();
+  const rs = (DB.recebimentosPedido||[]).filter(r=>noPeriodo(r.data, ini, fim));
+  const porPedido = {};
+  rs.forEach(r=>{ porPedido[r.pedidoId] = (porPedido[r.pedidoId]||0) + (+r.valor||0); });
+
+  repHeader('Antecipações de venda direta', `Recebido do cliente antes do faturamento · ${fmt(ini)} a ${fmt(fim)}`);
+  const tot = rs.reduce((s,r)=>s+(+r.valor||0),0);
+  const linhas = [['Data','Cliente','Doc','Veículo','Pedido','Forma','Conta','Valor','Conciliado']];
+  rs.sort((a,b)=>(a.data||'').localeCompare(b.data||'')).forEach(r=>{
+    const p = todos.find(x=>x.id===r.pedidoId) || {};
+    linhas.push([r.data, p.cliente||'', p.doc||'', p.modelo||'', p.pedido||'',
+      r.forma||'', r.conta||'', (+r.valor||0).toFixed(2), concOk(r)?'sim':'aguardando']);
+  });
+  REP_CSV = {nome:'antecipacoes-venda-direta', linhas};
+
+  const pendentes = todos.filter(p=>p.situacao==='pedido');
+  document.getElementById('rep-body').innerHTML = `
+    <div class="cards">
+      <div class="kpi"><div class="l">Total antecipado no período</div><div class="v pos">${brl0(tot)}</div><div class="s">${rs.length} recebimento(s)</div></div>
+      <div class="kpi"><div class="l">Pedidos aguardando faturamento</div><div class="v">${pendentes.length}</div><div class="s">${brl0(pendentes.reduce((s,p)=>s+(+p.valorVenda||0),0))} em vendas</div></div>
+      <div class="kpi"><div class="l">Antecipado nos pedidos abertos</div><div class="v amb">${brl0(pendentes.reduce((s,p)=>s+recebidoPedido(p.id),0))}</div><div class="s">já pago pelo cliente</div></div>
+      <div class="kpi"><div class="l">Falta receber dos abertos</div><div class="v neg">${brl0(pendentes.reduce((s,p)=>s+saldoPedido(p),0))}</div><div class="s">nos pedidos em aberto</div></div>
+    </div>
+    ${rs.length ? `<table class="tbl"><thead><tr><th>Data</th><th>Cliente</th><th>Veículo</th><th>Forma</th>
+        <th class="num">Valor</th><th>Situação</th></tr></thead><tbody>
+      ${rs.map(r=>{ const p = todos.find(x=>x.id===r.pedidoId)||{};
+        return `<tr><td>${fmt(r.data)}</td>
+          <td>${esc(p.cliente||'—')}<div class="hint" style="margin:0">${esc(p.doc||'')}</div></td>
+          <td>${esc(p.modelo||'—')}<div class="hint" style="margin:0">${esc(p.pedido?'pedido '+p.pedido:'')}</div></td>
+          <td>${esc(r.forma||'—')}</td><td class="num"><b>${brl(r.valor)}</b></td>
+          <td>${concOk(r)?'<span class="tag t-quitado">conciliado</span>':'<span class="tag t-parcial">a conciliar</span>'}</td></tr>`;}).join('')}
+      </tbody><tfoot><tr style="background:var(--panel2);font-weight:700"><td colspan="4">Total</td>
+        <td class="num">${brl(tot)}</td><td></td></tr></tfoot></table>`
+      : '<div class="empty">Nenhuma antecipação no período.</div>'}`;
+}
+
+function relVendaDireta(){
+  const ini = val('rep-ini'), fim = val('rep-fim');
+  const todos = (DB.pedidos||[]).slice();
+  const faturados = todos.filter(p=>p.situacao==='faturado');
+  const abertos   = todos.filter(p=>p.situacao==='pedido');
+  const semPedido = (DB.veiculos||[]).filter(v=>natDe(v)==='vendaDireta' && !todos.some(p=>mesmoChassiGlobal(p.chassi,v.chassi)));
+
+  repHeader('Venda direta — faturado x falta faturar',
+    `Pedidos de venda direta · ${fmt(ini)} a ${fmt(fim)}`);
+
+  const linhas = [['Situação','Data pedido','Cliente','Doc','Veículo','Pedido nº','Valor venda','Antecipado','Falta receber','Chassi/NF']];
+  faturados.forEach(p=>linhas.push(['Faturado',p.data,p.cliente,p.doc,p.modelo,p.pedido,
+    (+p.valorVenda||0).toFixed(2), recebidoPedido(p.id).toFixed(2), saldoPedido(p).toFixed(2), (p.chassi||'')+(p.nf?' NF '+p.nf:'')]));
+  abertos.forEach(p=>linhas.push(['Aguardando faturamento',p.data,p.cliente,p.doc,p.modelo,p.pedido,
+    (+p.valorVenda||0).toFixed(2), recebidoPedido(p.id).toFixed(2), saldoPedido(p).toFixed(2), '—']));
+  semPedido.forEach(v=>linhas.push(['Venda direta sem pedido', v.dataFaturamento||'', v.clienteDoc?'doc '+v.clienteDoc:'', v.clienteDoc,
+    veicRotulo(v), v.pedido||'', '0.00','0.00','0.00', v.chassi]));
+  REP_CSV = {nome:'venda-direta', linhas};
+
+  const totFat = faturados.reduce((s,p)=>s+(+p.valorVenda||0),0);
+  const totAberto = abertos.reduce((s,p)=>s+(+p.valorVenda||0),0);
+
+  document.getElementById('rep-body').innerHTML = `
+    <div class="cards">
+      <div class="kpi"><div class="l">Faturado pela fábrica</div><div class="v pos">${faturados.length}</div>
+        <div class="s">${brl0(totFat)} em vendas</div></div>
+      <div class="kpi"><div class="l">Falta a fábrica faturar</div><div class="v amb">${abertos.length}</div>
+        <div class="s">${brl0(totAberto)} em pedidos</div></div>
+      <div class="kpi"><div class="l">Antecipado nos faturados</div><div class="v">${brl0(faturados.reduce((s,p)=>s+recebidoPedido(p.id),0))}</div>
+        <div class="s">já recebido do cliente</div></div>
+      <div class="kpi"><div class="l">Sem pedido registrado</div><div class="v ${semPedido.length?'neg':''}">${semPedido.length}</div>
+        <div class="s">venda direta faturada sem pedido</div></div>
+    </div>
+
+    <h3 style="margin:16px 0 8px;font-size:12.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px">Aguardando a fábrica faturar (${abertos.length})</h3>
+    ${abertos.length? `<table class="tbl"><thead><tr><th>Pedido em</th><th>Cliente</th><th>Veículo</th><th>Vendedor</th>
+        <th class="num">Valor</th><th class="num">Antecipado</th><th class="num">Falta</th><th>Previsão</th></tr></thead><tbody>
+      ${abertos.sort((a,b)=>(a.data||'').localeCompare(b.data||'')).map(p=>`<tr>
+        <td>${fmt(p.data)}</td>
+        <td>${esc(p.cliente||'—')}<div class="hint" style="margin:0">${esc(p.doc||'')}</div></td>
+        <td>${esc(p.modelo||'—')}<div class="hint" style="margin:0">${esc(p.cor||'')}</div></td>
+        <td>${esc(p.vendedor||'—')}</td>
+        <td class="num">${brl(p.valorVenda)}</td>
+        <td class="num pos">${brl(recebidoPedido(p.id))}</td>
+        <td class="num amb"><b>${brl(saldoPedido(p))}</b></td>
+        <td>${p.previsao? fmt(p.previsao) : '<span class="hint">—</span>'}</td></tr>`).join('')}
+      </tbody></table>` : '<div class="empty">Todos os pedidos de venda direta já foram faturados.</div>'}
+
+    <h3 style="margin:20px 0 8px;font-size:12.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px">Já faturados pela fábrica (${faturados.length})</h3>
+    ${faturados.length? `<table class="tbl"><thead><tr><th>Faturado</th><th>Cliente</th><th>Veículo</th><th>Chassi</th>
+        <th class="num">Valor</th><th class="num">Antecipado</th><th class="num">Falta</th></tr></thead><tbody>
+      ${faturados.sort((a,b)=>(b.faturadoEm||'').localeCompare(a.faturadoEm||'')).map(p=>`<tr>
+        <td>${fmt(p.faturadoEm||p.data)}</td>
+        <td>${esc(p.cliente||'—')}<div class="hint" style="margin:0">${esc(p.doc||'')}</div></td>
+        <td>${esc(p.modelo||'—')}</td>
+        <td>${esc(p.chassi||'—')}<div class="hint" style="margin:0">${p.nf?'NF '+esc(p.nf):''}</div></td>
+        <td class="num">${brl(p.valorVenda)}</td>
+        <td class="num pos">${brl(recebidoPedido(p.id))}</td>
+        <td class="num ${saldoPedido(p)>0.005?'amb':'pos'}"><b>${brl(saldoPedido(p))}</b></td></tr>`).join('')}
+      </tbody></table>` : '<div class="empty">Nenhum pedido faturado no período.</div>'}
+
+    ${semPedido.length? `<h3 style="margin:20px 0 8px;font-size:12.5px;color:var(--danger);text-transform:uppercase;letter-spacing:.5px">Venda direta faturada sem pedido registrado (${semPedido.length})</h3>
+      <div class="hint" style="margin:0 0 8px">Estes carros vieram no faturamento da fábrica como venda direta, mas ninguém registrou o pedido antes. Confira se as antecipações do cliente estão lançadas.</div>
+      <table class="tbl"><thead><tr><th>Faturamento</th><th>Veículo</th><th>Chassi</th><th>Pedido fábrica</th><th class="num">Pé da NF</th></tr></thead><tbody>
+      ${semPedido.map(v=>`<tr><td>${fmt(v.dataFaturamento)}</td><td>${esc(veicRotulo(v))}</td>
+        <td>${esc(v.chassi)}</td><td>${esc(v.pedido||'—')}</td><td class="num">${brl(v.peNF)}</td></tr>`).join('')}
+      </tbody></table>`:''}`;
+}
+
+/* ============================================================
+   COMPROVANTES DAS MOVIMENTAÇÕES
+   Todo recebimento e todo pagamento pode guardar a foto (ou o PDF)
+   do comprovante, anexada no próprio lançamento.
+
+   A imagem é reduzida no navegador antes de gravar, para o banco
+   não inchar: foto de celular (3–5 MB) vira ~120 KB.
+   ============================================================ */
+
+const COMPR_MAX_PX   = 1400;   // comprovante precisa ser legível
+const COMPR_Q        = 0.72;
+const COMPR_MAX_KB   = 260;
+const COMPR_LIMITE   = 4;      // comprovantes por lançamento
+
+/* ---------- reduz a imagem no navegador ---------- */
+function comprimirComprovante(file){
+  return new Promise((resolve, reject)=>{
+    if(!file) return reject(new Error('Nenhum arquivo.'));
+    const ehPDF = /pdf$/i.test(file.type) || /\.pdf$/i.test(file.name||'');
+    const rd = new FileReader();
+    rd.onerror = ()=>reject(new Error('Não consegui ler o arquivo.'));
+
+    if(ehPDF){
+      /* PDF entra como está, se não for grande */
+      rd.onload = ()=>{
+        const kb = Math.round(String(rd.result||'').length/1024*0.75);
+        if(kb > 700) return reject(new Error('PDF muito grande ('+kb+' KB). Envie uma foto ou um PDF menor que 700 KB.'));
+        resolve({id:uid(), nome:(file.name||'comprovante.pdf').slice(0,60),
+          tipo:'pdf', dataUrl:rd.result, kb});
+      };
+      rd.readAsDataURL(file);
+      return;
+    }
+
+    if(!/^image\//.test(file.type)) return reject(new Error('Envie uma imagem (JPG/PNG) ou um PDF.'));
+    rd.onload = ()=>{
+      const img = new Image();
+      img.onerror = ()=>reject(new Error('Imagem inválida ou corrompida.'));
+      img.onload = ()=>{
+        let {width:w, height:h} = img;
+        const esc = Math.min(1, COMPR_MAX_PX / Math.max(w,h));
+        w = Math.round(w*esc); h = Math.round(h*esc);
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        const ctx = cv.getContext('2d');
+        ctx.fillStyle = '#fff';                 // fundo branco em PNG transparente
+        ctx.fillRect(0,0,w,h);
+        ctx.drawImage(img, 0, 0, w, h);
+        let q = COMPR_Q, url = cv.toDataURL('image/jpeg', q);
+        while(url.length/1024 > COMPR_MAX_KB && q > 0.35){
+          q -= 0.08; url = cv.toDataURL('image/jpeg', q);
+        }
+        resolve({id:uid(), nome:(file.name||'comprovante.jpg').slice(0,60),
+          tipo:'img', dataUrl:url, kb:Math.round(url.length/1024)});
+      };
+      img.src = rd.result;
+    };
+    rd.readAsDataURL(file);
+  });
+}
+
+/* ---------- anexar em um lançamento ---------- */
+function anexarComprovante(reg, inputId){
+  const alvo = document.getElementById(inputId || 'm-comprovantes');
+  if(!alvo) return;
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'image/*,application/pdf';
+  inp.multiple = true;
+  inp.onchange = async ()=>{
+    const arquivos = [...(inp.files||[])];
+    if(!arquivos.length) return;
+    COMPR_TMP = COMPR_TMP || [];
+    for(const f of arquivos){
+      if(COMPR_TMP.length >= COMPR_LIMITE){ alert('Máximo de '+COMPR_LIMITE+' comprovantes por lançamento.'); break; }
+      try{ COMPR_TMP.push(await comprimirComprovante(f)); }
+      catch(e){ alert(f.name+': '+e.message); }
+    }
+    pintarComprovantesTmp(alvo);
+  };
+  inp.click();
+}
+
+let COMPR_TMP = [];
+
+function pintarComprovantesTmp(alvo){
+  alvo = alvo || document.getElementById('m-comprovantes');
+  if(!alvo) return;
+  if(!COMPR_TMP.length){
+    alvo.innerHTML = '<span class="hint" style="margin:0">Nenhum comprovante anexado.</span>';
+    return;
+  }
+  alvo.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap">${COMPR_TMP.map((c,i)=>`
+    <div style="position:relative;border:1px solid var(--line);border-radius:8px;padding:4px;background:var(--panel2)">
+      ${c.tipo==='pdf'
+        ? `<div style="width:84px;height:84px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--mut);text-align:center">PDF<br>${c.kb} KB</div>`
+        : `<img src="${c.dataUrl}" style="width:84px;height:84px;object-fit:cover;border-radius:6px;cursor:pointer" onclick="verComprovanteTmp(${i})">`}
+      <button class="b sm dang" style="position:absolute;top:1px;right:1px;padding:1px 5px;font-size:10px"
+        onclick="removerComprovanteTmp(${i})">✕</button>
+      <div class="hint" style="margin:2px 0 0;font-size:9.5px;max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.nome||'')}</div>
+    </div>`).join('')}</div>
+    <div class="hint" style="margin:4px 0 0">${COMPR_TMP.length} arquivo(s) · ${Math.round(COMPR_TMP.reduce((s,c)=>s+(c.kb||0),0))} KB</div>`;
+}
+function removerComprovanteTmp(i){
+  COMPR_TMP.splice(i,1);
+  pintarComprovantesTmp();
+}
+function verComprovanteTmp(i){
+  const c = COMPR_TMP[i]; if(!c) return;
+  verComprovante({dataUrl:c.dataUrl, tipo:c.tipo, nome:c.nome});
+}
+
+/* ---------- visualizar ---------- */
+function verComprovante(c){
+  if(!c || !c.dataUrl) return;
+  const corpo = c.tipo === 'pdf'
+    ? `<iframe src="${c.dataUrl}" style="width:100%;height:70vh;border:1px solid var(--line);border-radius:8px"></iframe>`
+    : `<img src="${c.dataUrl}" style="width:100%;border-radius:8px">`;
+  document.getElementById('mbox-in').className = 'modal wide';
+  document.getElementById('mbox-body').innerHTML = `<h2>${esc(c.nome||'Comprovante')}</h2>${corpo}
+    <div class="mfoot">
+      <a class="b sec" href="${c.dataUrl}" download="${esc(c.nome||'comprovante')}" style="text-decoration:none">⬇️ Baixar</a>
+      <button class="b sec" onclick="fechar()">Fechar</button>
+    </div>`;
+  document.getElementById('mbox').classList.add('on');
+}
+
+/* ---------- bloco do formulário ---------- */
+function blocoComprovante(reg){
+  COMPR_TMP = (reg && reg.comprovantes ? reg.comprovantes : []).slice();
+  const id = 'comp-' + (reg && reg.id ? reg.id : uid());
+  setTimeout(()=>pintarComprovantesTmp(document.getElementById(id)), 0);
+  return `<div class="fld full" style="border-top:1px solid var(--line);padding-top:12px">
+    <label>Comprovante <span class="hint" style="display:inline;margin:0">(foto ou PDF · opcional)</span></label>
+    <div class="bar" style="margin:0 0 8px">
+      <button type="button" class="b sec sm" onclick="anexarComprovante(null,'${id}')">📎 Anexar comprovante</button>
+      <span class="hint" style="margin:0">A imagem é reduzida automaticamente antes de gravar.</span>
+    </div>
+    <div id="${id}"></div>
+  </div>`;
+}
+/* pega os comprovantes do formulário para gravar */
+const comprovantesDoForm = () => (COMPR_TMP||[]).map(c=>({...c}));
+
+/* ---------- exibição na listagem ---------- */
+function seloComprovante(reg){
+  const n = (reg && reg.comprovantes) ? reg.comprovantes.length : 0;
+  if(!n) return '';
+  return ` <span class="tag t-aberto" style="cursor:pointer" title="${n} comprovante(s)"
+    onclick="event.stopPropagation();verComprovantes('${reg.id}')">📎 ${n}</span>`;
+}
+function verComprovantes(id){
+  const regs = [].concat(DB.recebimentos||[], DB.pagamentosFabrica||[], DB.recebimentosPedido||[]);
+  const reg = regs.find(x=>x.id===id); if(!reg) return;
+  const lista = reg.comprovantes||[];
+  if(!lista.length) return verComprovante(null);
+  const corpo = `
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      ${lista.map((c,i)=>`
+        <div style="border:1px solid var(--line);border-radius:8px;padding:6px;background:var(--panel2)">
+          ${c.tipo==='pdf'
+            ? `<button class="b sec sm" onclick="verComprovante(DBcomprovante('${id}',${i}))">PDF · ${c.kb} KB</button>`
+            : `<img src="${c.dataUrl}" style="width:150px;height:150px;object-fit:cover;border-radius:6px;cursor:pointer"
+                 onclick="verComprovante(DBcomprovante('${id}',${i}))">`}
+          <div class="hint" style="margin:4px 0 0;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.nome||'')}</div>
+        </div>`).join('')}
+    </div>`;
+  document.getElementById('mbox-in').className = 'modal wide';
+  document.getElementById('mbox-body').innerHTML = `<h2>Comprovantes do lançamento</h2>${corpo}
+    <div class="mfoot"><button class="b sec" onclick="fechar()">Fechar</button></div>`;
+  document.getElementById('mbox').classList.add('on');
+}
+function DBcomprovante(id, i){
+  const regs = [].concat(DB.recebimentos||[], DB.pagamentosFabrica||[], DB.recebimentosPedido||[]);
+  const reg = regs.find(x=>x.id===id);
+  return reg && reg.comprovantes ? reg.comprovantes[i] : null;
 }
 
 </script>
