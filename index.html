@@ -21,6 +21,7 @@
   nav button:hover{color:var(--txt); background:var(--panel2)}
   nav button.on{color:var(--txt); background:var(--panel2); border-left-color:var(--acc); font-weight:600}
   .navfoot{margin-top:auto; padding:14px 10px 0; border-top:1px solid var(--line)}
+  .nav-titulo{display:none}
   main{flex:1; padding:22px; max-width:1240px; overflow-x:auto}
   h1{font-size:21px; margin-bottom:4px}
   .sub{color:var(--mut); font-size:13px; margin-bottom:18px; max-width:900px; line-height:1.45}
@@ -64,7 +65,9 @@
   .grid .full{grid-column:1/-1}
   .fld label{display:block; font-size:11.5px; color:var(--mut); margin-bottom:4px}
   .fld input,.fld select,.fld textarea{width:100%}
-  .mfoot{display:flex; justify-content:flex-end; gap:8px; margin-top:18px; flex-wrap:wrap}
+  .mfoot{display:flex; justify-content:flex-end; gap:8px; margin-top:18px; flex-wrap:wrap;
+    position:sticky; bottom:0; background:var(--panel); padding:12px 0 4px;
+    border-top:1px solid var(--line); z-index:2}
   .empty{color:var(--mut); text-align:center; padding:34px; background:var(--panel); border-radius:12px; font-size:14px}
   .hint{font-size:12px; color:var(--mut); margin-top:6px; line-height:1.4}
   .sect{grid-column:1/-1; font-size:10.5px; color:var(--acc); text-transform:uppercase; letter-spacing:.7px; margin-top:6px; border-top:1px solid var(--line); padding-top:12px; font-weight:700}
@@ -119,15 +122,23 @@
     .bar input, .bar select{flex:1 1 100%; min-width:0}
     .tbl{font-size:12.5px}
     .tbl th, .tbl td{padding:8px 9px}
-    .modal{padding:16px; border-radius:12px}
+    .modal{padding:16px; border-radius:12px; max-height:none}
     .modal-bg{padding:10px 8px}
+    .mfoot{position:sticky; bottom:0; padding:12px 0 6px}
+    .mfoot .b{flex:1}
     .rep-opt{grid-template-columns:1fr}
     #app{display:none} #app.on{display:flex}
     #app{flex-direction:column}
-    nav{width:100%; display:flex; overflow-x:auto; padding:0; border-right:none; border-bottom:1px solid var(--line); align-items:center; flex-direction:row}
-    .logo{padding:14px 16px 6px} .logo-sub{display:none} .navfoot{display:none}
-    nav button{white-space:nowrap; border-left:none; border-bottom:3px solid transparent; padding:12px 14px}
-    nav button.on{border-bottom-color:var(--acc)}
+    nav{width:100%; display:grid; grid-template-columns:1fr 1fr; gap:4px;
+        padding:8px; border-right:none; border-bottom:1px solid var(--line)}
+    .logo{padding:12px 14px 4px; grid-column:1/-1} .logo-sub{display:block; padding:0 14px 10px; grid-column:1/-1}
+    .navfoot{display:flex; gap:6px; grid-column:1/-1; margin-top:6px; padding:10px 0 0}
+    .navfoot button{width:auto; flex:1}
+    nav button{white-space:normal; border-left:none; border-radius:8px; padding:11px 8px;
+      font-size:12.5px; background:var(--panel2); text-align:center; line-height:1.25}
+    nav button.on{border-left:none; background:var(--acc); color:#fff}
+    .nav-titulo{display:block; grid-column:1/-1; padding:2px 14px 10px; font-size:12px;
+      color:var(--acc); font-weight:700; letter-spacing:.4px; text-transform:uppercase}
     .grid{grid-template-columns:1fr}
     .charts{grid-template-columns:1fr}
   }
@@ -149,6 +160,7 @@
 <nav>
   <div class="logo">ICAVEL<span>.</span></div>
   <div class="logo-sub">Contas a Receber · v3.1</div>
+  <div class="nav-titulo" id="nav-titulo"></div>
   <button data-v="dash">📊 Dashboard</button>
   <button data-v="estoque">🏷 Estoque de veículos</button>
   <button data-v="pedidos">📝 Pedidos de venda direta</button>
@@ -2497,6 +2509,8 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));
   document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
   b.classList.add('on'); document.getElementById('v-'+b.dataset.v).classList.add('on');
+  const t = document.getElementById('nav-titulo');
+  if(t) t.textContent = b.textContent.trim();
   renderAll();
 });
 document.querySelectorAll('.ctabs button').forEach(b=>b.onclick=()=>{
@@ -5855,7 +5869,8 @@ function renderPedidos(){
       const rec = recebidoPedido(p.id), saldo = saldoPedido(p), pc = pctPedido(p);
       return `<tr>
         <td>${fmt(p.data)}<div class="hint" style="margin:0">${esc(p.pedido?'pedido '+p.pedido:'')}</div></td>
-        <td><b>${esc(p.cliente||'—')}</b><div class="hint" style="margin:0">${esc(p.doc||'')}</div></td>
+        <td><b>${esc(p.cliente||'—')}</b>${typeof seloDocumentos==='function'?seloDocumentos(p):''}
+          <div class="hint" style="margin:0">${esc(p.doc||'')}</div></td>
         <td>${esc(p.modelo||'—')}<div class="hint" style="margin:0">${esc(p.cor||'')}${p.chassi?' · '+esc(p.chassi):''}</div></td>
         <td>${esc(p.vendedor||'—')}</td>
         <td class="num">${brl(p.valorVenda)}</td>
@@ -5895,12 +5910,16 @@ function formPedido(id){
           ${[...new Set((DB.veiculos||[]).map(v=>veicRotulo(v)).filter(Boolean))].slice(0,80).map(x=>`<option value="${esc(x)}">`).join('')}</datalist></div>
       <div class="fld"><label>Cor</label><input id="pd-cor" value="${esc(n.cor||'')}"></div>
       <div class="fld"><label>Opcionais</label><input id="pd-opc" value="${esc(n.opcionais||'')}"></div>
-      <div class="fld"><label>Vendedor</label><input id="pd-vendedor" list="dl-pd-vend" value="${esc(n.vendedor||'')}">
-        <datalist id="dl-pd-vend">${(DB.vendedores||[]).map(x=>`<option value="${esc(x.nome)}">`).join('')}</datalist></div>
+      <div class="fld"><label>Vendedor que está fazendo o pedido</label>
+        <input id="pd-vendedor" list="dl-pd-vend" value="${esc(n.vendedor || (usuarioAtual()||{}).nome || '')}" readonly
+          style="background:var(--panel2);cursor:not-allowed" title="Gravado automaticamente com o usuário que está digitando">
+        <datalist id="dl-pd-vend">${(DB.vendedores||[]).map(x=>`<option value="${esc(x.nome)}">`).join('')}</datalist>
+        <div class="hint" style="margin:2px 0 0">Gravado automaticamente: <b>${esc((usuarioAtual()||{}).nome || '—')}</b></div></div>
       <div class="fld"><label>Valor da venda (R$) *</label><input id="pd-valor" type="number" step="0.01" value="${n.valorVenda||''}"></div>
       <div class="fld"><label>Previsão de faturamento</label><input id="pd-prev" type="date" value="${esc(n.previsao||'')}">
         <div class="hint">Quando a fábrica deve faturar.</div></div>
       <div class="fld full"><label>Observações</label><input id="pd-obs" value="${esc(n.obs||'')}"></div>
+      ${typeof blocoDocumentos==='function' ? blocoDocumentos(p) : ''}
     </div>`, ()=>{
     const cliente = (val('pd-cliente')||'').trim();
     const modelo = (val('pd-modelo')||'').trim().toUpperCase();
@@ -5909,12 +5928,18 @@ function formPedido(id){
     if(!modelo) return alert('Informe o veículo.');
     if(valor <= 0) return alert('Informe o valor da venda.');
 
+    const eu = usuarioAtual() || {};
     const dados = {
       data: val('pd-data') || hoje(), pedido: (val('pd-num')||'').trim(),
       cliente, doc: (val('pd-doc')||'').trim(), modelo,
       cor: (val('pd-cor')||'').trim(), opcionais: (val('pd-opc')||'').trim(),
-      vendedor: (val('pd-vendedor')||'').trim(), valorVenda: valor,
-      previsao: val('pd-prev'), obs: (val('pd-obs')||'').trim()
+      /* quem está digitando é o vendedor do pedido */
+      vendedor: (val('pd-vendedor')||'').trim() || eu.nome || '',
+      digitadoPor: eu.nome || '',
+      digitadoPorId: eu.id || '',
+      valorVenda: valor,
+      previsao: val('pd-prev'), obs: (val('pd-obs')||'').trim(),
+      documentos: (typeof documentosDoForm==='function' ? documentosDoForm() : (p && p.documentos) || [])
     };
     if(id){ Object.assign(p, dados); }
     else {
@@ -6004,6 +6029,7 @@ function gerirPedido(id){
     <p class="hint" style="margin:0 0 12px">
       <b>${esc(p.cliente||'—')}</b>${p.doc?' ('+esc(p.doc)+')':''} · pedido ${fmt(p.data)}
       ${p.pedido?' · nº '+esc(p.pedido):''} · vendedor ${esc(p.vendedor||'—')}
+      ${p.digitadoPor?' · digitado por '+esc(p.digitadoPor):''}
       ${p.cor?' · '+esc(p.cor):''}${p.opcionais?' · '+esc(p.opcionais):''}
       ${p.obs?'<br>Obs.: '+esc(p.obs):''}</p>
     ${rs.length ? `<table class="tbl"><thead><tr><th>Data</th><th class="num">Valor</th><th>Forma</th><th>Conta</th><th>Obs.</th><th></th></tr></thead><tbody>
@@ -6013,6 +6039,10 @@ function gerirPedido(id){
       </tbody><tfoot><tr style="background:var(--panel2);font-weight:700"><td>Total antecipado</td>
         <td class="num">${brl(rs.reduce((s,r)=>s+(+r.valor||0),0))}</td><td colspan="4"></td></tr></tfoot></table>`
       : '<div class="empty" style="padding:18px">Nenhuma antecipação registrada ainda.</div>'}
+    <div class="bar" style="margin-top:12px">
+      <button class="b sec" onclick="verDocumentosPedido('${id}')">📄 Documentos (${(p.documentos||[]).length})</button>
+      ${p.situacao==='pedido' && pode('vendas','edit')?`<button class="b sec" onclick="formPedido('${id}')">✏️ Alterar pedido</button>`:''}
+    </div>
     <div class="mfoot" style="justify-content:space-between">
       ${p.situacao==='pedido' && pode('vendas','edit')?`<button class="b ok" onclick="formAntecipacao('${id}')">💵 Nova antecipação</button>`:'<span class="hint" style="margin:0">Pedido encerrado.</span>'}
       <button class="b sec" onclick="fechar()">Fechar</button>
@@ -6343,6 +6373,153 @@ function DBcomprovante(id, i){
   const regs = [].concat(DB.recebimentos||[], DB.pagamentosFabrica||[], DB.recebimentosPedido||[]);
   const reg = regs.find(x=>x.id===id);
   return reg && reg.comprovantes ? reg.comprovantes[i] : null;
+}
+
+/* ============================================================
+   DOCUMENTOS DO PEDIDO DE VENDA DIRETA
+   Contrato assinado e documentos do cliente (RG, CPF, comprovante
+   de residência…). Ficam guardados no próprio pedido.
+   ============================================================ */
+const DOCS_MAX_MB   = 1.2;     // contrato em PDF pode ser maior
+const DOCS_LIMITE   = 8;       // arquivos por pedido
+let DOCS_TMP = [];
+
+function comprimirDocumento(file, categoria){
+  return new Promise((resolve, reject)=>{
+    if(!file) return reject(new Error('Nenhum arquivo.'));
+    const ehPDF = /pdf$/i.test(file.type) || /\.pdf$/i.test(file.name||'');
+    const rd = new FileReader();
+    rd.onerror = ()=>reject(new Error('Não consegui ler o arquivo.'));
+    if(ehPDF){
+      rd.onload = ()=>{
+        const kb = Math.round(String(rd.result||'').length/1024*0.75);
+        if(kb > DOCS_MAX_MB*1024)
+          return reject(new Error('PDF de '+kb+' KB passa do limite de '+DOCS_MAX_MB+' MB.'));
+        resolve({id:uid(), nome:(file.name||'documento.pdf').slice(0,70),
+          tipo:'pdf', categoria, dataUrl:rd.result, kb});
+      };
+      rd.readAsDataURL(file);
+      return;
+    }
+    if(!/^image\//.test(file.type)) return reject(new Error('Envie uma imagem (JPG/PNG) ou um PDF.'));
+    rd.onload = ()=>{
+      const img = new Image();
+      img.onerror = ()=>reject(new Error('Imagem inválida ou corrompida.'));
+      img.onload = ()=>{
+        let {width:w, height:h} = img;
+        const esc = Math.min(1, 1600 / Math.max(w,h));
+        w = Math.round(w*esc); h = Math.round(h*esc);
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        const ctx = cv.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0,0,w,h);
+        ctx.drawImage(img, 0, 0, w, h);
+        let q = 0.75, url = cv.toDataURL('image/jpeg', q);
+        while(url.length/1024 > 320 && q > 0.4){ q -= 0.08; url = cv.toDataURL('image/jpeg', q); }
+        resolve({id:uid(), nome:(file.name||'documento.jpg').slice(0,70),
+          tipo:'img', categoria, dataUrl:url, kb:Math.round(url.length/1024)});
+      };
+      img.src = rd.result;
+    };
+    rd.readAsDataURL(file);
+  });
+}
+
+function anexarDocumento(categoria, inputId){
+  const id = inputId || 'docs-pedido';
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'image/*,application/pdf';
+  inp.multiple = true;
+  inp.onchange = async ()=>{
+    const arquivos = [...(inp.files||[])];
+    DOCS_TMP = DOCS_TMP || [];
+    for(const f of arquivos){
+      if(DOCS_TMP.length >= DOCS_LIMITE){ alert('Máximo de '+DOCS_LIMITE+' documentos por pedido.'); break; }
+      try{ DOCS_TMP.push(await comprimirDocumento(f, categoria)); }
+      catch(e){ alert(f.name+': '+e.message); }
+    }
+    pintarDocs(document.getElementById(id));
+  };
+  inp.click();
+}
+
+function pintarDocs(alvo){
+  alvo = alvo || document.getElementById('docs-pedido');
+  if(!alvo) return;
+  if(!DOCS_TMP.length){
+    alvo.innerHTML = '<span class="hint" style="margin:0">Nenhum documento anexado.</span>';
+    return;
+  }
+  const rot = c => c==='contrato' ? 'Contrato' : 'Cliente';
+  alvo.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap">${DOCS_TMP.map((c,i)=>`
+    <div style="border:1px solid var(--line);border-radius:8px;padding:5px;background:var(--panel2)">
+      ${c.tipo==='pdf'
+        ? `<div style="width:92px;height:92px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;color:var(--mut);text-align:center">
+             <b style="font-size:15px">PDF</b>${c.kb} KB</div>`
+        : `<img src="${c.dataUrl}" style="width:92px;height:92px;object-fit:cover;border-radius:6px;cursor:pointer"
+             onclick="verDocTmp(${i})">`}
+      <div class="hint" style="margin:3px 0 0;font-size:9.5px;max-width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+        title="${esc(c.nome||'')}">${esc(c.nome||'')}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:4px;margin-top:2px">
+        <span class="tag" style="font-size:9px;padding:1px 5px">${rot(c.categoria)}${c.tipo==='pdf'?'':' · '+c.kb+'KB'}</span>
+        <button type="button" class="b sm dang" style="padding:0 5px;font-size:10px" onclick="removerDocTmp(${i})">✕</button>
+      </div>
+    </div>`).join('')}</div>
+    <div class="hint" style="margin:5px 0 0">${DOCS_TMP.length} documento(s) · ${Math.round(DOCS_TMP.reduce((s,c)=>s+(c.kb||0),0))} KB</div>`;
+}
+function removerDocTmp(i){ DOCS_TMP.splice(i,1); pintarDocs(); }
+function verDocTmp(i){
+  const c = DOCS_TMP[i]; if(!c) return;
+  verComprovante({dataUrl:c.dataUrl, tipo:c.tipo, nome:c.nome});
+}
+
+function blocoDocumentos(reg){
+  DOCS_TMP = (reg && reg.documentos ? reg.documentos : []).slice();
+  const id = 'docs-pedido';
+  setTimeout(()=>pintarDocs(document.getElementById(id)), 0);
+  return `<div class="fld full" style="border-top:1px solid var(--line);padding-top:12px">
+    <label>Contrato e documentos do cliente <span class="hint" style="display:inline;margin:0">(foto ou PDF · opcional)</span></label>
+    <div class="bar" style="margin:0 0 8px">
+      <button type="button" class="b sec sm" onclick="anexarDocumento('contrato','${id}')">📄 Anexar contrato</button>
+      <button type="button" class="b sec sm" onclick="anexarDocumento('cliente','${id}')">🪪 Documentos do cliente</button>
+      <span class="hint" style="margin:0">RG, CPF, comprovante de residência, contrato assinado… até ${DOCS_LIMITE} arquivos.</span>
+    </div>
+    <div id="${id}"></div>
+  </div>`;
+}
+const documentosDoForm = () => (DOCS_TMP||[]).map(c=>({...c}));
+
+function seloDocumentos(reg){
+  const n = (reg && reg.documentos) ? reg.documentos.length : 0;
+  if(!n) return '';
+  const c = (reg.documentos||[]).some(d=>d.categoria==='contrato');
+  return ` <span class="tag t-div" style="cursor:pointer" title="${n} documento(s)${c?' · com contrato':''}"
+    onclick="event.stopPropagation();verDocumentosPedido('${reg.id}')">${c?'📄':'📎'} ${n}</span>`;
+}
+function verDocumentosPedido(id){
+  const p = (DB.pedidos||[]).find(x=>x.id===id); if(!p) return;
+  const lista = p.documentos||[];
+  if(!lista.length) return alert('Este pedido não tem documentos anexados.');
+  const corpo = `<div style="display:flex;gap:10px;flex-wrap:wrap">
+    ${lista.map((c,i)=>`
+      <div style="border:1px solid var(--line);border-radius:8px;padding:7px;background:var(--panel2)">
+        ${c.tipo==='pdf'
+          ? `<button class="b sec sm" onclick="verDocPedido('${id}',${i})">PDF · ${c.kb} KB</button>`
+          : `<img src="${c.dataUrl}" style="width:150px;height:150px;object-fit:cover;border-radius:6px;cursor:pointer"
+               onclick="verDocPedido('${id}',${i})">`}
+        <div class="hint" style="margin:4px 0 0;max-width:150px">${esc(c.nome||'')}</div>
+        <span class="tag" style="font-size:9.5px">${c.categoria==='contrato'?'Contrato':'Cliente'}</span>
+      </div>`).join('')}</div>`;
+  document.getElementById('mbox-in').className = 'modal wide';
+  document.getElementById('mbox-body').innerHTML = `<h2>Documentos · ${esc(p.cliente||'')}</h2>${corpo}
+    <div class="mfoot"><button class="b sec" onclick="fechar()">Fechar</button></div>`;
+  document.getElementById('mbox').classList.add('on');
+}
+function verDocPedido(id, i){
+  const p = (DB.pedidos||[]).find(x=>x.id===id);
+  const c = p && p.documentos ? p.documentos[i] : null;
+  if(c) verComprovante(c);
 }
 
 </script>
