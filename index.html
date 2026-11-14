@@ -1434,7 +1434,7 @@ function renderPagar(){
         <td>
           ${pode('pagamentos','edit')?`<button class="b sm ok" onclick="formPagamento('${esc(v.chassi)}')" title="Registrar pagamento">💸</button>`:''}
           ${pode('pagamentos','edit')?`<button class="b sm sec" onclick="formCusto('${esc(v.chassi)}')" title="Custo e condição">✏️</button>`:''}
-          <button class="b sm sec" onclick="gerirPagamentosFab('${esc(v.chassi)}')" title="Ver pagamentos">📄 ${(DB.pagamentosFabrica||[]).filter(p=>p.chassi===v.chassi).length||''}</button>
+          <button class="b sm sec" onclick="gerirPagamentosFab('${esc(v.chassi)}')" title="Ver e alterar os pagamentos">📄 ${(DB.pagamentosFabrica||[]).filter(p=>p.chassi===v.chassi).length||'alterar'}</button>
         </td></tr>`;
     }).join('')}
     </tbody></table></div>
@@ -1673,23 +1673,76 @@ function gerirPagamentosFab(chassi){
 function editarPagFab(id, chassi){
   if(!precisaPermissao('pagamentos','edit')) return;
   const p = (DB.pagamentosFabrica||[]).find(x=>x.id===id); if(!p) return;
-  modal('Editar pagamento à fábrica', `<div class="grid">
-    <div class="fld"><label>Data</label><input id="m-data" type="date" value="${p.data||''}"></div>
-    <div class="fld"><label>Valor (R$)</label><input id="m-valor" type="number" step="0.01" value="${p.valor}"></div>
+  const v = DB.veiculos.find(x=>x.chassi===chassi) || {};
+  const calc = juroApurado(v);
+
+  modal('Alterar pagamento à fábrica', `<div class="grid">
+    <div class="fld full"><label>Veículo</label>
+      <input value="${esc((veicRotulo(v)||'')+' · '+chassi)}" disabled></div>
+    <div class="fld"><label>Data do pagamento</label><input id="m-data" type="date" value="${p.data||''}" onchange="edPagPreview('${esc(chassi)}')"></div>
+    <div class="fld"><label>Valor pago (R$) *</label><input id="m-valor" type="number" step="0.01" value="${p.valor}" oninput="edPagPreview('${esc(chassi)}')"></div>
     <div class="fld"><label>Forma</label><input id="m-forma" value="${esc(p.forma||'')}"></div>
     <div class="fld"><label>Conta</label><input id="m-conta" value="${esc(p.conta||'')}"></div>
+    <div class="fld full" style="border-top:1px solid var(--line);padding-top:12px">
+      <label>Juros reais cobrados pela fábrica (R$)</label>
+      <input id="m-pjuros" type="number" step="0.01" value="${(p.jurosInformado!==undefined? p.jurosInformado : calc).toFixed(2)}" oninput="edPagPreview('${esc(chassi)}')">
+      <div class="hint" style="margin:2px 0 0">Calculado pelo sistema: <b>${brl(calc)}</b></div></div>
+    <div class="fld full"><label>Motivo do ajuste dos juros</label>
+      <input id="m-pjmotivo" value="${esc(p.jurosMotivo||'')}" placeholder="opcional · ex.: juro fechado pelo banco"></div>
     <div class="fld full"><label>Observação</label><input id="m-obs" value="${esc(p.obs||'')}"></div>
+    <div class="fld full"><div id="m-edprev" class="hint"></div></div>
   </div>`, ()=>{
-    const v = DB.veiculos.find(x=>x.chassi===chassi);
-    const outros = (DB.pagamentosFabrica||[]).filter(x=>x.chassi===chassi && x.id!==id).reduce((s,x)=>s+x.valor,0);
     const novo = +val('m-valor')||0;
-    if(outros + novo > custoFabrica(v) + 0.01) return alert('A soma dos pagamentos passaria do custo do veículo.');
-    Object.assign(p, {data:val('m-data'), valor:novo, forma:val('m-forma'), conta:val('m-conta'), obs:val('m-obs')});
-    if(!isMaster()){ p.conc = 'pendente'; p.concPor=''; p.concEm=''; p.concObs='Editado pelo financeiro — aguarda nova conciliação'; }
+    if(!novo || novo <= 0) return alert('Informe o valor pago.');
+    const outros = (DB.pagamentosFabrica||[]).filter(x=>x.chassi===chassi && x.id!==id).reduce((s,x)=>s+(+x.valor||0),0);
+
+    const jInformado = +val('m-pjuros')||0;
+    const ajusteJ = +(jInformado - calc).toFixed(2);
+
+    /* não bloqueia valor a maior: o excedente é juro */
+    const totalDevido = custoFabrica(v) + jInformado;
+    if(outros + novo > totalDevido + 0.01){
+      if(!confirm('A soma dos pagamentos (' + brl(outros+novo) + ') passa do total (veículo ' + brl(custoFabrica(v)) +
+          ' + juros ' + brl(jInformado) + ' = ' + brl(totalDevido) + ').\n\nExcedente de ' +
+          brl(outros+novo-totalDevido) + '. Salvar assim mesmo?')) return;
+    }
+
+    Object.assign(p, {data:val('m-data'), valor:novo, forma:val('m-forma'), conta:val('m-conta'), obs:val('m-obs'),
+      jurosInformado: Math.round(jInformado*100)/100,
+      jurosCalculado: Math.round(calc*100)/100,
+      jurosAjuste: ajusteJ,
+      jurosMotivo: (val('m-pjmotivo')||'').trim()});
+
+    /* o ajuste passa a valer como juro do veículo */
+    if(Math.abs(ajusteJ) > 0.005){
+      v.jurosCusto = Math.round(jInformado*100)/100;
+      v.jurosAjuste = ajusteJ;
+      v.jurosAjusteEm = p.data || hoje();
+      v.jurosAjustePor = (usuarioAtual()||{}).nome || '';
+      v.jurosAjusteMotivo = p.jurosMotivo;
+    }
+
+    if(!isMaster()){ p.conc = 'pendente'; p.concPor=''; p.concEm=''; p.concObs='Alterado pelo financeiro — aguarda nova conciliação'; }
     recalcPagFab(chassi);
+    logAcao('Alterou pagamento à fábrica', 'veiculos', chassi + ' · ' + brl(novo) + (Math.abs(ajusteJ)>0.005? ' · juros ajustados para '+brl(jInformado):''));
     save(); fechar(); renderAll(); gerirPagamentosFab(chassi);
   });
+  edPagPreview(chassi);
 }
+
+/* previa da edicao: mostra o efeito da alteracao */
+function edPagPreview(chassi){
+  const el = document.getElementById('m-edprev'); if(!el) return;
+  const v = DB.veiculos.find(x=>x.chassi===chassi) || {};
+  const valor = +val('m-valor')||0;
+  const juros = +val('m-pjuros')||0;
+  const id = (DB.pagamentosFabrica||[]).find(x=>x.chassi===chassi && x.id===(el.dataset.pid||'')) || null;
+  const pagoTotal = (DB.pagamentosFabrica||[]).filter(x=>x.chassi===chassi && concOk(x)).reduce((s,x)=>s+(+x.valor||0),0);
+  const carro = custoFabrica(v), total = carro + juros;
+  el.innerHTML = `Veículo <b>${brl(carro)}</b> + juros <b>${brl(juros)}</b> = <b>${brl(total)}</b> · já pago ${brl(pagoTotal)}<br>
+    ${valor > 0.005 ? `<b>Novo valor ${brl(valor)}</b>` : ''}`;
+}
+
 function excluirPagFab(id, chassi){
   if(!precisaPermissao('pagamentos','del')) return;
   const p = (DB.pagamentosFabrica||[]).find(x=>x.id===id); if(!p) return;
@@ -2981,22 +3034,63 @@ function formEditarBaixa(id){
   if(!precisaPermissao('titulos','edit')) return;
   const r = DB.recebimentos.find(x=>x.id===id); if(!r) return;
   const t = titulo(r.tituloId)||{};
-  modal('Editar recebimento', `<div class="grid">
-    <div class="fld full"><label>Título</label><input value="${esc(t.tipoNome||'')} — ${brl(t.valor||0)}" disabled></div>
-    <div class="fld"><label>Data</label><input id="m-data" type="date" value="${r.data||''}"></div>
-    <div class="fld"><label>Valor (R$)</label><input id="m-valor" type="number" step="0.01" value="${r.valor}"></div>
+  const vd = venda(t.vendaId)||{};
+  const acAtual = +r.acrescimo || 0;
+
+  modal('Alterar recebimento do cliente', `<div class="grid">
+    <div class="fld full"><label>Título</label>
+      <input value="${esc(t.tipoNome||'')} — ${brl(t.valor||0)} · ${esc(vd.chassi||'')}" disabled></div>
+    <div class="fld"><label>Data do recebimento</label><input id="m-data" type="date" value="${r.data||''}" onchange="edBaixaPreview('${id}')"></div>
+    <div class="fld"><label>Valor recebido (R$) *</label><input id="m-valor" type="number" step="0.01" value="${r.valor}" oninput="edBaixaPreview('${id}')"></div>
     <div class="fld"><label>Forma</label><input id="m-forma" value="${esc(r.forma||'')}"></div>
     <div class="fld"><label>Conta</label><input id="m-conta" value="${esc(r.conta||'')}"></div>
+    <div class="fld full" style="border-top:1px solid var(--line);padding-top:12px">
+      <label>Juros / multa / desconto cobrados do cliente (R$)</label>
+      <input id="m-acrescimo" type="number" step="0.01" value="${acAtual}" oninput="edBaixaPreview('${id}')">
+      <div class="hint" style="margin:2px 0 0">Positivo = juros/multa · Negativo = desconto. O valor abate o título pelo líquido.</div></div>
+    <div class="fld"><label>Motivo do ajuste</label><input id="m-motivo" value="${esc(r.motivoAjuste||'')}" placeholder="opcional"></div>
     <div class="fld full"><label>Observação</label><input id="m-obs" value="${esc(r.obs||'')}"></div>
+    <div class="fld full"><div id="m-edprev" class="hint"></div></div>
   </div>`, ()=>{
-    const v = +val('m-valor'); if(!v) return alert('Informe o valor.');
-    const outros = DB.recebimentos.filter(x=>x.tituloId===r.tituloId && x.id!==id).reduce((s,x)=>s+x.valor,0);
-    if(outros + v > (+titulo(r.tituloId).valor + 0.01)) return alert('A soma das baixas passaria do valor do título.');
-    Object.assign(r, {data:val('m-data'), valor:v, forma:val('m-forma'), conta:val('m-conta'), obs:val('m-obs')});
-    if(!isMaster()){ r.conc = 'pendente'; r.concPor=''; r.concEm=''; r.concObs='Editado pelo financeiro — aguarda nova conciliação'; }
+    const valor = +val('m-valor'); if(!valor) return alert('Informe o valor.');
+    const ac = +val('m-acrescimo') || 0;
+    const outros = DB.recebimentos.filter(x=>x.tituloId===r.tituloId && x.id!==id).reduce((s,x)=>s+(+x.valor||0),0);
+    const abate = Math.max(0, valor - ac);
+    const saldoTit = Math.max(0, (+t.valor||0) - outros);
+    if(abate > saldoTit + 0.01)
+      return alert('O líquido (' + brl(abate) + ', já descontado o acréscimo) passa do saldo do título (' + brl(saldoTit) + ').');
+
+    /* devolve ao título o acrescimo anterior e aplica o novo */
+    if(Math.abs(acAtual) > 0.005){
+      t.acrescimoTotal = Math.round(((+t.acrescimoTotal||0) - acAtual)*100)/100;
+    }
+    if(Math.abs(ac) > 0.005) t.acrescimoTotal = Math.round(((+t.acrescimoTotal||0) + ac)*100)/100;
+
+    Object.assign(r, {data:val('m-data'), valor, forma:val('m-forma'), conta:val('m-conta'), obs:val('m-obs'),
+      acrescimo: Math.round(ac*100)/100, motivoAjuste:(val('m-motivo')||'').trim()});
+
+    if(!isMaster()){ r.conc = 'pendente'; r.concPor=''; r.concEm=''; r.concObs='Alterado pelo financeiro — aguarda nova conciliação'; }
+    logAcao('Alterou recebimento', 'titulos', (t.tipoNome||'') + ' · ' + brl(valor) + (Math.abs(ac)>0.005? ' · ajuste '+brl(ac):''));
     save(); fechar(); renderAll(); gerirBaixas(r.tituloId);
   });
+  edBaixaPreview(id);
 }
+
+/* previa da edicao do recebimento */
+function edBaixaPreview(id){
+  const el = document.getElementById('m-edprev'); if(!el) return;
+  const r = DB.recebimentos.find(x=>x.id===id); if(!r) return;
+  const t = titulo(r.tituloId)||{};
+  const valor = +val('m-valor')||0;
+  const ac = +val('m-acrescimo') || 0;
+  const outros = DB.recebimentos.filter(x=>x.tituloId===r.tituloId && x.id!==id).reduce((s,x)=>s+(+x.valor||0),0);
+  const abate = Math.max(0, valor - ac);
+  const saldo = Math.max(0, (+t.valor||0) - outros - abate);
+  el.innerHTML = `Título <b>${brl(t.valor||0)}</b> · outros recebimentos ${brl(outros)}<br>
+    ${Math.abs(ac)>0.005?`${ac>0?'Juros/multa':'Desconto'}: <b>${brl(Math.abs(ac))}</b> · `:''}
+    abate <b>${brl(abate)}</b> · saldo após: <b>${brl(saldo)}</b> ${saldo<=0.005?'<span class="pos">→ quitado</span>':''}`;
+}
+
 function excluirBaixa(id, tituloId){
   if(!precisaPermissao('titulos','del')) return;
   const r = DB.recebimentos.find(x=>x.id===id); if(!r) return;
