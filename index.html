@@ -167,6 +167,7 @@
   <button data-v="vendas">🚗 Carros vendidos</button>
   <button data-v="titulos">🧾 Títulos a receber</button>
   <button data-v="pagar">🏭 Pagamento à fábrica</button>
+  <button data-v="diversos">💸 Pagamentos diversos</button>
   <button data-v="conciliacao">✅ Conciliação</button>
   <button data-v="relatorios">📈 Relatórios</button>
   <button data-v="cadastros">📋 Cadastros</button>
@@ -221,7 +222,7 @@
       <button class="b ok" data-perm="estoque:edit" onclick="abrirImportPlanilha()">📊 Atualizar pela planilha Estoque</button>
       <button class="b sec" data-perm="estoque:edit" onclick="abrirImportFabricante()">📥 Importar faturamento da fábrica</button>
       <button class="b" data-perm="estoque:edit" onclick="formVeiculo()">＋ Novo veículo</button>
-      <button class="b sec" onclick="exportarEstoque()">📤 CSV</button>
+      <button class="b sec" data-perm="estoque:ver" onclick="exportarEstoque()">📤 CSV</button>
       <button class="b sec" onclick="window.print()">🖨 PDF</button>
     </div>
     <div class="bar">
@@ -276,7 +277,7 @@
         <option value="div">Com divergência</option>
       </select>
       <select id="f-tipo-v" onchange="renderVendas()"><option value="">Todos os tipos</option></select>
-      <button class="b sec" onclick="exportarVendas()">📤 CSV</button>
+      <button class="b sec" data-perm="vendas:ver" onclick="exportarVendas()">📤 CSV</button>
       <button class="b sec" onclick="window.print()">🖨 PDF</button>
     </div>
     <div id="tbl-vendas"></div>
@@ -296,7 +297,7 @@
         <option value="">Todos</option>
       </select>
       <select id="f-tipo-t" onchange="renderTitulos()"><option value="">Todos os tipos</option></select>
-      <button class="b sec" onclick="exportarTitulos()">📤 CSV</button>
+      <button class="b sec" data-perm="titulos:ver" onclick="exportarTitulos()">📤 CSV</button>
       <button class="b sec" onclick="window.print()">🖨 PDF</button>
     </div>
     <div id="tbl-titulos"></div>
@@ -306,8 +307,8 @@
     <h1>Pagamento à fábrica</h1>
     <p class="sub">Situação de pagamento de cada veículo ao fornecedor: custo (pé da NF + desconto) + juros pela condição (FDIC 1 dia · Floor Plan 30 dias · À vista sem juros), menos os pagamentos feitos.</p>
     <div class="bar">
-      <button class="b" onclick="formCusto()">＋ Custo / condição do veículo</button>
-      <button class="b ok" onclick="formPagamento()">💸 Registrar pagamento</button>
+      <button class="b" data-perm="pagamentos:edit" onclick="formCusto()">＋ Custo / condição do veículo</button>
+      <button class="b ok" data-perm="pagamentos:edit" onclick="formPagamento()">💸 Registrar pagamento</button>
       <input id="f-busca-p" placeholder="Buscar chassi, carro, fornecedor…" oninput="renderPagar()" style="flex:1;min-width:170px">
       <select id="f-status-p" onchange="renderPagar()">
         <option value="">Todos os status</option>
@@ -323,10 +324,42 @@
         <option value="vendido-vencido">Vendidos fora do prazo da fábrica</option>
         <option value="estoque">Só no estoque (não vendidos)</option>
       </select>
-      <button class="b sec" onclick="exportarPagamentos()">📤 CSV</button>
+      <button class="b sec" data-perm="pagamentos:ver" onclick="exportarPagamentos()">📤 CSV</button>
       <button class="b sec" onclick="window.print()">🖨 PDF</button>
     </div>
     <div id="tbl-pagar"></div>
+  </section>
+
+  <section class="view" id="v-diversos">
+    <h1>Pagamentos diversos</h1>
+    <p class="sub">Despesas da empresa por <b>centro de custo</b>: Oficina, Funilaria, Peças, Veículos Novos, Usados e F&amp;I.
+    Cada conta tem fornecedor, categoria, vencimento e comprovante do pagamento. Não se mistura com o pagamento à fábrica.</p>
+    <div class="cards" id="dv-kpis"></div>
+    <div class="bar">
+      <button class="b ok" data-perm="pagamentos:edit" onclick="formDespesaDiversa()">＋ Nova conta</button>
+      <input id="f-busca-dv" placeholder="Buscar fornecedor, categoria, documento…" oninput="renderDiversos()" style="flex:1;min-width:170px">
+      <select id="f-cc-dv" onchange="renderDiversos()">
+        <option value="">Todos os centros</option>
+        <option value="oficina">Oficina</option>
+        <option value="funilaria">Funilaria</option>
+        <option value="pecas">Peças</option>
+        <option value="novos">Veículos Novos</option>
+        <option value="usados">Veículos Usados</option>
+        <option value="fi">F&amp;I</option>
+      </select>
+      <select id="f-sit-dv" onchange="renderDiversos()">
+        <option value="aberto">Em aberto</option>
+        <option value="vencido">Vencidas</option>
+        <option value="pago">Pagas</option>
+        <option value="todos">Todas</option>
+      </select>
+      <input id="dv-ini" type="date" onchange="renderDiversos()" title="de">
+      <input id="dv-fim" type="date" onchange="renderDiversos()" title="até">
+      <button class="b sec" data-perm="pagamentos:ver" onclick="window.print()">🖨 PDF</button>
+    </div>
+    <div class="sect" style="margin:6px 0 8px">Resumo por centro de custo</div>
+    <div id="dv-centros" style="margin-bottom:18px"></div>
+    <div id="tbl-diversos"></div>
   </section>
 
   <section class="view" id="v-conciliacao">
@@ -346,7 +379,7 @@
         <option value="pagamento">Somente pagamentos à fábrica</option>
       </select>
       <button class="b sec" onclick="renderConciliacao()">↻ Atualizar</button>
-      <button class="b sec" onclick="relConciliacoes();document.querySelector('nav button[data-v=relatorios]').click()">📈 Relatório</button>
+      <button class="b sec" data-perm="conciliacao:ver" onclick="relConciliacoes();document.querySelector('nav button[data-v=relatorios]').click()">📈 Relatório</button>
     </div>
     <div id="conc-tabela"></div>
     <h1 style="font-size:16px;margin:26px 0 4px">Histórico de conciliações</h1>
@@ -370,12 +403,12 @@
       <button onclick="relAging()"><b>4 · Inadimplência / aging</b><span>Vencidos por faixa e por pagador</span></button>
       <button onclick="relCliente()"><b>5 · Por cliente</b><span>Posição de cada cliente: comprado, recebido e saldo</span></button>
       <button onclick="relTitulosAbertos()"><b>6 · Títulos em aberto</b><span>Carteira detalhada com vencimento e dias de atraso</span></button>
-      <button onclick="relPagamentos()"><b>7 · Pagamentos à fábrica</b><span>Extrato de pagamentos por veículo e posição de custo</span></button>
-      <button onclick="relAgingPagar()"><b>8 · Vencidos à fábrica</b><span>Saldo a pagar por faixa de atraso e por fornecedor</span></button>
-      <button onclick="relConciliacoes()"><b>9 · Conciliações</b><span>Movimentos pendentes, confirmados e rejeitados, com autor e data</span></button>
+      <button data-perm="pagamentos:ver" onclick="relPagamentos()"><b>7 · Pagamentos à fábrica</b><span>Extrato de pagamentos por veículo e posição de custo</span></button>
+      <button data-perm="pagamentos:ver" onclick="relAgingPagar()"><b>8 · Vencidos à fábrica</b><span>Saldo a pagar por faixa de atraso e por fornecedor</span></button>
+      <button data-perm="conciliacao:ver" onclick="relConciliacoes()"><b>9 · Conciliações</b><span>Movimentos pendentes, confirmados e rejeitados, com autor e data</span></button>
       <button onclick="relCobranca()"><b>10 · Cobrança por cliente</b><span>Carta de cobrança formal por cliente, com os títulos em aberto e o total</span></button>
-      <button onclick="relAntecipacoes()"><b>11 · Antecipações de venda direta</b><span>O que o cliente já pagou antes do faturamento, por pedido</span></button>
-      <button onclick="relVendaDireta()"><b>12 · Venda direta — faturado x falta faturar</b><span>Pedidos aguardando a fábrica, já faturados e antecipações</span></button>
+      <button data-perm="vendas:ver" onclick="relAntecipacoes()"><b>11 · Antecipações de venda direta</b><span>O que o cliente já pagou antes do faturamento, por pedido</span></button>
+      <button data-perm="vendas:ver" onclick="relVendaDireta()"><b>12 · Venda direta — faturado x falta faturar</b><span>Pedidos aguardando a fábrica, já faturados e antecipações</span></button>
     </div>
     <div id="rep-out"><div class="empty">Escolha um relatório acima.</div></div>
   </section>
@@ -421,7 +454,7 @@
     <h1>Usuários e permissões</h1>
     <p class="sub">Somente o master vê esta tela. Cada usuário recebe acesso por módulo: ver, criar/editar e excluir. O master tem acesso total e não pode ser bloqueado.</p>
     <div class="bar">
-      <button class="b" id="btn-novo-usuario" onclick="formUsuario()">＋ Novo usuário</button>
+      <button class="b" id="btn-novo-usuario" data-perm="usuarios:edit" onclick="formUsuario()">＋ Novo usuário</button>
       <button class="b sec" onclick="renderUsuarios()">↻ Atualizar lista</button>
       <span class="hint" style="margin:0">Somente o master cria usuários. Cada pessoa entra com o login e a senha definidos aqui.</span>
     </div>
@@ -443,6 +476,7 @@
     </div>
     <div class="card" id="dados-resumo"></div>
     <div class="bar" style="margin-top:18px">
+      <button class="b sec" data-perm="dados:del" onclick="abrirLimpezaDocumentos()">🧹 Limpeza de documentos dos pedidos</button>
       <button class="b dang" data-perm="dados:del" onclick="zerar()">🗑️ Zerar a base (mantém os usuários)</button>
     </div>
   </section>
@@ -461,6 +495,7 @@ const PERMS = [
   {k:'vendas',     l:'Carros vendidos',         d:'Cadastro de vendas, dossiê e situação de cada carro'},
   {k:'titulos',    l:'Títulos a receber',       d:'Criar títulos, lançar recebimentos, editar e excluir'},
   {k:'pagamentos', l:'Pagamento à fábrica',     d:'Custo do veículo, condição, juros e pagamentos ao fornecedor'},
+  {k:'diversos',   l:'Pagamentos diversos',     d:'Despesas por centro de custo: oficina, funilaria, peças, novos, usados e F&I'},
   {k:'conciliacao',l:'Conciliação',             d:'Confirmar ou devolver os recebimentos e pagamentos lançados'},
   {k:'relatorios', l:'Relatórios',              d:'Carteira, tipo de recebimento, extrato, aging, cliente'},
   {k:'cadastros',  l:'Cadastros',               d:'Tipos de recebimento, pagadores, clientes, vendedores'},
@@ -483,7 +518,7 @@ const ACOES = [{k:'ver', l:'Ver'}, {k:'edit', l:'Criar/Editar'}, {k:'del', l:'Ex
 
 const SUPA_URL = 'https://ukwfouwxhpxotrwwxxre.supabase.co';
 const SUPA_KEY = 'sb_publishable_c-e_CeLKkPbZ0UzLfXNbug_fhwqjjGt';
-const COLS = ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog','pedidos','recebimentosPedido'];
+const COLS = ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog','pedidos','recebimentosPedido','despesasDiversas','pagamentosDiversos'];
 
 const CLOUD = {
   sessao: null,        // {access_token, refresh_token, expires_at}
@@ -726,17 +761,32 @@ const isMaster = () => !!(PERFIL && PERFIL.master);
 function pode(mod, acao){
   if(!PERFIL) return false;
   if(PERFIL.master) return true;
-  const p = (PERFIL.permissoes||{})[mod];
+  let p = (PERFIL.permissoes||{})[mod];
+  /* pagamentos diversos herda a permissão de pagamentos quando ainda
+     não foi dada uma permissão específica (usuários antigos) */
+  if((!p || p[acao] === undefined) && mod === 'diversos'){
+    p = (PERFIL.permissoes||{}).pagamentos;
+  }
   return !!(p && (p[acao] === true));
 }
 
 
 /* ---------- visibilidade conforme permissões ---------- */
 function aplicarPermissoes(){
+  /* cada item do menu aponta para o MÓDULO de permissão correspondente.
+     Alguns itens têm nome de tela diferente do módulo (ex.: 'pagar' usa
+     'pagamentos', 'pedidos' e 'diversos' também usam 'pagamentos'/'vendas'). */
+  const MOD_DO_MENU = {
+    dash:'dash', estoque:'estoque', pedidos:'vendas', vendas:'vendas',
+    titulos:'titulos', pagar:'pagamentos', diversos:'diversos',
+    conciliacao:'conciliacao', relatorios:'relatorios', cadastros:'cadastros',
+    dados:'dados'
+  };
   document.querySelectorAll('nav button[data-v]').forEach(b=>{
-    const mod = b.dataset.v;
+    const item = b.dataset.v;
+    const mod = MOD_DO_MENU[item] || item;
     let ok = true;
-    if(mod === 'usuarios') ok = isMaster();
+    if(item === 'usuarios') ok = isMaster();
     else if(PERMS.some(p=>p.k===mod)) ok = pode(mod,'ver');
     b.style.display = ok ? '' : 'none';
   });
@@ -992,8 +1042,9 @@ async function renderUsuarios(){
       <td>${u.master?'<span class="tag t-div">Master · acesso total</span>':resumoPerm(u)}</td>
       <td>${u.ativo?'<span class="tag t-quitado">Ativo</span>':'<span class="tag t-vencido">Bloqueado</span>'}</td>
       <td>
-        <button class="b sm sec" onclick="formUsuario('${u.id}')">✏️ Permissões</button>
+        <button class="b sm sec" onclick="formUsuario('${u.id}')" title="Alterar nome, área e permissões">✏️ Alterar</button>
         ${u.id!==PERFIL.id?`<button class="b sm ${u.ativo?'dang':'sec'}" onclick="bloquearUsuario('${u.id}',${!u.ativo})">${u.ativo?'🚫 Bloquear':'✅ Ativar'}</button>`:''}
+        ${u.id!==PERFIL.id && !u.master?`<button class="b sm dang" onclick="excluirUsuario('${u.id}')" title="Apagar o usuário">🗑</button>`:''}
       </td></tr>`).join('')}</tbody></table>
     <div class="hint">Quem cria a conta pelo login entra bloqueado; libere aqui marcando as permissões.</div>`;
   renderLogNuvem();
@@ -1100,6 +1151,32 @@ function formNovoUsuarioCloud(){
   }, true);
 }
 
+/* apagar usuário: remove o perfil. A conta de login continua no Auth do
+   Supabase (só o dono do projeto remove por lá), mas sem perfil a pessoa
+   NÃO consegue entrar no sistema. */
+async function excluirUsuario(id){
+  if(!isMaster()) return alert('Apenas o master pode apagar usuários.');
+  if(id === PERFIL.id) return alert('Você não pode apagar o seu próprio usuário.');
+  let alvo = null;
+  try{ const rows = await apiRest(`usuarios?id=eq.${id}&select=*`); alvo = (rows||[]).map(normalizarPerfil)[0] || null; }catch(e){}
+  if(alvo && alvo.master) return alert('Não é possível apagar um usuário master.');
+
+  const nome = alvo ? alvo.nome : 'este usuário';
+  if(!confirm('Apagar o usuário "'+nome+'"?\n\nA pessoa perde o acesso ao sistema imediatamente.\n' +
+      'Os lançamentos que ela já fez continuam registrados com o nome dela.\n\nEsta ação não pode ser desfeita.')) return;
+  if(!confirm('Confirmar a exclusão de "'+nome+'"?')) return;
+
+  try{
+    await apiRest(`usuarios?id=eq.${id}`, {method:'DELETE', prefer:'return=minimal'});
+    salvarLog('Apagou usuário','usuarios', nome);
+    alert('Usuário "'+nome+'" apagado.\n\nEle não consegue mais entrar no sistema.');
+    renderUsuarios();
+  }catch(e){
+    alert('Não foi possível apagar: '+e.message +
+      '\n\nAlternativa: use o botão 🚫 Bloquear — a pessoa para de entrar e o histórico fica igual.');
+  }
+}
+
 async function bloquearUsuario(id, ativo){
   try{
     await atualizarPerfil(id, {ativo});
@@ -1119,7 +1196,7 @@ function formUsuario(id){
         ${ACOES.map(a=>`<td style="text-align:center"><input type="checkbox" id="pm-${p.k}-${a.k}" ${u.master||atual[a.k]?'checked':''} ${u.master?'disabled':''} style="width:17px;height:17px"></td>`).join('')}
       </tr>`;
     }).join('');
-    modal('Permissões · '+esc(u.nome), `<div class="grid">
+    modal('Alterar usuário · '+esc(u.nome), `<div class="grid">
       <div class="fld full"><label>Nome</label><input id="m-nome" value="${esc(u.nome||'')}"></div>
       <div class="fld full"><label>E-mail</label><input value="${esc(u.email||'')}" disabled></div>
       <div class="fld full"><label>Situação</label>
@@ -1465,7 +1542,7 @@ function renderPagar(){
         <td>${badgePag(s)}
             ${at?`<div class="hint neg" style="margin:0">${at}d atraso</div>`:''}
             ${vencFabrica(v)?`<div class="hint" style="margin:0">venc. ${fmt(vencFabrica(v))}</div>`
-              :(saldoFabrica(v)>0.005?`<button class="b sm sec" style="font-size:10.5px;padding:2px 6px;margin-top:2px" onclick="formBoleto('${esc(v.chassi)}')" title="Lançar boleto com vencimento">boleto</button>`:'')}</td>
+              :(saldoFabrica(v)>0.005 && pode('pagamentos','edit')?`<button class="b sm sec" style="font-size:10.5px;padding:2px 6px;margin-top:2px" onclick="formBoleto('${esc(v.chassi)}')" title="Lançar boleto com vencimento">boleto</button>`:'')}</td>
         <td>
           ${pode('pagamentos','edit')?`<button class="b sm ok" onclick="formPagamento('${esc(v.chassi)}')" title="Registrar pagamento">💸</button>`:''}
           ${pode('pagamentos','edit')?`<button class="b sm sec" onclick="formCusto('${esc(v.chassi)}')" title="Custo e condição">✏️</button>`:''}
@@ -1681,6 +1758,7 @@ function gerirPagamentosFab(chassi){
   const v = DB.veiculos.find(x=>x.chassi===chassi); if(!v) return;
   const ps = (DB.pagamentosFabrica||[]).filter(p=>p.chassi===chassi).sort((a,b)=>(a.data||'').localeCompare(b.data||''));
   const carro = custoFabrica(v), juros = jurosFabrica(v), pago = pagoFabrica(chassi);
+  const pc_status = saldoFabrica(v)<=0.005 ? 'quitado' : 'em aberto';
   const pagoCarro = Math.min(pago, carro), pagoJuros = Math.max(0, pago - carro);
   const condRot = (COND_PAG[v.condicao||'']||{}).rotulo || 'sem juros';
   const corpo = `
@@ -1702,7 +1780,6 @@ function gerirPagamentosFab(chassi){
       ${saldoFabrica(v)>0.005 && pode('pagamentos','edit')?`<button class="b" onclick="formPagamento('${esc(chassi)}')">＋ Novo pagamento</button>`:'<span class="hint" style="margin:0">Veículo quitado com a fábrica.</span>'}
       <button class="b sec" onclick="fechar()">Fechar</button>
     </div>`;
-  const pc_status = saldoFabrica(v)<=0.005?'quitado':'em aberto';
   document.getElementById('mbox-in').className = 'modal';
   document.getElementById('mbox-body').innerHTML = `<h2>Pagamentos à fábrica · ${esc(chassi)}</h2>${corpo}`;
   document.getElementById('mbox').classList.add('on');
@@ -2447,7 +2524,7 @@ const SEED_PAGADORES = [
 ].map((nome,i)=>({id:'p-'+(i+1), nome, tipo: i===0?'Cliente':(i>=9?'Fábrica':'Financeira')}));
 
 function normalize(){
-  ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog','pedidos','recebimentosPedido'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k]=[]; });
+  ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog','pedidos','recebimentosPedido','despesasDiversas','pagamentosDiversos'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k]=[]; });
   if(!DB.tipos.length) DB.tipos = SEED_TIPOS.map(x=>({...x}));
   if(!DB.pagadores.length) DB.pagadores = SEED_PAGADORES.map(x=>({...x}));
   DB.titulos.forEach(t=>{
@@ -3656,6 +3733,7 @@ function renderAll(){
   renderPagar(); renderJuros();
   if(typeof renderPrazoFab === 'function') renderPrazoFab();
   if(typeof renderPedidos==='function') renderPedidos();
+  if(typeof renderDiversos==='function') renderDiversos();
   if(typeof renderConciliacao==='function'){ renderConciliacao(); atualizarBadgeConc(); }
   if(typeof renderUsuarios==='function') renderUsuarios();
   renderPeriodoHint();
@@ -6040,7 +6118,7 @@ function gerirPedido(id){
         <td class="num">${brl(rs.reduce((s,r)=>s+(+r.valor||0),0))}</td><td colspan="4"></td></tr></tfoot></table>`
       : '<div class="empty" style="padding:18px">Nenhuma antecipação registrada ainda.</div>'}
     <div class="bar" style="margin-top:12px">
-      <button class="b sec" onclick="verDocumentosPedido('${id}')">📄 Documentos (${(p.documentos||[]).length})</button>
+      ${(p.documentos||[]).length ? `<button class="b sec" onclick="verDocumentosPedido('${id}')">📄 Documentos (${(p.documentos||[]).length})</button>` : ''}
       ${p.situacao==='pedido' && pode('vendas','edit')?`<button class="b sec" onclick="formPedido('${id}')">✏️ Alterar pedido</button>`:''}
     </div>
     <div class="mfoot" style="justify-content:space-between">
@@ -6195,6 +6273,118 @@ function relVendaDireta(){
       ${semPedido.map(v=>`<tr><td>${fmt(v.dataFaturamento)}</td><td>${esc(veicRotulo(v))}</td>
         <td>${esc(v.chassi)}</td><td>${esc(v.pedido||'—')}</td><td class="num">${brl(v.peNF)}</td></tr>`).join('')}
       </tbody></table>`:''}`;
+}
+
+/* ============================================================
+   ROTINA: LIMPEZA DE DOCUMENTOS DE PEDIDOS ANTIGOS
+   Contrato em PDF ocupa espaço na nuvem. Pedido já faturado há
+   muito tempo não precisa mais guardar o arquivo no banco — o
+   pedido continua com o registro de que houve contrato.
+   ============================================================ */
+function tamanhoDocumentos(){
+  const todos = (DB.pedidos||[]).reduce((s,p)=>{
+    return s + (p.documentos||[]).reduce((t,d)=>t+(+d.kb||0),0);
+  },0);
+  return Math.round(todos);
+}
+
+function abrirLimpezaDocumentos(){
+  if(!precisaPermissao('dados','del') && !isMaster())
+    return alert('Apenas o master pode fazer a limpeza de documentos.');
+  const dias = +(DB.limpezaDocs && DB.limpezaDocs.dias) || 1825;
+  const limite = somarDias(hoje(), -dias);
+
+  const candidatos = (DB.pedidos||[]).filter(p=>{
+    if(p.situacao !== 'faturado') return false;
+    if(!(p.documentos||[]).length) return false;
+    const ref = p.faturadoEm || p.data || '';
+    return ref && ref < limite;
+  });
+  const kbCandidatos = Math.round(candidatos.reduce((s,p)=>s+(p.documentos||[]).reduce((t,d)=>t+(+d.kb||0),0),0));
+  const kbTotal = tamanhoDocumentos();
+
+  const corpo = `
+    <p class="hint" style="margin:0 0 12px">Os contratos e documentos dos pedidos ficam guardados dentro do sistema e ocupam
+    espaço no banco. Pedidos <b>já faturados</b> há muito tempo podem liberar os arquivos: o pedido continua registrado,
+    só o arquivo é apagado.</p>
+    <div class="cards" style="margin-bottom:14px">
+      <div class="kpi"><div class="l">Documentos hoje</div><div class="v" style="font-size:17px">${kbTotal>=1024?(kbTotal/1024).toFixed(1)+' MB':kbTotal+' KB'}</div>
+        <div class="s">em ${(DB.pedidos||[]).filter(p=>(p.documentos||[]).length).length} pedido(s)</div></div>
+      <div class="kpi"><div class="l">Podem ser liberados</div><div class="v ${kbCandidatos?'amb':''}" style="font-size:17px">${kbCandidatos>=1024?(kbCandidatos/1024).toFixed(1)+' MB':kbCandidatos+' KB'}</div>
+        <div class="s">${candidatos.length} pedido(s) faturado(s) há mais de ${dias} dias</div></div>
+    </div>
+    <div class="fld"><label>Guardar documentos dos últimos (dias)</label>
+      <input id="ld-dias" type="number" min="365" max="3650" step="365" value="${dias}">
+      <div class="hint" style="margin:2px 0 0">Pedidos faturados há mais tempo que isso perdem os arquivos. Padrão: 1825 dias (5 anos — prazo fiscal do contrato).</div></div>
+    <div class="fld full" style="margin-top:12px">
+      <label style="display:flex;gap:8px;align-items:center;font-weight:600">
+        <input type="checkbox" id="ld-auto" ${(DB.limpezaDocs&&DB.limpezaDocs.auto)?'checked':''} style="width:16px;height:16px">
+        Fazer esta limpeza automaticamente todo mês
+      </label>
+      <div class="hint" style="margin:2px 0 0 24px">Você recebe um aviso no chat com o que foi liberado.</div>
+    </div>
+    <div class="hint" style="margin-top:12px">⚠️ O arquivo apagado não volta. Se precisar guardar contrato por obrigação fiscal,
+    baixe antes de limpar (a tela do pedido tem o botão de download).</div>
+    <div class="bar" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+      <button type="button" class="b ok" onclick="limparDocumentosAgora()">🧹 Limpar agora</button>
+      <span class="hint" style="margin:0">Usa os dias acima (salve antes, se mudou o número).</span>
+    </div>`;
+
+  modal('Limpeza de documentos dos pedidos', corpo, ()=>{
+    const d = +val('ld-dias') || 90;
+    const auto = !!(document.getElementById('ld-auto')||{}).checked;
+    DB.limpezaDocs = {dias:d, auto, atualizadoEm:new Date().toISOString(),
+      atualizadoPor:(usuarioAtual()||{}).nome||''};
+    save();
+    logAcao('Configurou limpeza de documentos','dados', d+' dias · auto='+auto);
+    fechar(); renderAll();
+    alert('Rotina configurada.\n\nDocumentos de pedidos faturados há mais de '+d+' dias serão liberados'+
+      (auto? ' automaticamente todo mês.' : ' quando você usar o botão “Limpar agora”.'));
+  }, true);
+
+  setTimeout(()=>{
+    const i = document.getElementById('ld-dias');
+    if(i) i.oninput = ()=>{ /* recalcula ao vivo */ };
+  },0);
+}
+
+/* executa a limpeza; devolve o que liberou */
+function executarLimpezaDocumentos(manual){
+  const cfg = DB.limpezaDocs || {};
+  const dias = +cfg.dias || 1825;
+  const limite = somarDias(hoje(), -dias);
+  let pedidos = 0, arquivos = 0, kb = 0;
+  (DB.pedidos||[]).forEach(p=>{
+    if(p.situacao !== 'faturado') return;
+    const ref = p.faturadoEm || p.data || '';
+    if(!ref || ref >= limite) return;
+    if(!(p.documentos||[]).length) return;
+    arquivos += p.documentos.length;
+    kb += p.documentos.reduce((s,d)=>s+(+d.kb||0),0);
+    /* guarda o rastro de que existiam, sem o arquivo */
+    p.docsRemovidos = {quantidade:p.documentos.length, kb:Math.round(kb),
+      em:new Date().toISOString(), por:(usuarioAtual()||{}).nome||''};
+    p.documentos = [];
+    pedidos++;
+  });
+  if(pedidos){
+    save();
+    logAcao('Limpou documentos de pedidos antigos','dados',
+      pedidos+' pedido(s) · '+arquivos+' arquivo(s) · '+Math.round(kb)+' KB');
+  }
+  return {pedidos, arquivos, kb:Math.round(kb)};
+}
+
+function limparDocumentosAgora(){
+  if(!isMaster() && !precisaPermissao('dados','del')) return alert('Apenas o master pode fazer a limpeza.');
+  const cfg = DB.limpezaDocs || {};
+  alert('Vou liberar os documentos de pedidos faturados há mais de '+(+cfg.dias||90)+' dias.\n\n' +
+    'Os pedidos continuam registrados; só os arquivos são apagados.');
+  const r = executarLimpezaDocumentos(true);
+  if(!r.pedidos) return alert('Nada a limpar: não há pedido faturado antigo com documento.');
+  renderAll();
+  alert('Limpeza feita.\n\n'+r.pedidos+' pedido(s) · '+r.arquivos+' arquivo(s) · '+
+    (r.kb>=1024?(r.kb/1024).toFixed(1)+' MB':r.kb+' KB')+' liberados.');
 }
 
 /* ============================================================
@@ -6520,6 +6710,286 @@ function verDocPedido(id, i){
   const p = (DB.pedidos||[]).find(x=>x.id===id);
   const c = p && p.documentos ? p.documentos[i] : null;
   if(c) verComprovante(c);
+}
+
+/* ============================================================
+   PAGAMENTOS DIVERSOS DA EMPRESA — POR CENTRO DE CUSTO
+   Despesas que não são de veículo nem de fábrica: oficina,
+   funilaria, peças, veículos novos, usados e F&I.
+   Cada lançamento tem centro de custo, fornecedor, categoria,
+   vencimento, pago/em aberto e comprovante.
+   ============================================================ */
+
+const CENTROS_CUSTO = [
+  {k:'oficina',   l:'Oficina',         cor:'#3b82f6'},
+  {k:'funilaria', l:'Funilaria',       cor:'#a78bfa'},
+  {k:'pecas',     l:'Peças',           cor:'#22c55e'},
+  {k:'novos',     l:'Veículos Novos',  cor:'#f59e0b'},
+  {k:'usados',    l:'Veículos Usados', cor:'#ef4444'},
+  {k:'fi',        l:'F&I',             cor:'#06b6d4'}
+];
+const centroDe = k => CENTROS_CUSTO.find(c=>c.k===k) || {l:'—', cor:'#64748b'};
+const badgeCentro = k => { const c = centroDe(k);
+  return `<span class="tag" style="background:${c.cor}22;color:${c.cor}">${c.l}</span>`; };
+
+const CATEGORIAS_DIVERSAS = ['Água / energia','Aluguel','Combustível','Fornecedor de peças',
+  'Material de consumo','Manutenção predial','Marketing / publicidade','Salários / pró-labore',
+  'Impostos / taxas','Seguros','Serviços terceirizados','Software / sistemas',
+  'Telefone / internet','Vigilância','Outros'];
+
+let DIV_TMP = [];
+
+/* ---------- totais ---------- */
+function pagoDiverso(r){
+  return (DB.pagamentosDiversos||[]).filter(p=>p.contaId===r.id && concOk(p))
+    .reduce((s,p)=>s+(+p.valor||0),0);
+}
+function saldoDiverso(r){
+  return Math.max(0, (+r.valor||0) - pagoDiverso(r));
+}
+function statusDiverso(r){
+  const pago = pagoDiverso(r), saldo = saldoDiverso(r);
+  if(saldo <= 0.005) return {k:'quitado', l:'Pago'};
+  if(r.vencimento && diasAte(r.vencimento) < 0) return {k:'vencido', l:'Vencido há '+(-diasAte(r.vencimento))+'d'};
+  if(pago > 0.005) return {k:'parcial', l:'Parcial'};
+  return {k:'aberto', l:'Em aberto'};
+}
+
+/* ---------- tela ---------- */
+function renderDiversos(){
+  const el = document.getElementById('tbl-diversos'); if(!el) return;
+  DB.despesasDiversas = DB.despesasDiversas || [];
+  DB.pagamentosDiversos = DB.pagamentosDiversos || [];
+
+  const busca = (val('f-busca-dv')||'').toLowerCase();
+  const cc = val('f-cc-dv') || '';
+  const st = val('f-sit-dv') || 'aberto';
+  const ini = val('dv-ini'), fim = val('dv-fim');
+
+  let lista = DB.despesasDiversas.slice();
+  if(cc) lista = lista.filter(r=>r.centro===cc);
+  if(ini) lista = lista.filter(r=>(r.vencimento||r.data||'') >= ini);
+  if(fim) lista = lista.filter(r=>(r.vencimento||r.data||'') <= fim);
+  if(st === 'aberto') lista = lista.filter(r=>saldoDiverso(r) > 0.005);
+  else if(st === 'pago') lista = lista.filter(r=>saldoDiverso(r) <= 0.005);
+  else if(st === 'vencido') lista = lista.filter(r=>statusDiverso(r).k === 'vencido');
+  if(busca) lista = lista.filter(r=>[r.fornecedor, r.categoria, r.descricao, r.documento]
+    .join(' ').toLowerCase().includes(busca));
+  lista.sort((a,b)=>(a.vencimento||'').localeCompare(b.vencimento||''));
+
+  /* KPIs por centro de custo */
+  const k = document.getElementById('dv-kpis');
+  if(k){
+    const abertas = DB.despesasDiversas.filter(r=>saldoDiverso(r) > 0.005);
+    const vencidas = abertas.filter(r=>statusDiverso(r).k === 'vencido');
+    k.innerHTML = `
+      <div class="kpi"><div class="l">Em aberto</div><div class="v amb">${brl0(abertas.reduce((s,r)=>s+saldoDiverso(r),0))}</div>
+        <div class="s">${abertas.length} conta(s)</div></div>
+      <div class="kpi"><div class="l">Vencidas</div><div class="v neg">${brl0(vencidas.reduce((s,r)=>s+saldoDiverso(r),0))}</div>
+        <div class="s">${vencidas.length} conta(s)</div></div>
+      <div class="kpi"><div class="l">Pago no mês</div><div class="v pos">${brl0((DB.pagamentosDiversos||[])
+          .filter(p=>concOk(p) && String(p.data||'').slice(0,7)===hoje().slice(0,7))
+          .reduce((s,p)=>s+(+p.valor||0),0))}</div>
+        <div class="s">${(DB.pagamentosDiversos||[]).filter(p=>String(p.data||'').slice(0,7)===hoje().slice(0,7)).length} pagamento(s)</div></div>
+      <div class="kpi"><div class="l">Total do mês</div><div class="v">${brl0(DB.despesasDiversas
+          .filter(r=>String(r.vencimento||r.data||'').slice(0,7)===hoje().slice(0,7))
+          .reduce((s,r)=>s+(+r.valor||0),0))}</div>
+        <div class="s">lançado em ${hoje().slice(0,7).split('-').reverse().join('/')}</div></div>`;
+  }
+
+  /* resumo por centro */
+  const resumo = document.getElementById('dv-centros');
+  if(resumo){
+    const porCentro = {};
+    DB.despesasDiversas.forEach(r=>{
+      const c = r.centro || 'outros';
+      porCentro[c] = porCentro[c] || {total:0, pago:0, aberto:0, venc:0, qtd:0};
+      const s = saldoDiverso(r);
+      porCentro[c].total += (+r.valor||0);
+      porCentro[c].pago  += pagoDiverso(r);
+      porCentro[c].aberto += s;
+      porCentro[c].qtd++;
+      if(statusDiverso(r).k === 'vencido') porCentro[c].venc += s;
+    });
+    resumo.innerHTML = `<table class="tbl"><thead><tr><th>Centro de custo</th><th class="num">Lançado</th>
+      <th class="num">Pago</th><th class="num">Em aberto</th><th class="num">Vencido</th><th class="num">Contas</th></tr></thead><tbody>
+      ${CENTROS_CUSTO.map(c=>{
+        const d = porCentro[c.k]; if(!d) return '';
+        return `<tr><td>${badgeCentro(c.k)}</td>
+          <td class="num">${brl(d.total)}</td><td class="num pos">${brl(d.pago)}</td>
+          <td class="num ${d.aberto>0.005?'amb':'pos'}"><b>${brl(d.aberto)}</b></td>
+          <td class="num ${d.venc>0.005?'neg':''}">${brl(d.venc)}</td>
+          <td class="num">${d.qtd}</td></tr>`;}).join('')}
+      </tbody><tfoot><tr style="background:var(--panel2);font-weight:700">
+        <td>Total</td>
+        <td class="num">${brl(DB.despesasDiversas.reduce((s,r)=>s+(+r.valor||0),0))}</td>
+        <td class="num">${brl(DB.despesasDiversas.reduce((s,r)=>s+pagoDiverso(r),0))}</td>
+        <td class="num">${brl(DB.despesasDiversas.reduce((s,r)=>s+saldoDiverso(r),0))}</td>
+        <td class="num">${brl(DB.despesasDiversas.filter(r=>statusDiverso(r).k==='vencido').reduce((s,r)=>s+saldoDiverso(r),0))}</td>
+        <td class="num">${DB.despesasDiversas.length}</td></tr></tfoot></table>`;
+  }
+
+  if(!lista.length){
+    el.innerHTML = `<div class="empty">${DB.despesasDiversas.length
+      ? 'Nenhuma conta com esse filtro.'
+      : 'Nenhuma conta lançada. Use “＋ Nova conta” para registrar as despesas por centro de custo.'}</div>`;
+    return;
+  }
+  el.innerHTML = `<div style="overflow-x:auto"><table class="tbl"><thead><tr>
+      <th>Vencimento</th><th>Centro de custo</th><th>Fornecedor</th><th>Categoria</th>
+      <th class="num">Valor</th><th class="num">Pago</th><th class="num">Saldo</th>
+      <th>Situação</th><th></th></tr></thead><tbody>
+    ${lista.map(r=>{
+      const s = statusDiverso(r), pago = pagoDiverso(r), saldo = saldoDiverso(r);
+      return `<tr>
+        <td>${fmt(r.vencimento)}${r.documento?`<div class="hint" style="margin:0">${esc(r.documento)}</div>`:''}</td>
+        <td>${badgeCentro(r.centro)}</td>
+        <td>${esc(r.fornecedor||'—')}<div class="hint" style="margin:0">${esc(r.descricao||'')}</div></td>
+        <td>${esc(r.categoria||'—')}</td>
+        <td class="num">${brl(r.valor)}</td>
+        <td class="num pos">${brl(pago)}${seloComprovante(r)||''}</td>
+        <td class="num ${saldo>0.005?'amb':'pos'}"><b>${brl(saldo)}</b></td>
+        <td><span class="tag t-${s.k}">${s.l}</span></td>
+        <td style="white-space:nowrap">
+          ${saldo>0.005 && pode('pagamentos','edit')?`<button class="b sm ok" onclick="formPagarDiverso('${r.id}')" title="Registrar pagamento">💸</button>`:''}
+          ${pode('pagamentos','edit')?`<button class="b sm sec" onclick="formDespesaDiversa('${r.id}')" title="Alterar">✏️</button>`:''}
+          <button class="b sm sec" onclick="gerirDiverso('${r.id}')" title="Ver pagamentos">📄</button>
+          ${pode('pagamentos','del')?`<button class="b sm dang" onclick="excluirDespesaDiversa('${r.id}')" title="Excluir">🗑</button>`:''}
+        </td></tr>`;}).join('')}
+    </tbody></table></div>
+    <div class="hint">${lista.length} conta(s) · ${brl(lista.reduce((s,r)=>s+(+r.valor||0),0))}</div>`;
+}
+
+/* ---------- cadastro da conta ---------- */
+function formDespesaDiversa(id){
+  if(!precisaPermissao('pagamentos','edit')) return;
+  const r = id ? (DB.despesasDiversas||[]).find(x=>x.id===id) : null;
+  const n = r || {data: hoje(), vencimento: somarDias(hoje(), 30), centro:'oficina'};
+  modal(id ? 'Alterar conta a pagar' : 'Nova conta a pagar', `
+    <p class="hint" style="margin:0 0 12px">Despesas da empresa por <b>centro de custo</b>. Não entram no pagamento à fábrica
+    nem nos recebimentos de cliente.</p>
+    <div class="grid">
+      <div class="fld"><label>Centro de custo *</label>
+        <select id="dv-centro">
+          ${CENTROS_CUSTO.map(c=>`<option value="${c.k}" ${n.centro===c.k?'selected':''}>${c.l}</option>`).join('')}
+        </select></div>
+      <div class="fld"><label>Categoria</label>
+        <select id="dv-cat">
+          ${CATEGORIAS_DIVERSAS.map(c=>`<option ${n.categoria===c?'selected':''}>${c}</option>`).join('')}
+        </select></div>
+      <div class="fld full"><label>Fornecedor *</label>
+        <input id="dv-forn" value="${esc(n.fornecedor||'')}" list="dl-dv-forn" placeholder="nome do fornecedor">
+        <datalist id="dl-dv-forn">${[...new Set((DB.despesasDiversas||[]).map(x=>x.fornecedor).filter(Boolean))].map(f=>`<option value="${esc(f)}">`).join('')}</datalist></div>
+      <div class="fld"><label>Valor (R$) *</label><input id="dv-valor" type="number" step="0.01" value="${n.valor||''}"></div>
+      <div class="fld"><label>Vencimento</label><input id="dv-venc" type="date" value="${n.vencimento||''}"></div>
+      <div class="fld"><label>Documento / NF / boleto</label><input id="dv-doc" value="${esc(n.documento||'')}"></div>
+      <div class="fld"><label>Competência (mês)</label><input id="dv-comp" type="month" value="${(n.competencia||hoje()).slice(0,7)}"></div>
+      <div class="fld full"><label>Descrição</label><input id="dv-desc" value="${esc(n.descricao||'')}" placeholder="ex.: aluguel do galpão, peça de reposição…"></div>
+    </div>`, ()=>{
+    const forn = (val('dv-forn')||'').trim();
+    const valor = +val('dv-valor')||0;
+    if(!forn) return alert('Informe o fornecedor.');
+    if(valor <= 0) return alert('Informe o valor da conta.');
+    const dados = {
+      centro: val('dv-centro'), categoria: val('dv-cat'),
+      fornecedor: forn, valor,
+      vencimento: val('dv-venc') || hoje(),
+      documento: (val('dv-doc')||'').trim(),
+      competencia: (val('dv-comp')||hoje().slice(0,7)) + '-01',
+      descricao: (val('dv-desc')||'').trim(),
+      criadoPor: (usuarioAtual()||{}).nome||''
+    };
+    if(id) Object.assign(r, dados);
+    else {
+      DB.despesasDiversas = DB.despesasDiversas || [];
+      DB.despesasDiversas.push(Object.assign({id:uid(), criadoEm:new Date().toISOString()}, dados));
+    }
+    save(); logAcao(id?'Alterou conta a pagar':'Lançou conta a pagar','pagamentos',
+      centroDe(dados.centro).l+' · '+forn+' · '+brl(valor));
+    fechar(); renderAll();
+  }, true);
+}
+
+/* ---------- pagamento da conta ---------- */
+function formPagarDiverso(id){
+  if(!precisaPermissao('pagamentos','edit')) return;
+  const r = (DB.despesasDiversas||[]).find(x=>x.id===id); if(!r) return;
+  const pago = pagoDiverso(r), saldo = saldoDiverso(r);
+  COMPR_TMP = [];
+  modal('Pagar conta · '+centroDe(r.centro).l, `
+    <p class="hint" style="margin:0 0 12px"><b>${esc(r.fornecedor)}</b> · ${esc(r.categoria||'')}<br>
+      Valor ${brl(r.valor)} · pago ${brl(pago)} · <b class="amb">falta ${brl(saldo)}</b> · vence ${fmt(r.vencimento)}</p>
+    <div class="grid">
+      <div class="fld"><label>Data do pagamento</label><input id="dv-pdata" type="date" value="${hoje()}"></div>
+      <div class="fld"><label>Valor pago (R$) *</label><input id="dv-pvalor" type="number" step="0.01" value="${saldo.toFixed(2)}"></div>
+      <div class="fld"><label>Forma</label><select id="dv-pforma"><option>PIX</option><option>TED</option><option>Boleto</option>
+        <option>Débito em conta</option><option>Cheque</option><option>Dinheiro</option><option>Cartão</option><option>Outro</option></select></div>
+      <div class="fld"><label>Banco / conta</label><input id="dv-pconta" placeholder="ex.: Itaú c/ 1234-5"></div>
+      <div class="fld full"><label>Observação</label><input id="dv-pobs" placeholder="referência, parcela…"></div>
+      ${typeof blocoComprovante==='function' ? blocoComprovante(null) : ''}
+    </div>`, ()=>{
+    const v = +val('dv-pvalor')||0;
+    if(v <= 0) return alert('Informe o valor pago.');
+    if(v > saldo + 0.01){
+      if(!confirm('O valor ('+brl(v)+') é maior que o saldo ('+brl(saldo)+').\n\nRegistrar assim mesmo?')) return;
+    }
+    DB.pagamentosDiversos = DB.pagamentosDiversos || [];
+    const novo = {id:uid(), contaId:id, data:val('dv-pdata'), valor:v,
+      forma:val('dv-pforma'), conta:val('dv-pconta').trim(), obs:val('dv-pobs').trim(),
+      comprovantes: (typeof comprovantesDoForm==='function' ? comprovantesDoForm() : []),
+      criadoPor:(usuarioAtual()||{}).nome||''};
+    novo.conc = isMaster() ? 'conciliado' : 'pendente';
+    if(novo.conc === 'conciliado'){ novo.concPor = novo.criadoPor; novo.concEm = new Date().toISOString(); }
+    DB.pagamentosDiversos.push(novo);
+    save(); logAcao('Pagou conta diversa','pagamentos', r.fornecedor+' · '+brl(v));
+    fechar(); renderAll();
+    if(novo.conc === 'pendente') alert('Pagamento lançado.\n\nAguardando conciliação do master.');
+  });
+}
+
+/* ---------- detalhe da conta ---------- */
+function gerirDiverso(id){
+  const r = (DB.despesasDiversas||[]).find(x=>x.id===id); if(!r) return;
+  const ps = (DB.pagamentosDiversos||[]).filter(p=>p.contaId===id).sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+  const pago = pagoDiverso(r), saldo = saldoDiverso(r), s = statusDiverso(r);
+  document.getElementById('mbox-in').className = 'modal wide';
+  document.getElementById('mbox-body').innerHTML = `<h2>${esc(r.fornecedor)}</h2>
+    <p class="hint" style="margin:0 0 12px">${badgeCentro(r.centro)} · ${esc(r.categoria||'')} · competência ${fmt(r.competencia)} · vence ${fmt(r.vencimento)}
+      ${r.documento?' · doc '+esc(r.documento):''}${r.descricao?'<br>'+esc(r.descricao):''}</p>
+    <div class="cards" style="margin-bottom:14px">
+      <div class="kpi"><div class="l">Valor</div><div class="v" style="font-size:16px">${brl(r.valor)}</div><div class="s">${esc(r.categoria||'')}</div></div>
+      <div class="kpi"><div class="l">Pago</div><div class="v pos" style="font-size:16px">${brl(pago)}</div><div class="s">${ps.length} pagamento(s)</div></div>
+      <div class="kpi"><div class="l">Saldo</div><div class="v ${saldo>0.005?'amb':'pos'}" style="font-size:16px">${brl(saldo)}</div><div class="s">${s.l}</div></div>
+    </div>
+    ${ps.length ? `<table class="tbl"><thead><tr><th>Data</th><th class="num">Valor</th><th>Forma</th><th>Conta</th><th>Obs.</th><th></th></tr></thead><tbody>
+      ${ps.map(p=>`<tr><td>${fmt(p.data)}${seloConc(p)}${seloComprovante(p)}</td>
+        <td class="num"><b>${brl(p.valor)}</b></td><td>${esc(p.forma||'—')}</td>
+        <td>${esc(p.conta||'—')}</td><td>${esc(p.obs||'—')}</td>
+        <td>${pode('pagamentos','del')?`<button class="b sm dang" onclick="excluirPagDiverso('${p.id}','${id}')">🗑</button>`:''}</td></tr>`).join('')}
+      </tbody></table>` : '<div class="empty" style="padding:18px">Nenhum pagamento registrado.</div>'}
+    <div class="mfoot" style="justify-content:space-between">
+      ${saldo>0.005 && pode('pagamentos','edit')?`<button class="b ok" onclick="formPagarDiverso('${id}')">💸 Pagar</button>`:'<span class="hint" style="margin:0">Conta quitada.</span>'}
+      <button class="b sec" onclick="fechar()">Fechar</button>
+    </div>`;
+  document.getElementById('mbox').classList.add('on');
+}
+function excluirPagDiverso(id, contaId){
+  if(!precisaPermissao('pagamentos','del')) return;
+  const p = (DB.pagamentosDiversos||[]).find(x=>x.id===id); if(!p) return;
+  if(!confirm('Excluir o pagamento de '+brl(p.valor)+' de '+fmt(p.data)+'?')) return;
+  DB.pagamentosDiversos = DB.pagamentosDiversos.filter(x=>x.id!==id);
+  save(); renderAll(); gerirDiverso(contaId);
+}
+function excluirDespesaDiversa(id){
+  if(!precisaPermissao('pagamentos','del')) return;
+  const r = (DB.despesasDiversas||[]).find(x=>x.id===id); if(!r) return;
+  const ps = (DB.pagamentosDiversos||[]).filter(p=>p.contaId===id);
+  if(!confirm('Excluir a conta de '+esc(r.fornecedor)+' ('+brl(r.valor)+')?'+
+    (ps.length?'\n\n'+ps.length+' pagamento(s) vinculados também serão apagados.':''))) return;
+  DB.pagamentosDiversos = (DB.pagamentosDiversos||[]).filter(p=>p.contaId!==id);
+  DB.despesasDiversas = (DB.despesasDiversas||[]).filter(x=>x.id!==id);
+  save(); logAcao('Excluiu conta diversa','pagamentos', r.fornecedor+' · '+brl(r.valor));
+  renderAll();
 }
 
 </script>
