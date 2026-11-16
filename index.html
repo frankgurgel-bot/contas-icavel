@@ -93,6 +93,7 @@
   .ctabs button{background:var(--panel2); border:1px solid var(--line); color:var(--mut); border-radius:8px; padding:8px 14px; font-size:13px; cursor:pointer; font-family:inherit}
   .ctabs button.on{color:#fff; background:var(--acc); border-color:var(--acc); font-weight:600}
   .ctab{display:none} .ctab.on{display:block}
+  .dvtab{display:none} .dvtab.on{display:block}
   .rep-opt{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-bottom:16px}
   .rep-opt button{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; text-align:left; color:var(--txt); cursor:pointer; font-size:13.5px; font-family:inherit}
   .rep-opt button:hover{border-color:var(--acc)}
@@ -331,35 +332,59 @@
   </section>
 
   <section class="view" id="v-diversos">
-    <h1>Pagamentos diversos</h1>
-    <p class="sub">Despesas da empresa por <b>centro de custo</b>: Oficina, Funilaria, Peças, Veículos Novos, Usados e F&amp;I.
-    Cada conta tem fornecedor, categoria, vencimento e comprovante do pagamento. Não se mistura com o pagamento à fábrica.</p>
-    <div class="cards" id="dv-kpis"></div>
-    <div class="bar">
-      <button class="b ok" data-perm="pagamentos:edit" onclick="formDespesaDiversa()">＋ Nova conta</button>
-      <input id="f-busca-dv" placeholder="Buscar fornecedor, categoria, documento…" oninput="renderDiversos()" style="flex:1;min-width:170px">
-      <select id="f-cc-dv" onchange="renderDiversos()">
-        <option value="">Todos os centros</option>
-        <option value="oficina">Oficina</option>
-        <option value="funilaria">Funilaria</option>
-        <option value="pecas">Peças</option>
-        <option value="novos">Veículos Novos</option>
-        <option value="usados">Veículos Usados</option>
-        <option value="fi">F&amp;I</option>
-      </select>
-      <select id="f-sit-dv" onchange="renderDiversos()">
-        <option value="aberto">Em aberto</option>
-        <option value="vencido">Vencidas</option>
-        <option value="pago">Pagas</option>
-        <option value="todos">Todas</option>
-      </select>
-      <input id="dv-ini" type="date" onchange="renderDiversos()" title="de">
-      <input id="dv-fim" type="date" onchange="renderDiversos()" title="até">
-      <button class="b sec" data-perm="pagamentos:ver" onclick="window.print()">🖨 PDF</button>
+    <h1>Diversos — a pagar e a receber</h1>
+    <p class="sub">Movimentações da empresa por <b>centro de custo</b> (Oficina, Funilaria, Peças, Veículos Novos, Usados e F&amp;I),
+    separadas do pagamento à fábrica e das vendas de veículo. Duas abas: <b>contas a pagar</b> (fornecedores) e
+    <b>contas a receber</b> (clientes, seguradoras, repasses que não são de veículo).</p>
+
+    <div class="ctabs">
+      <button data-dvt="pagar" class="on">💸 Contas a pagar</button>
+      <button data-dvt="receber">💵 Contas a receber</button>
     </div>
-    <div class="sect" style="margin:6px 0 8px">Resumo por centro de custo</div>
-    <div id="dv-centros" style="margin-bottom:18px"></div>
-    <div id="tbl-diversos"></div>
+
+    <div class="dvtab on" id="dvt-pagar">
+      <div class="cards" id="dv-kpis"></div>
+      <div class="bar">
+        <button class="b ok" data-perm="pagamentos:edit" onclick="formDespesaDiversa()">＋ Nova conta a pagar</button>
+        <input id="f-busca-dv" placeholder="Buscar fornecedor, categoria, documento…" oninput="renderDiversos()" style="flex:1;min-width:170px">
+        <select id="f-cc-dv" onchange="renderDiversos()">
+          <option value="">Todos os centros</option>
+        </select>
+        <select id="f-sit-dv" onchange="renderDiversos()">
+          <option value="aberto">Em aberto</option>
+          <option value="vencido">Vencidas</option>
+          <option value="pago">Pagas</option>
+          <option value="todos">Todas</option>
+        </select>
+        <input id="dv-ini" type="date" onchange="renderDiversos()" title="de">
+        <input id="dv-fim" type="date" onchange="renderDiversos()" title="até">
+        <button class="b sec" data-perm="pagamentos:ver" onclick="window.print()">🖨 PDF</button>
+      </div>
+      <div class="sect" style="margin:6px 0 8px">Resumo por centro de custo — a pagar</div>
+      <div id="dv-centros" style="margin-bottom:18px"></div>
+      <div id="tbl-diversos"></div>
+    </div>
+
+    <div class="dvtab" id="dvt-receber">
+      <div class="cards" id="dr-kpis"></div>
+      <div class="bar">
+        <button class="b ok" data-perm="diversos:edit" onclick="formReceitaDiversa()">＋ Nova conta a receber</button>
+        <input id="f-busca-dr" placeholder="Buscar cliente, categoria, documento…" oninput="renderReceitas()" style="flex:1;min-width:170px">
+        <select id="f-cc-dr" onchange="renderReceitas()">
+          <option value="">Todos os centros</option>
+        </select>
+        <select id="f-sit-dr" onchange="renderReceitas()">
+          <option value="aberto">Em aberto</option>
+          <option value="vencido">Vencidas</option>
+          <option value="recebido">Recebidas</option>
+          <option value="todos">Todas</option>
+        </select>
+        <button class="b sec" data-perm="diversos:ver" onclick="window.print()">🖨 PDF</button>
+      </div>
+      <div class="sect" style="margin:6px 0 8px">Resumo por centro de custo — a receber</div>
+      <div id="dr-centros" style="margin-bottom:18px"></div>
+      <div id="tbl-receitas"></div>
+    </div>
   </section>
 
   <section class="view" id="v-conciliacao">
@@ -409,24 +434,31 @@
       <button onclick="relCobranca()"><b>10 · Cobrança por cliente</b><span>Carta de cobrança formal por cliente, com os títulos em aberto e o total</span></button>
       <button data-perm="vendas:ver" onclick="relAntecipacoes()"><b>11 · Antecipações de venda direta</b><span>O que o cliente já pagou antes do faturamento, por pedido</span></button>
       <button data-perm="vendas:ver" onclick="relVendaDireta()"><b>12 · Venda direta — faturado x falta faturar</b><span>Pedidos aguardando a fábrica, já faturados e antecipações</span></button>
+      <button onclick="relTiposMovimento()"><b>13 · Movimentação por tipo</b><span>Quanto entrou e saiu em cada tipo, e o que está em aberto</span></button>
     </div>
     <div id="rep-out"><div class="empty">Escolha um relatório acima.</div></div>
   </section>
 
   <section class="view" id="v-cadastros">
     <h1>Cadastros</h1>
-    <p class="sub">Tipos de recebimento classificam cada título (entrada, financiamento, bônus de fábrica, troca…). Pagadores são bancos, financeiras, fábrica e clientes que efetivamente pagam.</p>
+    <p class="sub">O <b>tipo</b> classifica cada movimentação: os de <b>receber</b> (entrada, financiamento, bônus, serviços) e os de <b>pagar</b>
+    (aluguel, peças, combustível, salários…). Os tipos aparecem em todos os lançamentos e relatórios. Pagadores são bancos, financeiras, fábrica e clientes que efetivamente pagam.</p>
     <div class="ctabs">
-      <button data-c="tipos" class="on">🏷 Tipos de recebimento</button>
+      <button data-c="tipos-receber" class="on">🏷 Tipos a receber</button>
+      <button data-c="tipos-pagar">🏷 Tipos a pagar</button>
       <button data-c="pagadores">🏦 Pagadores / Financeiras</button>
       <button data-c="clientes">👥 Clientes</button>
       <button data-c="vendedores">🧑‍💼 Vendedores</button>
       <button data-c="juros">％ Juros Floor Plan / FDIC</button>
       <button data-c="prazo">📅 Prazo da fábrica</button>
     </div>
-    <div class="ctab on" id="c-tipos">
-      <div class="bar"><button class="b" data-perm="cadastros:edit" onclick="formTipo()">＋ Novo tipo</button></div>
-      <div id="tbl-tipos"></div>
+    <div class="ctab on" id="c-tipos-receber">
+      <div class="bar"><button class="b" data-perm="cadastros:edit" onclick="formTipoReceber()">＋ Novo tipo a receber</button></div>
+      <div id="tbl-tipos-receber"></div>
+    </div>
+    <div class="ctab" id="c-tipos-pagar">
+      <div class="bar"><button class="b" data-perm="cadastros:edit" onclick="formTipoPagar()">＋ Novo tipo a pagar</button></div>
+      <div id="tbl-tipos-pagar"></div>
     </div>
     <div class="ctab" id="c-pagadores">
       <div class="bar"><button class="b" data-perm="cadastros:edit" onclick="formPagador()">＋ Novo pagador</button></div>
@@ -518,7 +550,7 @@ const ACOES = [{k:'ver', l:'Ver'}, {k:'edit', l:'Criar/Editar'}, {k:'del', l:'Ex
 
 const SUPA_URL = 'https://ukwfouwxhpxotrwwxxre.supabase.co';
 const SUPA_KEY = 'sb_publishable_c-e_CeLKkPbZ0UzLfXNbug_fhwqjjGt';
-const COLS = ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog','pedidos','recebimentosPedido','despesasDiversas','pagamentosDiversos'];
+const COLS = ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog','pedidos','recebimentosPedido','despesasDiversas','pagamentosDiversos','receitasDiversas','recebimentosDiversos','tiposPagar'];
 
 const CLOUD = {
   sessao: null,        // {access_token, refresh_token, expires_at}
@@ -647,7 +679,7 @@ async function atualizarPerfil(uid, dados){
 async function baixarTudo(){
   const rows = await apiRest('registros?select=tabela,id,payload,atualizado_em&limit=20000');
   DB = {vendas:[], titulos:[], recebimentos:[], veiculos:[], tipos:[], pagadores:[], clientes:[],
-        vendedores:[], usuarios:[], log:[], pagamentosFabrica:[], concLog:[], pedidos:[], recebimentosPedido:[], juros:{}};
+        vendedores:[], usuarios:[], log:[], pagamentosFabrica:[], concLog:[], pedidos:[], recebimentosPedido:[], despesasDiversas:[], pagamentosDiversos:[], receitasDiversas:[], recebimentosDiversos:[], juros:{}};
   (rows||[]).forEach(r=>{
     if(r.tabela === 'juros'){ DB.juros = r.payload || {}; return; }
     if(!DB[r.tabela]) DB[r.tabela] = [];
@@ -2203,6 +2235,19 @@ function itensConciliacao(){
       conc:p.conc || 'conciliado'
     });
   });
+  /* contas diversas (a pagar e a receber) */
+  (DB.pagamentosDiversos||[]).forEach(p=>{
+    const d = (DB.despesasDiversas||[]).find(x=>x.id===p.contaId) || {};
+    out.push({tipo:'pagamento', id:p.id, data:p.data||'', valor:+p.valor||0, reg:p,
+      chassi:'', carro:'', cliente:d.fornecedor||'', desc:'Diverso · '+(d.categoria||''),
+      quem:p.criadoPor||'—', conc:p.conc||'conciliado', area:'pagar'});
+  });
+  (DB.recebimentosDiversos||[]).forEach(p=>{
+    const d = (DB.receitasDiversas||[]).find(x=>x.id===p.contaId) || {};
+    out.push({tipo:'recebimento', id:p.id, data:p.data||'', valor:+p.valor||0, reg:p,
+      chassi:'', carro:'', cliente:d.cliente||'', desc:'Diverso · '+(d.categoria||''),
+      quem:p.criadoPor||'—', conc:p.conc||'conciliado', area:'receber'});
+  });
   return out.sort((a,b)=>(b.data||'').localeCompare(a.data||''));
 }
 const somarConc = arr => arr.reduce((s,x)=>s+x.valor, 0);
@@ -2349,9 +2394,10 @@ function conciliarSelecionados(){
 
 /* ---------- ações ---------- */
 function acharRegistroConc(tipo, id){
-  return tipo === 'recebimento'
-    ? (DB.recebimentos||[]).find(r=>r.id===id)
-    : (DB.pagamentosFabrica||[]).find(p=>p.id===id);
+  const lista = tipo === 'recebimento'
+    ? [...(DB.recebimentos||[]), ...(DB.recebimentosPedido||[]), ...(DB.recebimentosDiversos||[])]
+    : [...(DB.pagamentosFabrica||[]), ...(DB.pagamentosDiversos||[])];
+  return lista.find(r=>r.id===id) || null;
 }
 /* status de destino conforme quem age */
 function destinoConciliacao(tipo){
@@ -2379,7 +2425,9 @@ function aplicarConciliacao(tipo, id, status, obs){
   return true;
 }
 function chassiDoRegistro(tipo, reg){
+  if(!reg) return '';
   if(tipo === 'pagamento') return reg.chassi || '';
+  if(!reg.tituloId) return '';           // baixa de conta diversa: sem título de veículo
   const t = titulo(reg.tituloId) || {};
   const v = venda(t.vendaId) || {};
   return v.chassi || '';
@@ -2524,8 +2572,9 @@ const SEED_PAGADORES = [
 ].map((nome,i)=>({id:'p-'+(i+1), nome, tipo: i===0?'Cliente':(i>=9?'Fábrica':'Financeira')}));
 
 function normalize(){
-  ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog','pedidos','recebimentosPedido','despesasDiversas','pagamentosDiversos'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k]=[]; });
+  ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog','pedidos','recebimentosPedido','despesasDiversas','pagamentosDiversos','receitasDiversas','recebimentosDiversos','tiposPagar'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k]=[]; });
   if(!DB.tipos.length) DB.tipos = SEED_TIPOS.map(x=>({...x}));
+  if(typeof aplicarSeedTiposPagar === 'function') aplicarSeedTiposPagar();
   if(!DB.pagadores.length) DB.pagadores = SEED_PAGADORES.map(x=>({...x}));
   DB.titulos.forEach(t=>{
     t.valor = +t.valor || 0;
@@ -2590,10 +2639,30 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(t) t.textContent = b.textContent.trim();
   renderAll();
 });
-document.querySelectorAll('.ctabs button').forEach(b=>b.onclick=()=>{
-  document.querySelectorAll('.ctabs button').forEach(x=>x.classList.remove('on'));
-  document.querySelectorAll('.ctab').forEach(x=>x.classList.remove('on'));
-  b.classList.add('on'); document.getElementById('c-'+b.dataset.c).classList.add('on');
+/* abas da tela "Diversos" (a pagar / a receber) */
+/* abas: dois tipos convivem na mesma classe .ctabs
+   - [data-c]  -> abas de Cadastros (c-xxx)
+   - [data-dvt]-> abas de Diversos (dvt-xxx)                     */
+document.querySelectorAll('.ctabs button').forEach(b=>{
+  b.onclick = ()=>{
+    const grupo = b.closest('.ctabs');
+    const irmaos = grupo ? grupo.querySelectorAll('button') : [b];
+    irmaos.forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+
+    if(b.dataset.c){
+      document.querySelectorAll('.ctab').forEach(x=>x.classList.remove('on'));
+      const alvo = document.getElementById('c-'+b.dataset.c);
+      if(alvo) alvo.classList.add('on');
+    }
+    if(b.dataset.dvt){
+      document.querySelectorAll('.dvtab').forEach(x=>x.classList.remove('on'));
+      const alvo = document.getElementById('dvt-'+b.dataset.dvt);
+      if(alvo) alvo.classList.add('on');
+      if(b.dataset.dvt === 'receber' && typeof renderReceitas==='function') renderReceitas();
+      if(b.dataset.dvt === 'pagar' && typeof renderDiversos==='function') renderDiversos();
+    }
+  };
 });
 const val = id => { const e = document.getElementById(id); return e ? e.value : ''; };
 const setv = (id,v) => { const e = document.getElementById(id); if(e) e.value = v==null?'':v; };
@@ -3236,6 +3305,8 @@ function renderTipos(){
     }).join('')}</tbody></table>`;
 }
 function formTipo(id){
+  /* compatibilidade: o cadastro agora é por fluxo (receber/pagar) */
+  if(typeof formTipoReceber === 'function') return formTipoReceber(id);
   if(!precisaPermissao('cadastros', id?'edit':'edit')) return;
   const t = id ? tipo(id)||{} : {};
   modal(id?'Editar tipo':'Novo tipo de recebimento', `<div class="grid">
@@ -3734,6 +3805,9 @@ function renderAll(){
   if(typeof renderPrazoFab === 'function') renderPrazoFab();
   if(typeof renderPedidos==='function') renderPedidos();
   if(typeof renderDiversos==='function') renderDiversos();
+  if(typeof renderReceitas==='function') renderReceitas();
+  if(typeof renderTiposReceber==='function') renderTiposReceber();
+  if(typeof renderTiposPagar==='function') renderTiposPagar();
   if(typeof renderConciliacao==='function'){ renderConciliacao(); atualizarBadgeConc(); }
   if(typeof renderUsuarios==='function') renderUsuarios();
   renderPeriodoHint();
@@ -6726,8 +6800,22 @@ const CENTROS_CUSTO = [
   {k:'pecas',     l:'Peças',           cor:'#22c55e'},
   {k:'novos',     l:'Veículos Novos',  cor:'#f59e0b'},
   {k:'usados',    l:'Veículos Usados', cor:'#ef4444'},
-  {k:'fi',        l:'F&I',             cor:'#06b6d4'}
+  {k:'fi',        l:'F&I',             cor:'#06b6d4'},
+  {k:'adm',       l:'Administrativo',  cor:'#8b5cf6'}
 ];
+
+/* preenche os seletores de centro de custo a partir da lista única,
+   para "a pagar" e "a receber" usarem SEMPRE as mesmas opções */
+function preencherSelectsCentros(){
+  ['f-cc-dv','f-cc-dr'].forEach(id=>{
+    const sel = document.getElementById(id);
+    if(!sel) return;
+    const atual = sel.value;
+    sel.innerHTML = '<option value="">Todos os centros</option>' +
+      CENTROS_CUSTO.map(c=>`<option value="${c.k}">${c.l}</option>`).join('');
+    if(atual) sel.value = atual;
+  });
+}
 const centroDe = k => CENTROS_CUSTO.find(c=>c.k===k) || {l:'—', cor:'#64748b'};
 const badgeCentro = k => { const c = centroDe(k);
   return `<span class="tag" style="background:${c.cor}22;color:${c.cor}">${c.l}</span>`; };
@@ -6758,6 +6846,7 @@ function statusDiverso(r){
 /* ---------- tela ---------- */
 function renderDiversos(){
   const el = document.getElementById('tbl-diversos'); if(!el) return;
+  preencherSelectsCentros();
   DB.despesasDiversas = DB.despesasDiversas || [];
   DB.pagamentosDiversos = DB.pagamentosDiversos || [];
 
@@ -6873,10 +6962,12 @@ function formDespesaDiversa(id){
         <select id="dv-centro">
           ${CENTROS_CUSTO.map(c=>`<option value="${c.k}" ${n.centro===c.k?'selected':''}>${c.l}</option>`).join('')}
         </select></div>
-      <div class="fld"><label>Categoria</label>
+      <div class="fld"><label>Tipo de conta a pagar *</label>
         <select id="dv-cat">
-          ${CATEGORIAS_DIVERSAS.map(c=>`<option ${n.categoria===c?'selected':''}>${c}</option>`).join('')}
-        </select></div>
+          ${(typeof opcoesTiposPagar==='function'? opcoesTiposPagar() : []).map(t=>
+            `<option value="${esc(t.nome)}" ${n.categoria===t.nome?'selected':''}>${esc(t.nome)} · ${esc(t.categoria||'')}</option>`).join('')}
+        </select>
+        <div class="hint" style="margin:2px 0 0">Cadastrados em Cadastros → Tipos a pagar.</div></div>
       <div class="fld full"><label>Fornecedor *</label>
         <input id="dv-forn" value="${esc(n.fornecedor||'')}" list="dl-dv-forn" placeholder="nome do fornecedor">
         <datalist id="dl-dv-forn">${[...new Set((DB.despesasDiversas||[]).map(x=>x.fornecedor).filter(Boolean))].map(f=>`<option value="${esc(f)}">`).join('')}</datalist></div>
@@ -6890,8 +6981,9 @@ function formDespesaDiversa(id){
     const valor = +val('dv-valor')||0;
     if(!forn) return alert('Informe o fornecedor.');
     if(valor <= 0) return alert('Informe o valor da conta.');
+    const tipoSel = (typeof tipoPagarPorNome==='function') ? tipoPagarPorNome(val('dv-cat')) : null;
     const dados = {
-      centro: val('dv-centro'), categoria: val('dv-cat'),
+      centro: val('dv-centro'), categoria: val('dv-cat'), tipoId: tipoSel? tipoSel.id : '',
       fornecedor: forn, valor,
       vencimento: val('dv-venc') || hoje(),
       documento: (val('dv-doc')||'').trim(),
@@ -6990,6 +7082,502 @@ function excluirDespesaDiversa(id){
   DB.despesasDiversas = (DB.despesasDiversas||[]).filter(x=>x.id!==id);
   save(); logAcao('Excluiu conta diversa','pagamentos', r.fornecedor+' · '+brl(r.valor));
   renderAll();
+}
+
+/* ============================================================
+   CONTAS A RECEBER DIVERSAS
+   Receitas que não vêm de venda de veículo: serviços de oficina
+   e funilaria, venda de peças, comissões de F&I, etc.
+   Mesmo centro de custo, mesma lógica de baixa e comprovante.
+   ============================================================ */
+
+const CATEGORIAS_RECEITA = ['Serviço de oficina','Serviço de funilaria','Venda de peças',
+  'Comissão de seguro','Comissão de financiamento','Ressarcimento de fábrica',
+  'Aluguel recebido','Serviço terceirizado','Venda de sucata','Outros'];
+
+function recebidoDiverso(r){
+  return (DB.recebimentosDiversos||[]).filter(p=>p.contaId===r.id && concOk(p))
+    .reduce((s,p)=>s+(+p.valor||0),0);
+}
+function saldoReceita(r){ return Math.max(0, (+r.valor||0) - recebidoDiverso(r)); }
+function statusReceita(r){
+  const rec = recebidoDiverso(r), saldo = saldoReceita(r);
+  if(saldo <= 0.005) return {k:'quitado', l:'Recebido'};
+  if(r.vencimento && diasAte(r.vencimento) < 0) return {k:'vencido', l:'Vencido há '+(-diasAte(r.vencimento))+'d'};
+  if(rec > 0.005) return {k:'parcial', l:'Parcial'};
+  return {k:'aberto', l:'Em aberto'};
+}
+
+function renderReceitas(){
+  const el = document.getElementById('tbl-receitas'); if(!el) return;
+  preencherSelectsCentros();
+  DB.receitasDiversas = DB.receitasDiversas || [];
+  DB.recebimentosDiversos = DB.recebimentosDiversos || [];
+
+  const busca = (val('f-busca-dr')||'').toLowerCase();
+  const cc = val('f-cc-dr') || '';
+  const st = val('f-sit-dr') || 'aberto';
+
+  let lista = DB.receitasDiversas.slice();
+  if(cc) lista = lista.filter(r=>r.centro===cc);
+  if(st === 'aberto') lista = lista.filter(r=>saldoReceita(r) > 0.005);
+  else if(st === 'recebido') lista = lista.filter(r=>saldoReceita(r) <= 0.005);
+  else if(st === 'vencido') lista = lista.filter(r=>statusReceita(r).k === 'vencido');
+  if(busca) lista = lista.filter(r=>[r.cliente, r.categoria, r.descricao, r.documento]
+    .join(' ').toLowerCase().includes(busca));
+  lista.sort((a,b)=>(a.vencimento||'').localeCompare(b.vencimento||''));
+
+  const k = document.getElementById('dr-kpis');
+  if(k){
+    const abertas = DB.receitasDiversas.filter(r=>saldoReceita(r) > 0.005);
+    const vencidas = abertas.filter(r=>statusReceita(r).k === 'vencido');
+    k.innerHTML = `
+      <div class="kpi"><div class="l">A receber</div><div class="v amb">${brl0(abertas.reduce((s,r)=>s+saldoReceita(r),0))}</div>
+        <div class="s">${abertas.length} conta(s)</div></div>
+      <div class="kpi"><div class="l">Vencidas</div><div class="v neg">${brl0(vencidas.reduce((s,r)=>s+saldoReceita(r),0))}</div>
+        <div class="s">${vencidas.length} conta(s)</div></div>
+      <div class="kpi"><div class="l">Recebido no mês</div><div class="v pos">${brl0((DB.recebimentosDiversos||[])
+          .filter(p=>concOk(p) && String(p.data||'').slice(0,7)===hoje().slice(0,7))
+          .reduce((s,p)=>s+(+p.valor||0),0))}</div>
+        <div class="s">${(DB.recebimentosDiversos||[]).filter(p=>String(p.data||'').slice(0,7)===hoje().slice(0,7)).length} recebimento(s)</div></div>
+      <div class="kpi"><div class="l">Total do mês</div><div class="v">${brl0(DB.receitasDiversas
+          .filter(r=>String(r.vencimento||r.data||'').slice(0,7)===hoje().slice(0,7))
+          .reduce((s,r)=>s+(+r.valor||0),0))}</div>
+        <div class="s">lançado no mês</div></div>`;
+  }
+
+  const resumo = document.getElementById('dr-centros');
+  if(resumo){
+    const porCentro = {};
+    DB.receitasDiversas.forEach(r=>{
+      const c = r.centro || 'outros';
+      porCentro[c] = porCentro[c] || {total:0, rec:0, aberto:0, venc:0, qtd:0};
+      const s = saldoReceita(r);
+      porCentro[c].total += (+r.valor||0);
+      porCentro[c].rec += recebidoDiverso(r);
+      porCentro[c].aberto += s;
+      porCentro[c].qtd++;
+      if(statusReceita(r).k === 'vencido') porCentro[c].venc += s;
+    });
+    resumo.innerHTML = `<table class="tbl"><thead><tr><th>Centro de custo</th><th class="num">Lançado</th>
+      <th class="num">Recebido</th><th class="num">A receber</th><th class="num">Vencido</th><th class="num">Contas</th></tr></thead><tbody>
+      ${CENTROS_CUSTO.map(c=>{
+        const d = porCentro[c.k]; if(!d) return '';
+        return `<tr><td>${badgeCentro(c.k)}</td>
+          <td class="num">${brl(d.total)}</td><td class="num pos">${brl(d.rec)}</td>
+          <td class="num ${d.aberto>0.005?'amb':'pos'}"><b>${brl(d.aberto)}</b></td>
+          <td class="num ${d.venc>0.005?'neg':''}">${brl(d.venc)}</td>
+          <td class="num">${d.qtd}</td></tr>`;}).join('')}
+      </tbody></table>`;
+  }
+
+  if(!lista.length){
+    el.innerHTML = `<div class="empty">${DB.receitasDiversas.length
+      ? 'Nenhuma conta com esse filtro.'
+      : 'Nenhuma conta a receber lançada. Use “＋ Nova conta a receber” para registrar serviços, peças e comissões.'}</div>`;
+    return;
+  }
+  el.innerHTML = `<div style="overflow-x:auto"><table class="tbl"><thead><tr>
+      <th>Vencimento</th><th>Centro de custo</th><th>Cliente</th><th>Categoria</th>
+      <th class="num">Valor</th><th class="num">Recebido</th><th class="num">Saldo</th>
+      <th>Situação</th><th></th></tr></thead><tbody>
+    ${lista.map(r=>{
+      const s = statusReceita(r), rec = recebidoDiverso(r), saldo = saldoReceita(r);
+      return `<tr>
+        <td>${fmt(r.vencimento)}${r.documento?`<div class="hint" style="margin:0">${esc(r.documento)}</div>`:''}</td>
+        <td>${badgeCentro(r.centro)}</td>
+        <td>${esc(r.cliente||'—')}<div class="hint" style="margin:0">${esc(r.descricao||'')}</div></td>
+        <td>${esc(r.categoria||'—')}</td>
+        <td class="num">${brl(r.valor)}</td>
+        <td class="num pos">${brl(rec)}${seloComprovante(r)||''}</td>
+        <td class="num ${saldo>0.005?'amb':'pos'}"><b>${brl(saldo)}</b></td>
+        <td><span class="tag t-${s.k}">${s.l}</span></td>
+        <td style="white-space:nowrap">
+          ${saldo>0.005 && pode('diversos','edit')?`<button class="b sm ok" onclick="formReceberDiverso('${r.id}')" title="Registrar recebimento">💵</button>`:''}
+          ${pode('diversos','edit')?`<button class="b sm sec" onclick="formReceitaDiversa('${r.id}')" title="Alterar">✏️</button>`:''}
+          ${pode('diversos','del')?`<button class="b sm dang" onclick="excluirReceitaDiversa('${r.id}')" title="Excluir">🗑</button>`:''}
+        </td></tr>`;}).join('')}
+    </tbody></table></div>
+    <div class="hint">${lista.length} conta(s) · ${brl(lista.reduce((s,r)=>s+(+r.valor||0),0))}</div>`;
+}
+
+function formReceitaDiversa(id){
+  if(!precisaPermissao('diversos','edit')) return;
+  const r = id ? (DB.receitasDiversas||[]).find(x=>x.id===id) : null;
+  const n = r || {data: hoje(), vencimento: somarDias(hoje(), 30), centro:'oficina'};
+  modal(id ? 'Alterar conta a receber' : 'Nova conta a receber', `
+    <p class="hint" style="margin:0 0 12px">Receitas que <b>não</b> vêm de venda de veículo: serviços, peças, comissões.
+    Ficam separadas dos títulos de cliente do carro.</p>
+    <div class="grid">
+      <div class="fld"><label>Centro de custo *</label>
+        <select id="dr-centro">
+          ${CENTROS_CUSTO.map(c=>`<option value="${c.k}" ${n.centro===c.k?'selected':''}>${c.l}</option>`).join('')}
+        </select></div>
+      <div class="fld"><label>Tipo de conta a receber *</label>
+        <select id="dr-cat">
+          ${(typeof opcoesTiposReceber==='function'? opcoesTiposReceber() : []).map(t=>
+            `<option value="${esc(t.nome)}" ${n.categoria===t.nome?'selected':''}>${esc(t.nome)} · ${esc(t.categoria||'')}</option>`).join('')}
+        </select>
+        <div class="hint" style="margin:2px 0 0">Cadastrados em Cadastros → Tipos a receber.</div></div>
+      <div class="fld full"><label>Cliente / pagador *</label>
+        <input id="dr-cliente" value="${esc(n.cliente||'')}" list="dl-dr-cli" placeholder="quem vai pagar">
+        <datalist id="dl-dr-cli">${(DB.clientes||[]).map(c=>`<option value="${esc(c.nome)}">`).join('')}
+          ${[...new Set((DB.receitasDiversas||[]).map(x=>x.cliente).filter(Boolean))].slice(0,40).map(f=>`<option value="${esc(f)}">`).join('')}</datalist></div>
+      <div class="fld"><label>Valor (R$) *</label><input id="dr-valor" type="number" step="0.01" value="${n.valor||''}"></div>
+      <div class="fld"><label>Vencimento</label><input id="dr-venc" type="date" value="${n.vencimento||''}"></div>
+      <div class="fld"><label>Documento / NF</label><input id="dr-doc" value="${esc(n.documento||'')}"></div>
+      <div class="fld"><label>Competência (mês)</label><input id="dr-comp" type="month" value="${(n.competencia||hoje()).slice(0,7)}"></div>
+      <div class="fld full"><label>Descrição</label><input id="dr-desc" value="${esc(n.descricao||'')}" placeholder="ex.: revisão de 20.000 km, venda de peças…"></div>
+    </div>`, ()=>{
+    const cli = (val('dr-cliente')||'').trim();
+    const valor = +val('dr-valor')||0;
+    if(!cli) return alert('Informe o cliente.');
+    if(valor <= 0) return alert('Informe o valor da conta.');
+    const tipoSel = (typeof tipoReceberPorNome==='function') ? tipoReceberPorNome(val('dr-cat')) : null;
+    const dados = {
+      centro: val('dr-centro'), categoria: val('dr-cat'), tipoId: tipoSel? tipoSel.id : '',
+      cliente: cli, valor,
+      vencimento: val('dr-venc') || hoje(),
+      documento: (val('dr-doc')||'').trim(),
+      competencia: (val('dr-comp')||hoje().slice(0,7)) + '-01',
+      descricao: (val('dr-desc')||'').trim(),
+      criadoPor: (usuarioAtual()||{}).nome||''
+    };
+    if(id) Object.assign(r, dados);
+    else {
+      DB.receitasDiversas = DB.receitasDiversas || [];
+      DB.receitasDiversas.push(Object.assign({id:uid(), criadoEm:new Date().toISOString()}, dados));
+    }
+    save(); logAcao(id?'Alterou conta a receber':'Lançou conta a receber','diversos',
+      centroDe(dados.centro).l+' · '+cli+' · '+brl(valor));
+    fechar(); renderAll();
+  }, true);
+}
+
+function formReceberDiverso(id){
+  if(!precisaPermissao('diversos','edit')) return;
+  const r = (DB.receitasDiversas||[]).find(x=>x.id===id); if(!r) return;
+  const rec = recebidoDiverso(r), saldo = saldoReceita(r);
+  COMPR_TMP = [];
+  modal('Receber conta · '+centroDe(r.centro).l, `
+    <p class="hint" style="margin:0 0 12px"><b>${esc(r.cliente)}</b> · ${esc(r.categoria||'')}<br>
+      Valor ${brl(r.valor)} · recebido ${brl(rec)} · <b class="amb">falta ${brl(saldo)}</b> · vence ${fmt(r.vencimento)}</p>
+    <div class="grid">
+      <div class="fld"><label>Data do recebimento</label><input id="dr-pdata" type="date" value="${hoje()}"></div>
+      <div class="fld"><label>Valor recebido (R$) *</label><input id="dr-pvalor" type="number" step="0.01" value="${saldo.toFixed(2)}"></div>
+      <div class="fld"><label>Forma</label><select id="dr-pforma"><option>PIX</option><option>TED</option><option>Boleto</option>
+        <option>Dinheiro</option><option>Cartão</option><option>Cheque</option><option>Outro</option></select></div>
+      <div class="fld"><label>Banco / conta</label><input id="dr-pconta" placeholder="ex.: Itaú c/ 1234-5"></div>
+      <div class="fld full"><label>Observação</label><input id="dr-pobs" placeholder="referência…"></div>
+      ${typeof blocoComprovante==='function' ? blocoComprovante(null) : ''}
+    </div>`, ()=>{
+    const v = +val('dr-pvalor')||0;
+    if(v <= 0) return alert('Informe o valor recebido.');
+    if(v > saldo + 0.01 && !confirm('O valor ('+brl(v)+') é maior que o saldo ('+brl(saldo)+'). Registrar assim mesmo?')) return;
+    DB.recebimentosDiversos = DB.recebimentosDiversos || [];
+    const novo = {id:uid(), contaId:id, data:val('dr-pdata'), valor:v,
+      forma:val('dr-pforma'), conta:val('dr-pconta').trim(), obs:val('dr-pobs').trim(),
+      comprovantes: (typeof comprovantesDoForm==='function' ? comprovantesDoForm() : []),
+      criadoPor:(usuarioAtual()||{}).nome||''};
+    novo.conc = isMaster() ? 'conciliado' : 'pendente';
+    if(novo.conc === 'conciliado'){ novo.concPor = novo.criadoPor; novo.concEm = new Date().toISOString(); }
+    DB.recebimentosDiversos.push(novo);
+    save(); logAcao('Recebeu conta diversa','diversos', r.cliente+' · '+brl(v));
+    fechar(); renderAll();
+    if(novo.conc === 'pendente') alert('Recebimento lançado.\n\nAguardando conciliação do master.');
+  });
+}
+
+function excluirReceitaDiversa(id){
+  if(!precisaPermissao('diversos','del')) return;
+  const r = (DB.receitasDiversas||[]).find(x=>x.id===id); if(!r) return;
+  const rs = (DB.recebimentosDiversos||[]).filter(p=>p.contaId===id);
+  if(!confirm('Excluir a conta a receber de '+esc(r.cliente)+' ('+brl(r.valor)+')?'+
+    (rs.length?'\n\n'+rs.length+' recebimento(s) também serão apagados.':''))) return;
+  DB.recebimentosDiversos = (DB.recebimentosDiversos||[]).filter(p=>p.contaId!==id);
+  DB.receitasDiversas = (DB.receitasDiversas||[]).filter(x=>x.id!==id);
+  save(); renderAll();
+}
+
+/* ============================================================
+   CADASTRO DE TIPOS — CONTAS A RECEBER E A PAGAR
+   Cada empresa tem os seus tipos. Aqui ficam registrados uma vez
+   e passam a aparecer nos lançamentos, nos recebimentos, nos
+   pagamentos e nos relatórios.
+
+   RECEBER: classificam os títulos (entrada, financiamento, bônus…)
+            e as contas a receber diversas (serviços, peças…).
+   PAGAR:   classificam os pagamentos diversos (aluguel, peças,
+            combustível, contabilidade…), por centro de custo.
+   ============================================================ */
+
+/* ---------------- sementes ---------------- */
+const SEED_TIPOS_PAGAR = [
+  {id:'p-aluguel',    nome:'Aluguel',                categoria:'Estrutura',   cor:'#8b5cf6'},
+  {id:'p-agua',       nome:'Água / Energia',         categoria:'Estrutura',   cor:'#0ea5e9'},
+  {id:'p-internet',   nome:'Telefone / Internet',    categoria:'Estrutura',   cor:'#06b6d4'},
+  {id:'p-condominio', nome:'Condomínio / IPTU',      categoria:'Estrutura',   cor:'#7c3aed'},
+  {id:'p-manut',      nome:'Manutenção predial',     categoria:'Estrutura',   cor:'#a78bfa'},
+  {id:'p-pecas',      nome:'Fornecedor de peças',    categoria:'Operacional', cor:'#22c55e'},
+  {id:'p-consumo',    nome:'Material de consumo',    categoria:'Operacional', cor:'#10b981'},
+  {id:'p-comb',       nome:'Combustível',            categoria:'Operacional', cor:'#f59e0b'},
+  {id:'p-terceiros',  nome:'Serviços terceirizados', categoria:'Operacional', cor:'#14b8a6'},
+  {id:'p-tintas',     nome:'Tintas / Funilaria',     categoria:'Operacional', cor:'#ec4899'},
+  {id:'p-salarios',   nome:'Salários / Pró-labore',  categoria:'Pessoal',     cor:'#3b82f6'},
+  {id:'p-encargos',   nome:'Encargos / FGTS / INSS', categoria:'Pessoal',     cor:'#6366f1'},
+  {id:'p-beneficios', nome:'Benefícios / VT / VR',    categoria:'Pessoal',    cor:'#818cf8'},
+  {id:'p-impostos',   nome:'Impostos / Taxas',       categoria:'Tributos',    cor:'#ef4444'},
+  {id:'p-seguros',    nome:'Seguros',                categoria:'Tributos',    cor:'#f97316'},
+  {id:'p-marketing',  nome:'Marketing / Publicidade',categoria:'Comercial',   cor:'#d946ef'},
+  {id:'p-software',   nome:'Software / Sistemas',    categoria:'Comercial',   cor:'#0891b2'},
+  {id:'p-fretes',     nome:'Fretes / Logística',     categoria:'Operacional', cor:'#eab308'},
+  {id:'p-viagens',    nome:'Viagens / Representação',categoria:'Comercial',   cor:'#f43f5e'},
+  {id:'p-outros',     nome:'Outros',                 categoria:'Outros',      cor:'#64748b'}
+];
+
+const CAT_RECEBER = ['Entrada','Financiamento','Bonificação','Serviços','Outros'];
+const CAT_PAGAR   = ['Estrutura','Operacional','Pessoal','Tributos','Comercial','Outros'];
+
+/* ---------------- soma dos valores por categoria ---------------- */
+const catReceber = t => t.categoria || 'Outros';
+const catPagar   = t => t.categoria || 'Outros';
+
+/* ---------------- tela: tipos a receber ---------------- */
+function renderTiposReceber(){
+  const el = document.getElementById('tbl-tipos-receber'); if(!el) return;
+  DB.tipos = DB.tipos || [];
+
+  const usaEmTitulos = t => DB.titulos.filter(x=>x.tipoId===t.id);
+  const usaEmDiversos = t => (DB.receitasDiversas||[]).filter(x=>x.tipoId===t.id || x.categoria===t.nome);
+
+  el.innerHTML = `<div style="overflow-x:auto"><table class="tbl"><thead><tr>
+      <th></th><th>Tipo</th><th>Categoria</th>
+      <th class="num">Títulos de veículo</th><th class="num">Em aberto</th>
+      <th class="num">Contas diversas</th><th></th></tr></thead><tbody>
+    ${DB.tipos.map(t=>{
+      const ts = usaEmTitulos(t), ds = usaEmDiversos(t);
+      return `<tr>
+        <td><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:${t.cor||'#3b82f6'}"></span></td>
+        <td><b>${esc(t.nome)}</b></td>
+        <td>${esc(catReceber(t))}</td>
+        <td class="num">${ts.length}${ts.length?`<div class="hint" style="margin:0">${brl(ts.reduce((s,x)=>s+(+x.valor||0),0))}</div>`:''}</td>
+        <td class="num amb">${brl(ts.reduce((s,x)=>s+saldoTitulo(x),0))}</td>
+        <td class="num">${ds.length}</td>
+        <td style="white-space:nowrap">
+          ${pode('cadastros','edit')?`<button class="b sm sec" onclick="formTipoReceber('${t.id}')" title="Alterar">✏️</button>`:''}
+          ${pode('cadastros','del')?`<button class="b sm dang" onclick="excluirTipoReceber('${t.id}')" title="Excluir">🗑</button>`:''}
+        </td></tr>`;}).join('')}
+    </tbody></table></div>
+    <div class="hint">${DB.tipos.length} tipo(s). Estes tipos aparecem ao criar um título de veículo e ao lançar uma conta a receber diversa.</div>`;
+}
+
+function formTipoReceber(id){
+  if(!precisaPermissao('cadastros','edit')) return;
+  const t = id ? (DB.tipos||[]).find(x=>x.id===id) : null;
+  const n = t || {cor:'#3b82f6', categoria:'Entrada'};
+  modal(id?'Alterar tipo a receber':'Novo tipo a receber', `<div class="grid">
+    <div class="fld full"><label>Nome *</label>
+      <input id="m-nome" value="${esc(n.nome||'')}" placeholder="ex.: Financiamento bancário"></div>
+    <div class="fld"><label>Categoria</label>
+      <select id="m-cat">${CAT_RECEBER.map(c=>`<option ${catReceber(n)===c?'selected':''}>${c}</option>`).join('')}</select></div>
+    <div class="fld"><label>Cor</label><input id="m-cor" type="color" value="${n.cor||'#3b82f6'}" style="height:38px"></div>
+  </div>`, ()=>{
+    const nome = (val('m-nome')||'').trim();
+    if(!nome) return alert('Informe o nome do tipo.');
+    if(!id && (DB.tipos||[]).some(x=>String(x.nome).toLowerCase()===nome.toLowerCase()))
+      return alert('Já existe um tipo com esse nome.');
+    const dados = {nome, categoria: val('m-cat'), cor: val('m-cor')};
+    if(id) Object.assign(t, dados);
+    else { DB.tipos = DB.tipos || []; DB.tipos.push(Object.assign({id:uid()}, dados)); }
+    save(); logAcao(id?'Alterou tipo a receber':'Criou tipo a receber','cadastros', nome);
+    fechar(); renderAll();
+  });
+}
+
+function excluirTipoReceber(id){
+  if(!precisaPermissao('cadastros','del')) return;
+  const t = (DB.tipos||[]).find(x=>x.id===id); if(!t) return;
+  const n = DB.titulos.filter(x=>x.tipoId===id).length;
+  if(n) return alert('Este tipo está em '+n+' título(s) de veículo.\n\nAltere esses títulos antes de excluir.');
+  if(!confirm('Excluir o tipo "'+t.nome+'"?')) return;
+  DB.tipos = DB.tipos.filter(x=>x.id!==id);
+  save(); logAcao('Excluiu tipo a receber','cadastros', t.nome);
+  renderAll();
+}
+
+/* ---------------- tela: tipos a pagar ---------------- */
+function renderTiposPagar(){
+  const el = document.getElementById('tbl-tipos-pagar'); if(!el) return;
+  aplicarSeedTiposPagar();
+
+  const usa = t => (DB.despesasDiversas||[]).filter(x=>x.tipoId===t.id || x.categoria===t.nome);
+  const porCat = {};
+  DB.tiposPagar.forEach(t=>{
+    const c = catPagar(t);
+    porCat[c] = porCat[c] || {qtd:0, total:0, aberto:0};
+    const ds = usa(t);
+    porCat[c].qtd += ds.length;
+    porCat[c].total += ds.reduce((s,x)=>s+(+x.valor||0),0);
+    porCat[c].aberto += ds.reduce((s,x)=>s+saldoDiverso(x),0);
+  });
+
+  el.innerHTML = `<div style="overflow-x:auto"><table class="tbl"><thead><tr>
+      <th></th><th>Tipo</th><th>Categoria</th>
+      <th class="num">Lançamentos</th><th class="num">Valor</th><th class="num">Em aberto</th><th></th></tr></thead><tbody>
+    ${DB.tiposPagar.map(t=>{
+      const ds = usa(t);
+      return `<tr>
+        <td><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:${t.cor||'#f59e0b'}"></span></td>
+        <td><b>${esc(t.nome)}</b></td>
+        <td>${esc(catPagar(t))}</td>
+        <td class="num">${ds.length}</td>
+        <td class="num">${brl(ds.reduce((s,x)=>s+(+x.valor||0),0))}</td>
+        <td class="num amb">${brl(ds.reduce((s,x)=>s+saldoDiverso(x),0))}</td>
+        <td style="white-space:nowrap">
+          ${pode('cadastros','edit')?`<button class="b sm sec" onclick="formTipoPagar('${t.id}')" title="Alterar">✏️</button>`:''}
+          ${pode('cadastros','del')?`<button class="b sm dang" onclick="excluirTipoPagar('${t.id}')" title="Excluir">🗑</button>`:''}
+        </td></tr>`;}).join('')}
+    </tbody></table></div>
+    <div class="hint">${DB.tiposPagar.length} tipo(s) de conta a pagar. Aparecem ao lançar uma despesa em Pagamentos diversos.</div>`;
+}
+
+function aplicarSeedTiposPagar(){
+  const tinha = Array.isArray(DB.tiposPagar) && DB.tiposPagar.length > 0;
+  DB.tiposPagar = DB.tiposPagar || [];
+  if(!DB.tiposPagar.length){
+    DB.tiposPagar = SEED_TIPOS_PAGAR.map(x=>({...x}));
+    return true;
+  }
+  return !tinha;
+}
+/* garante os tipos a pagar assim que o sistema carrega */
+if(typeof DB !== 'undefined') aplicarSeedTiposPagar();
+/* lista de nomes para os seletores (com a categoria) */
+function opcoesTiposPagar(){
+  aplicarSeedTiposPagar();
+  return DB.tiposPagar.slice().sort((a,b)=>catPagar(a).localeCompare(catPagar(b)) || String(a.nome).localeCompare(String(b.nome)));
+}
+function opcoesTiposReceber(){
+  DB.tipos = DB.tipos || [];
+  return DB.tipos.slice().sort((a,b)=>catReceber(a).localeCompare(catReceber(b)) || String(a.nome).localeCompare(String(b.nome)));
+}
+function tipoPagarPorNome(nome){
+  aplicarSeedTiposPagar();
+  return (DB.tiposPagar||[]).find(t=>String(t.nome).toLowerCase()===String(nome||'').toLowerCase()) || null;
+}
+function tipoReceberPorNome(nome){
+  return (DB.tipos||[]).find(t=>String(t.nome).toLowerCase()===String(nome||'').toLowerCase()) || null;
+}
+
+function formTipoPagar(id){
+  if(!precisaPermissao('cadastros','edit')) return;
+  aplicarSeedTiposPagar();
+  const t = id ? DB.tiposPagar.find(x=>x.id===id) : null;
+  const n = t || {cor:'#f59e0b', categoria:'Operacional'};
+  modal(id?'Alterar tipo a pagar':'Novo tipo a pagar', `<div class="grid">
+    <div class="fld full"><label>Nome *</label>
+      <input id="m-nome" value="${esc(n.nome||'')}" placeholder="ex.: Aluguel do galpão"></div>
+    <div class="fld"><label>Categoria</label>
+      <select id="m-cat">${CAT_PAGAR.map(c=>`<option ${catPagar(n)===c?'selected':''}>${c}</option>`).join('')}</select></div>
+    <div class="fld"><label>Cor</label><input id="m-cor" type="color" value="${n.cor||'#f59e0b'}" style="height:38px"></div>
+  </div>`, ()=>{
+    const nome = (val('m-nome')||'').trim();
+    if(!nome) return alert('Informe o nome do tipo.');
+    if(!id && DB.tiposPagar.some(x=>String(x.nome).toLowerCase()===nome.toLowerCase()))
+      return alert('Já existe um tipo com esse nome.');
+    const dados = {nome, categoria: val('m-cat'), cor: val('m-cor')};
+    if(id) Object.assign(t, dados);
+    else DB.tiposPagar.push(Object.assign({id:uid()}, dados));
+    save(); logAcao(id?'Alterou tipo a pagar':'Criou tipo a pagar','cadastros', nome);
+    fechar(); renderAll();
+  });
+}
+
+function excluirTipoPagar(id){
+  if(!precisaPermissao('cadastros','del')) return;
+  aplicarSeedTiposPagar();
+  const t = DB.tiposPagar.find(x=>x.id===id); if(!t) return;
+  const n = (DB.despesasDiversas||[]).filter(x=>x.tipoId===id).length;
+  if(n) return alert('Este tipo está em '+n+' conta(s) a pagar.\n\nAltere essas contas antes de excluir.');
+  if(!confirm('Excluir o tipo "'+t.nome+'"?')) return;
+  DB.tiposPagar = DB.tiposPagar.filter(x=>x.id!==id);
+  save(); logAcao('Excluiu tipo a pagar','cadastros', t.nome);
+  renderAll();
+}
+
+/* ---------------- relatório: movimentação por tipo ---------------- */
+function relTiposMovimento(){
+  const ini = val('rep-ini'), fim = val('rep-fim');
+  repHeader('Movimentação por tipo', `Contas a receber e a pagar por tipo · ${fmt(ini)} a ${fmt(fim)}`);
+
+  /* RECEBER: títulos de veículo + contas diversas */
+  const rec = {};
+  (DB.titulos||[]).forEach(t=>{
+    if(!noPeriodo(t.vencimento||t.emissao, ini, fim)) return;
+    const k = t.tipoNome || 'Outro';
+    rec[k] = rec[k] || {lan:0, total:0, aberto:0};
+    rec[k].lan++; rec[k].total += (+t.valor||0); rec[k].aberto += saldoTitulo(t);
+  });
+  (DB.receitasDiversas||[]).forEach(r=>{
+    if(!noPeriodo(r.vencimento||r.data, ini, fim)) return;
+    const k = (tipoReceberPorNome(r.categoria)||{}).nome || r.categoria || 'Outro';
+    rec[k] = rec[k] || {lan:0, total:0, aberto:0};
+    rec[k].lan++; rec[k].total += (+r.valor||0); rec[k].aberto += saldoReceita(r);
+  });
+
+  /* PAGAR: contas diversas + pagamento à fábrica */
+  const pag = {};
+  (DB.despesasDiversas||[]).forEach(d=>{
+    if(!noPeriodo(d.vencimento||d.data, ini, fim)) return;
+    const k = (tipoPagarPorNome(d.categoria)||{}).nome || d.categoria || 'Outro';
+    pag[k] = pag[k] || {lan:0, total:0, aberto:0};
+    pag[k].lan++; pag[k].total += (+d.valor||0); pag[k].aberto += saldoDiverso(d);
+  });
+  const fab = DB.veiculos.filter(v=>noPeriodo(v.dataFaturamento, ini, fim));
+  if(fab.length){
+    pag['Fábrica (veículos)'] = {lan:fab.length,
+      total:fab.reduce((s,v)=>s+totalFabrica(v),0),
+      aberto:fab.reduce((s,v)=>s+saldoFabrica(v),0)};
+  }
+
+  const linhas = [['Fluxo','Tipo','Lançamentos','Valor','Em aberto']];
+  Object.entries(rec).forEach(([k,v])=>linhas.push(['Receber',k,v.lan,v.total.toFixed(2),v.aberto.toFixed(2)]));
+  Object.entries(pag).forEach(([k,v])=>linhas.push(['Pagar',k,v.lan,v.total.toFixed(2),v.aberto.toFixed(2)]));
+  REP_CSV = {nome:'tipos-movimento', linhas};
+
+  const tRec = Object.values(rec).reduce((s,v)=>s+v.total,0);
+  const tRecAb = Object.values(rec).reduce((s,v)=>s+v.aberto,0);
+  const tPag = Object.values(pag).reduce((s,v)=>s+v.total,0);
+  const tPagAb = Object.values(pag).reduce((s,v)=>s+v.aberto,0);
+
+  const tabela = (obj, titulo) => Object.keys(obj).length ? `
+    <h3 style="margin:16px 0 8px;font-size:12.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px">${titulo}</h3>
+    <table class="tbl"><thead><tr><th>Tipo</th><th class="num">Lançamentos</th>
+      <th class="num">Valor</th><th class="num">Em aberto</th></tr></thead><tbody>
+      ${Object.entries(obj).sort((a,b)=>b[1].total-a[1].total).map(([k,v])=>`<tr>
+        <td><b>${esc(k)}</b></td><td class="num">${v.lan}</td>
+        <td class="num">${brl(v.total)}</td>
+        <td class="num ${v.aberto>0.005?'amb':'pos'}">${brl(v.aberto)}</td></tr>`).join('')}
+      </tbody><tfoot><tr style="background:var(--panel2);font-weight:700"><td>Total</td>
+        <td class="num">${Object.values(obj).reduce((s,v)=>s+v.lan,0)}</td>
+        <td class="num">${brl(Object.values(obj).reduce((s,v)=>s+v.total,0))}</td>
+        <td class="num">${brl(Object.values(obj).reduce((s,v)=>s+v.aberto,0))}</td></tr></tfoot></table>` : '';
+
+  document.getElementById('rep-body').innerHTML = `
+    <div class="cards">
+      <div class="kpi"><div class="l">A receber no período</div><div class="v pos">${brl0(tRec)}</div>
+        <div class="s">${brl0(tRecAb)} em aberto</div></div>
+      <div class="kpi"><div class="l">A pagar no período</div><div class="v neg">${brl0(tPag)}</div>
+        <div class="s">${brl0(tPagAb)} em aberto</div></div>
+      <div class="kpi"><div class="l">Resultado</div><div class="v" style="font-size:17px">${brl0(tRec-tPag)}</div>
+        <div class="s">receber − pagar</div></div>
+      <div class="kpi"><div class="l">Tipos em uso</div><div class="v">${Object.keys(rec).length+Object.keys(pag).length}</div>
+        <div class="s">${Object.keys(rec).length} a receber · ${Object.keys(pag).length} a pagar</div></div>
+    </div>
+    ${tabela(rec,'Contas a receber por tipo')}
+    ${tabela(pag,'Contas a pagar por tipo')}
+    <div class="hint" style="margin-top:12px">Os tipos vêm de Cadastros → Tipos a receber / Tipos a pagar.
+    Para detalhar um tipo, use os relatórios 1 a 8.</div>`;
 }
 
 </script>
