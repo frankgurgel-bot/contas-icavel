@@ -222,6 +222,7 @@
     <div class="bar">
       <button class="b ok" data-perm="estoque:edit" onclick="abrirImportPlanilha()">📊 Atualizar pela planilha Estoque</button>
       <button class="b sec" data-perm="estoque:edit" onclick="abrirImportFabricante()">📥 Importar faturamento da fábrica</button>
+      <button class="b sec" data-perm="estoque:edit" onclick="abrirImportDVE()">🎁 Bônus de fábrica (DVE)</button>
       <button class="b" data-perm="estoque:edit" onclick="formVeiculo()">＋ Novo veículo</button>
       <button class="b sec" data-perm="estoque:ver" onclick="exportarEstoque()">📤 CSV</button>
       <button class="b sec" onclick="window.print()">🖨 PDF</button>
@@ -558,7 +559,7 @@ const ACOES = [{k:'ver', l:'Ver'}, {k:'edit', l:'Criar/Editar'}, {k:'del', l:'Ex
 
 const SUPA_URL = 'https://ukwfouwxhpxotrwwxxre.supabase.co';
 const SUPA_KEY = 'sb_publishable_c-e_CeLKkPbZ0UzLfXNbug_fhwqjjGt';
-const COLS = ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog','pedidos','recebimentosPedido','despesasDiversas','pagamentosDiversos','receitasDiversas','recebimentosDiversos','tiposPagar','fornecedores'];
+const COLS = ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog','pedidos','recebimentosPedido','despesasDiversas','pagamentosDiversos','receitasDiversas','recebimentosDiversos','tiposPagar','fornecedores','dveArquivos'];
 
 const CLOUD = {
   sessao: null,        // {access_token, refresh_token, expires_at}
@@ -2592,7 +2593,7 @@ const SEED_PAGADORES = [
 ].map((nome,i)=>({id:'p-'+(i+1), nome, tipo: i===0?'Cliente':(i>=9?'Fábrica':'Financeira')}));
 
 function normalize(){
-  ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog','pedidos','recebimentosPedido','despesasDiversas','pagamentosDiversos','receitasDiversas','recebimentosDiversos','tiposPagar','fornecedores'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k]=[]; });
+  ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog','pedidos','recebimentosPedido','despesasDiversas','pagamentosDiversos','receitasDiversas','recebimentosDiversos','tiposPagar','fornecedores','dveArquivos'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k]=[]; });
   if(!DB.tipos.length) DB.tipos = SEED_TIPOS.map(x=>({...x}));
   if(typeof aplicarSeedTiposPagar === 'function') aplicarSeedTiposPagar();
   if(!DB.pagadores.length) DB.pagadores = SEED_PAGADORES.map(x=>({...x}));
@@ -4382,8 +4383,12 @@ function parseFaturamentoFiat(texto){
     const fpag = _campo(m,'F.PAG').toUpperCase();
     const condSug = /FL\.?\s*PLAN/.test(fpag) ? 'floorPlan' : (/A\s*VISTA/.test(fpag) ? 'avista' : 'fdic');
 
+    /* MVS: o código do modelo que a carta do mês usa para o bônus.
+       No relatório FIASA ele vem no campo MOD/VER/SER (ex.: 341AGW0). */
+    const mvs = ((_campo(m,'MOD/VER/SER')||'').match(/[0-9]{3,5}[A-Z0-9]{2,4}/i)||[''])[0].toUpperCase();
+
     veiculos.push({
-      seq, chassi, modelo, cor,
+      seq, chassi, modelo, cor, mvs,
       opcionais: (extras || rev).replace(/\s+/g,' ').trim().toUpperCase(),
       anoModelo: (mFab && mMod) ? `${mFab[1]}/${mMod[1]}` : '',
       dataFaturamento: datas[0] || hoje(), dataNF: datas[1] || '',
@@ -4486,7 +4491,7 @@ function confirmarImportFabricante(){
   sel.forEach(v=>{
     const ex = DB.veiculos.find(x=>x.chassi===v.chassi);
     const dados = {
-      chassi: v.chassi, modelo: v.modelo, cor: v.cor, anoModelo: v.anoModelo,
+      chassi: v.chassi, modelo: v.modelo, cor: v.cor, anoModelo: v.anoModelo, mvs: v.mvs,
       nf: v.nf, pedido: v.pedido, motor: v.motor, renavam: v.renavam,
       dataFaturamento: v.dataFaturamento, dataNF: v.dataNF,
       peNF: v.peNF, bonusFabrica: v.bonusFabrica, icms: v.icms, ipi: v.ipi,
@@ -8034,6 +8039,434 @@ function carimbarDigitacao(reg){
   if(!reg) return reg;
   if(!reg.criadoEm) reg.criadoEm = new Date().toISOString();
   return reg;
+}
+
+/* ============================================================
+   LEITOR DA CARTA DO MÊS (DVE) — BÔNUS DE FÁBRICA
+   Lê o PDF que a fábrica envia todo mês, extrai a tabela de
+   BÔNUS VAREJO por MVS + ano modelo e aplica nos veículos.
+
+   Como o PDF é uma apresentação (não uma tabela real), a leitura
+   usa as COORDENADAS do texto, exatamente como a versão validada
+   em Python (19 de 19 valores conferidos contra o PDF de nov/2026):
+     · acha o cabeçalho MODELO / MVS / MY e a coluna BÔNUS VAREJO
+     · percorre as linhas abaixo mantendo o MVS "corrente"
+     · valor na coluna VAREJO da linha, somando quando o mesmo
+       MVS+MY aparece em mais de uma linha (ex.: Toro Ultra)
+   ============================================================ */
+
+const DVE = {registros:[], arquivo:null, meta:null};
+
+/* ---------- descompacta um stream (usa o que já existe no sistema) ---------- */
+async function _dveInflar(bytes){
+  if(typeof _inflar === 'function'){
+    const r = await _inflar(bytes);
+    if(r) return r;
+  }
+  return null;
+}
+
+/* ---------- extrai itens de texto COM posição de uma página ---------- */
+/* Operadores relevantes: BT/ET, Tf, Td, TD, Tm, T*, TJ, Tj, TL */
+function _dveItensDoConteudo(cs){
+  const itens = [];
+  /* posição corrente */
+  let x = 0, y = 0, leading = 12, tam = 10;
+  let linhaX = 0, linhaY = 0;
+  const re = /(-?[\d.]+)\s+(-?[\d.]+)\s+(Td|TD)|(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+Tm|(T\*)|([\d.]+)\s+Tf|\[((?:[^\[\]\\]|\\.)*)\]\s*TJ|\(((?:\\.|[^\\()])*)\)\s*Tj/g;
+  let m;
+  while((m = re.exec(cs))){
+    if(m[3]){                                  // Td / TD
+      const tx = parseFloat(m[1])||0, ty = parseFloat(m[2])||0;
+      linhaX += tx; linhaY += ty;
+      if(m[3] === 'TD') leading = -ty;
+      x = linhaX; y = linhaY;
+    } else if(m[9]){                           // Tm
+      const a=parseFloat(m[4])||0, b=parseFloat(m[5])||0, c=parseFloat(m[6])||0;
+      const d=parseFloat(m[7])||0, e=parseFloat(m[8])||0, f=parseFloat(m[9])||0;
+      linhaX = e; linhaY = f; x = e; y = f;
+      tam = Math.abs(d) || Math.abs(a) || tam;
+    } else if(m[10]){                          // T*
+      linhaY -= leading; x = linhaX; y = linhaY;
+    } else if(m[11]){                          // Tf
+      tam = parseFloat(m[11])||tam;
+    } else if(m[12] !== undefined || m[13] !== undefined){
+      const bruto = m[12] !== undefined ? m[12] : m[13];
+      const partes = m[12] !== undefined
+        ? (bruto.match(/\((?:\\.|[^\\()])*\)/g) || [])
+        : ['('+bruto+')'];
+      partes.forEach(p=>{
+        const txt = _desescPDF(p.slice(1,-1));
+        if(txt.trim()) itens.push({texto:txt.trim(), x, y, tam});
+      });
+    }
+  }
+  return itens;
+}
+
+/* ---------- agrupa em linhas e localiza o cabeçalho ---------- */
+function _dveLinhas(itens, tol){
+  tol = tol || 7;
+  const g = {};
+  itens.forEach(it=>{
+    const k = Math.round(it.y / tol) * tol;
+    (g[k] = g[k] || []).push(it);
+  });
+  Object.keys(g).forEach(k=>g[k].sort((a,b)=>a.x-b.x));
+  return g;
+}
+const RE_DVE_MVS = /^\d{3,5}[A-Z0-9]{2,4}$/;
+const RE_DVE_MY  = /^20\d{2}\/20\d{2}$/;
+const _dveNum = t => {
+  const s = String(t||'').trim();
+  if(s === '-' || !s) return null;
+  if(!/^[\d.]+$/.test(s)) return null;
+  const n = parseInt(s.replace(/\./g,''),10);
+  return isNaN(n) ? null : n;
+};
+
+function _dveExtraiPagina(itens){
+  if(!itens.length) return [];
+  const linhas = _dveLinhas(itens);
+  /* no PDF o eixo Y cresce para cima: o cabeçalho tem Y MAIOR que as
+     linhas de dados. Percorremos de cima para baixo (Y decrescente). */
+  const ys = Object.keys(linhas).map(Number).sort((a,b)=>b-a);
+  const out = [];
+
+  ys.forEach((y, i)=>{
+    const ws = linhas[y];
+    const txt = ws.map(w=>w.texto).join(' ').toUpperCase();
+    if(!(txt.indexOf('MODELO') >= 0 && txt.indexOf('MVS') >= 0 && txt.indexOf('MY') >= 0)) return;
+
+    /* coluna do BÔNUS VAREJO: procura VAREJO nesta linha ou nas vizinhas */
+    let alvo = null;
+    const vizinhas = [y, (ys[i-1]!=null?ys[i-1]:null), (ys[i-2]!=null?ys[i-2]:null),
+                      (ys[i+1]!=null?ys[i+1]:null), (ys[i+2]!=null?ys[i+2]:null)].filter(v=>v!=null);
+    for(const vy of vizinhas){
+      const lista = linhas[vy] || [];
+      const varejos = lista.filter(w=>w.texto.toUpperCase() === 'VAREJO').map(w=>w.x);
+      if(varejos.length){ alvo = Math.max.apply(null, varejos); break; }
+    }
+    if(alvo == null) return;
+
+    /* O PDF agrupa assim:
+         linha do MODELO (ex.: ARGO)  -> ancora do bloco
+         MVS + MY (2 a 5 linhas)      -> cada uma é uma variação
+         linha da VERSÃO              -> traz o VALOR na coluna VAREJO
+       Quando o valor está numa linha SEM MVS/MY, ele vale para o bloco:
+       aplica-se à versão cujo MY aparece no texto da linha da versão ou,
+       se não houver, à primeira variação do bloco (a do MY mais "novo").
+       Quando o valor está na própria linha do MVS+MY, vale para ela. */
+    let bloco = [];          // pares MVS+MY deste bloco, em ordem
+    let versaoMy = null;
+
+    const aplica = (chave, valor)=>{
+      let r = out.find(o=>o.chave === chave);
+      if(!r){ const [m,y] = chave.split('|'); r = {chave, mvs:m, my:y, bonus:0}; out.push(r); }
+      r.bonus += valor;
+    };
+
+    for(let j = i+1; j < ys.length; j++){
+      const ws2 = linhas[ys[j]];
+      const tx = ws2.map(w=>w.texto);
+      const t2 = tx.join(' ').toUpperCase();
+      if(t2.indexOf('MODELO') >= 0 && t2.indexOf('MVS') >= 0) break;   // novo cabeçalho
+      if(t2.length > 150) break;
+
+      const mvs = tx.find(t=>RE_DVE_MVS.test(t)) || null;
+      const my  = tx.find(t=>RE_DVE_MY.test(t)) || null;
+
+      /* valor na coluna BÔNUS VAREJO */
+      const perto = ws2.map(w=>({d:Math.abs(w.x-alvo), t:w.texto})).sort((a,b)=>a.d-b.d)[0];
+      let valor = null;
+      if(perto && perto.d <= 30) valor = _dveNum(perto.t);
+
+      if(mvs || my){
+        if(mvs && my) bloco.push(mvs + '|' + my);
+        else if(my && bloco.length) bloco[bloco.length-1] = bloco[bloco.length-1].split('|')[0] + '|' + my;
+        if(valor != null && mvs && my) aplica(mvs + '|' + my, valor);
+        continue;
+      }
+
+      /* linha da VERSÃO: o valor vale para o bloco */
+      if(valor != null && bloco.length){
+        /* se a linha cita algum MY, aplica nele; senão no último par do bloco */
+        const myLinha = tx.find(t=>RE_DVE_MY.test(t));
+        const alvoChave = myLinha && bloco.some(c=>c.endsWith('|'+myLinha))
+          ? bloco.find(c=>c.endsWith('|'+myLinha))
+          : bloco[bloco.length-1];
+        aplica(alvoChave, valor);
+      }
+    }
+  });
+  return out;
+}
+
+/* ---------- lê o arquivo inteiro ---------- */
+async function dveLerPDF(arrayBuffer){
+  const u8 = new Uint8Array(arrayBuffer);
+  const latin = new TextDecoder('latin1').decode(u8);
+  const paginas = [];
+  let idx = 0;
+  while(true){
+    const s = latin.indexOf('stream', idx);
+    if(s < 0) break;
+    if(latin.slice(Math.max(0,s-3), s) === 'end'){ idx = s + 6; continue; }
+    let p = s + 6;
+    if(latin[p] === '\r') p++;
+    if(latin[p] === '\n') p++;
+    const e = latin.indexOf('endstream', p);
+    if(e < 0) break;
+    let fim = e;
+    const dict = latin.slice(Math.max(0, s - 400), s);
+    const mLen = dict.match(/\/Length\s+(\d+)(?!\s+\d+\s+R)/);
+    if(mLen){ const n = parseInt(mLen[1],10); if(n > 0 && p + n <= latin.length) fim = p + n; }
+    let conteudo = null;
+    try{ conteudo = await _dveInflar(u8.subarray(p, fim)); }catch(err){ conteudo = null; }
+    const cs = conteudo ? new TextDecoder('latin1').decode(conteudo)
+                        : new TextDecoder('latin1').decode(u8.subarray(p, fim));
+    if(/(Tj|TJ)/.test(cs) && cs.indexOf('Tf') >= 0){
+      const itens = _dveItensDoConteudo(cs);
+      if(itens.length) paginas.push(itens);
+    }
+    idx = e + 9;
+  }
+
+  const todos = [];
+  paginas.forEach(itens=>{
+    _dveExtraiPagina(itens).forEach(r=>{
+      const ex = todos.find(t=>t.chave === r.chave);
+      if(ex) ex.bonus += r.bonus;
+      else todos.push(r);
+    });
+  });
+  return todos.filter(r=>r.bonus > 0).sort((a,b)=>a.mvs.localeCompare(b.mvs));
+}
+
+/* ---------- identifica a vigência e a DVE no texto ---------- */
+function dveMetaDoArquivo(nome, itensTxt){
+  const t = String(itensTxt||'');
+  const dve = (t.match(/DVE[_ ]?(\d{4})[_ ]?(\d{4})/i) || []);
+  const vig = t.match(/VIG[ÊE]NCIA\s*:?\s*DE?\s*(\d{2})\s*\/?\s*(\d{2})\s*\/?\s*(\d{4})\s*A\s*(\d{2})\s*\/?\s*(\d{2})\s*\/?\s*(\d{4})/i);
+  return {
+    arquivo: nome || '',
+    dve: dve.length ? (dve[1]+'_'+dve[2]) : '',
+    inicio: vig ? `${vig[3]}-${vig[2]}-${vig[1]}` : '',
+    fim: vig ? `${vig[6]}-${vig[5]}-${vig[4]}` : ''
+  };
+}
+
+
+/* ============================================================
+   TELA: BÔNUS DE FÁBRICA (CARTA DO MÊS / DVE)
+   ============================================================ */
+let DVE_IMP = {registros:[], meta:null, arquivo:null, aplicados:0};
+
+function abrirImportDVE(){
+  if(!precisaPermissao('estoque','edit')) return;
+  DVE_IMP = {registros:[], meta:null, arquivo:null, aplicados:0};
+  const hist = DB.dveArquivos || [];
+  modal('Bônus de fábrica — carta do mês (DVE)', `
+    <p class="hint" style="margin:0 0 12px">Envie o PDF da <b>carta do mês</b> que a fábrica envia. O sistema lê a tabela de
+    <b>bônus varejo</b> por MVS + ano modelo, aplica nos veículos do estoque e <b>guarda o arquivo</b> no histórico.</p>
+
+    <div class="fld full" style="margin-bottom:10px">
+      <label>Arquivo da DVE (PDF)</label>
+      <input type="file" id="dve-file" accept=".pdf" onchange="dveImportar(this.files)">
+    </div>
+    <div id="dve-progresso" class="hint"></div>
+    <div id="dve-preview" style="margin-top:12px"></div>
+
+    ${hist.length ? `<div class="sect" style="margin-top:16px">Arquivos já arquivados</div>
+    <table class="tbl"><thead><tr><th>Arquivo</th><th>DVE</th><th>Vigência</th><th class="num">Bônus</th><th></th></tr></thead><tbody>
+      ${hist.slice().reverse().map((a,i)=>`<tr>
+        <td>${esc(a.nome)}</td><td>${esc(a.dve||'—')}</td>
+        <td>${a.inicio?fmt(a.inicio)+' a '+fmt(a.fim):'—'}</td>
+        <td class="num">${a.registros||0}</td>
+        <td><button class="b sm sec" onclick="dveBaixar(${hist.length-1-i})">⬇️</button>
+            <button class="b sm dang" onclick="dveExcluir(${hist.length-1-i})">🗑</button></td>
+      </tr>`).join('')}
+    </tbody></table>
+    <div class="hint">${hist.length} arquivo(s) guardado(s) no sistema.</div>` : ''}
+
+    <div class="mfoot"><button class="b sec" onclick="fechar()">Fechar</button></div>`, null, true);
+}
+
+async function dveImportar(files){
+  const f = (files||[])[0]; if(!f) return;
+  const prog = document.getElementById('dve-progresso');
+  const prev = document.getElementById('dve-preview');
+  if(prog) prog.innerHTML = '⏳ Lendo o arquivo (' + Math.round(f.size/1024) + ' KB)… pode levar alguns segundos.';
+  if(prev) prev.innerHTML = '';
+  try{
+    const buf = await f.arrayBuffer();
+    const t0 = Date.now();
+    const regs = await dveLerPDF(buf);
+    const ms = Date.now() - t0;
+
+    if(!regs.length){
+      if(prog) prog.innerHTML = '<b class="neg">Não encontrei a tabela de bônus neste arquivo.</b> ' +
+        'Confirme se é a carta do mês (DVE) com a tabela VAREJO e bônus por MVS.';
+      return;
+    }
+
+    /* texto do arquivo para achar a vigência */
+    let textoArq = '';
+    try{
+      const u8 = new Uint8Array(buf), latin = new TextDecoder('latin1').decode(u8);
+      textoArq = latin.replace(/[^\x20-\x7E\u00C0-\u017F]/g,' ');
+    }catch(e){}
+    const meta = dveMetaDoArquivo(f.name, textoArq);
+
+    DVE_IMP = {registros:regs, meta, arquivo:f, aplicados:0};
+    if(prog) prog.innerHTML = '✅ <b>' + regs.length + '</b> combinações MVS + ano modelo encontradas em ' + ms + ' ms.';
+
+    /* cruza com o estoque */
+    const linhas = regs.map(r=>{
+      const veics = (DB.veiculos||[]).filter(v=>{
+        const b = bonusDoVeiculo(v, regs);
+        return b && b.chave === r.chave;
+      });
+      return {r, veics};
+    });
+    const encontrados = linhas.filter(l=>l.veics.length);
+    const naoAchou = linhas.filter(l=>!l.veics.length);
+
+    DVE_IMP.vinculos = linhas.filter(l=>l.veics.length);
+    const totalBonus = DVE_IMP.vinculos.reduce((s,l)=>s + l.r.bonus * l.veics.length, 0);
+
+    if(prev) prev.innerHTML = `
+      <div class="cards" style="margin-bottom:12px">
+        <div class="kpi"><div class="l">Bônus na carta</div><div class="v">${regs.length}</div><div class="s">MVS + ano modelo</div></div>
+        <div class="kpi"><div class="l">Veículos no estoque</div><div class="v pos">${DVE_IMP.vinculos.reduce((s,l)=>s+l.veics.length,0)}</div><div class="s">que recebem bônus</div></div>
+        <div class="kpi"><div class="l">Bônus total a aplicar</div><div class="v amb" style="font-size:17px">${brl0(totalBonus)}</div><div class="s">soma nos veículos</div></div>
+        <div class="kpi"><div class="l">Sem veículo</div><div class="v">${naoAchou.length}</div><div class="s">na carta, fora do estoque</div></div>
+      </div>
+      ${meta.dve || meta.inicio ? `<div class="hint" style="margin-bottom:10px">DVE <b>${esc(meta.dve||'—')}</b> · vigência ${meta.inicio?fmt(meta.inicio)+' a '+fmt(meta.fim):'—'}</div>`:''}
+      ${DVE_IMP.vinculos.length ? `<div style="overflow-x:auto"><table class="tbl"><thead><tr>
+          <th>Veículo</th><th>Chassi</th><th>MVS</th><th>Ano</th>
+          <th class="num">Bônus atual</th><th class="num">Bônus da carta</th><th class="num">Diferença</th></tr></thead><tbody>
+        ${DVE_IMP.vinculos.flatMap(l=>l.veics.map(v=>{
+          const atual = +v.bonusFabrica||0, novo = l.r.bonus, dif = novo - atual;
+          return `<tr>
+            <td>${esc(veicRotulo(v)||'—')}</td>
+            <td>${esc(v.chassi)}</td>
+            <td>${esc(l.r.mvs)}</td>
+            <td>${esc(l.r.my)}</td>
+            <td class="num">${brl(atual)}</td>
+            <td class="num pos"><b>${brl(novo)}</b></td>
+            <td class="num ${Math.abs(dif)>0.005?(dif>0?'amb':'neg'):''}">${dif>0.005?'+':''}${brl(dif)}</td>
+          </tr>`;
+        })).join('')}
+        </tbody></table></div>
+        <div class="bar" style="margin-top:12px">
+          <button class="b ok" onclick="dveAplicar()">✅ Aplicar nos veículos</button>
+          <span class="hint" style="margin:0">O bônus entra no custo do veículo (reduz o valor a pagar à fábrica).</span>
+        </div>`
+      : '<div class="empty" style="padding:16px">Nenhum veículo do estoque bate com a carta atual. Confira se o faturamento da fábrica já foi importado.</div>'}`;
+  }catch(e){
+    if(prog) prog.innerHTML = '<b class="neg">Erro ao ler:</b> ' + esc(e.message);
+  }
+}
+
+/* compara o MVS do veículo com o da carta (aceita prefixo) */
+function mvsDoVeiculo(v){
+  const bruto = String(v.mvs||v.codigoModelo||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(bruto) return bruto;
+  /* tenta pelo modelo/cor/ano quando não houver MVS gravado */
+  return '';
+}
+function mesmoMvs(v, mvs){
+  const meu = mvsDoVeiculo(v);
+  if(!meu) return false;
+  if(meu === mvs) return true;
+  /* aceita quando um é prefixo do outro (ex.: 341AGW0 x 341AGW0) */
+  return meu.length>=6 && mvs.length>=6 && (meu.startsWith(mvs) || mvs.startsWith(meu));
+}
+/* acha o bônus do veículo na carta: primeiro pelo par MVS+MY exato;
+   se não houver, pelo MVS (a carta pode ter só um ano para aquela versão) */
+function bonusDoVeiculo(v, regs){
+  const mvsV = mvsDoVeiculo(v);
+  if(!mvsV) return null;
+  const doMvs = (regs||[]).filter(r=>mesmoMvs({mvs:mvsV}, r.mvs));
+  if(!doMvs.length) return null;
+  const exato = doMvs.find(r=>mesmoAno(v, r.my));
+  if(exato) return exato;
+  /* sem o ano exato: só usa quando a carta tem UM único ano para esse MVS */
+  if(doMvs.length === 1) return doMvs[0];
+  return null;
+}
+
+function mesmoAno(v, my){
+  const ano = String(v.anoModelo||'').replace(/[^0-9/]/g,'');
+  if(!ano) return false;
+  if(ano === my) return true;
+  /* anoModelo pode vir como 2026/27 — compara com 2026/2027 */
+  const [a,b] = my.split('/');
+  const [x,y] = ano.split('/');
+  const norm = s => s && s.length===2 ? (s[0]==='0'?'200':'20')+s : s;
+  return x===a && norm(y)===b;
+}
+
+function dveAplicar(){
+  if(!precisaPermissao('estoque','edit')) return;
+  const vinc = DVE_IMP.vinculos || [];
+  if(!vinc.length) return alert('Nada para aplicar.');
+  const total = vinc.reduce((s,l)=>s + l.r.bonus * l.veics.length, 0);
+  if(!confirm('Aplicar o bônus em ' + vinc.reduce((s,l)=>s+l.veics.length,0) + ' veículo(s)?\n\n' +
+      'Bônus total: ' + brl(total) + '\n\nO valor entra no campo "Bônus de fábrica" de cada veículo e reduz o custo.')) return;
+  let n = 0;
+  vinc.forEach(l=>{
+    l.veics.forEach(v=>{
+      v.bonusFabrica = l.r.bonus;
+      v.bonusMvs = l.r.mvs;
+      v.bonusMy = l.r.my;
+      v.bonusAplicadoEm = new Date().toISOString();
+      n++;
+    });
+  });
+
+  /* arquiva o PDF no sistema */
+  const arq = DVE_IMP.arquivo;
+  const arquivar = ()=>{
+    if(!arq) return;
+    const rd = new FileReader();
+    rd.onload = ()=>{
+      DB.dveArquivos = DB.dveArquivos || [];
+      const existe = DB.dveArquivos.findIndex(a=>a.nome===arq.name);
+      const registro = {id:uid(), nome:arq.name, kb:Math.round(arq.size/1024),
+        dataUrl:rd.result, enviadoEm:new Date().toISOString(),
+        enviadoPor:(usuarioAtual()||{}).nome||'',
+        dve:(DVE_IMP.meta||{}).dve||'', inicio:(DVE_IMP.meta||{}).inicio||'',
+        fim:(DVE_IMP.meta||{}).fim||'', registros:(DVE_IMP.registros||[]).length,
+        aplicados:n};
+      if(existe >= 0) DB.dveArquivos[existe] = registro;
+      else DB.dveArquivos.push(registro);
+      save(); logAcao('Importou carta do mês (DVE)','estoque',
+        arq.name + ' · ' + n + ' veículo(s) · ' + brl(total));
+      fechar(); renderAll();
+      alert('Bônus aplicado.\n\n' + n + ' veículo(s) atualizados.\nArquivo guardado no histórico: ' + arq.name);
+    };
+    rd.readAsDataURL(arq);
+  };
+  save();
+  arquivar();
+}
+
+function dveBaixar(i){
+  DB.dveArquivos = DB.dveArquivos || [];
+  const a = DB.dveArquivos[i]; if(!a) return;
+  const el = document.createElement('a');
+  el.href = a.dataUrl; el.download = a.nome;
+  document.body.appendChild(el); el.click(); el.remove();
+}
+function dveExcluir(i){
+  DB.dveArquivos = DB.dveArquivos || [];
+  const a = DB.dveArquivos[i]; if(!a) return;
+  if(!isMaster() && !precisaPermissao('dados','del')) return alert('Apenas o master pode apagar arquivos da DVE.');
+  if(!confirm('Excluir o arquivo "'+a.nome+'" do histórico?\n\nOs bônus já aplicados nos veículos NÃO serão alterados.')) return;
+  DB.dveArquivos.splice(i,1);
+  save(); renderAll(); abrirImportDVE();
 }
 
 </script>
