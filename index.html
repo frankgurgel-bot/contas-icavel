@@ -435,6 +435,8 @@
       <button data-perm="vendas:ver" onclick="relAntecipacoes()"><b>11 · Antecipações de venda direta</b><span>O que o cliente já pagou antes do faturamento, por pedido</span></button>
       <button data-perm="vendas:ver" onclick="relVendaDireta()"><b>12 · Venda direta — faturado x falta faturar</b><span>Pedidos aguardando a fábrica, já faturados e antecipações</span></button>
       <button onclick="relTiposMovimento()"><b>13 · Movimentação por tipo</b><span>Quanto entrou e saiu em cada tipo, e o que está em aberto</span></button>
+      <button onclick="relPagamentosEfetivados()"><b>14 · Pagamentos efetivados</b><span>Tudo que saiu do caixa no período, por tipo de pagamento</span></button>
+      <button onclick="relRecebimentosEfetivados()"><b>15 · Recebimentos efetivados</b><span>Tudo que entrou no caixa no período, por tipo de recebimento</span></button>
     </div>
     <div id="rep-out"><div class="empty">Escolha um relatório acima.</div></div>
   </section>
@@ -447,6 +449,7 @@
       <button data-c="tipos-receber" class="on">🏷 Tipos a receber</button>
       <button data-c="tipos-pagar">🏷 Tipos a pagar</button>
       <button data-c="pagadores">🏦 Pagadores / Financeiras</button>
+      <button data-c="fornecedores">🏭 Fornecedores</button>
       <button data-c="clientes">👥 Clientes</button>
       <button data-c="vendedores">🧑‍💼 Vendedores</button>
       <button data-c="juros">％ Juros Floor Plan / FDIC</button>
@@ -463,6 +466,11 @@
     <div class="ctab" id="c-pagadores">
       <div class="bar"><button class="b" data-perm="cadastros:edit" onclick="formPagador()">＋ Novo pagador</button></div>
       <div id="tbl-pagadores"></div>
+    </div>
+    <div class="ctab" id="c-fornecedores">
+      <div class="bar"><button class="b" data-perm="cadastros:edit" onclick="formFornecedor()">＋ Novo fornecedor</button>
+        <input id="f-busca-fo" placeholder="Buscar fornecedor, CNPJ, segmento…" oninput="renderFornecedores()" style="flex:1;min-width:180px"></div>
+      <div id="tbl-fornecedores"></div>
     </div>
     <div class="ctab" id="c-clientes">
       <div class="bar"><button class="b" data-perm="cadastros:edit" onclick="formCliente()">＋ Novo cliente</button></div>
@@ -550,7 +558,7 @@ const ACOES = [{k:'ver', l:'Ver'}, {k:'edit', l:'Criar/Editar'}, {k:'del', l:'Ex
 
 const SUPA_URL = 'https://ukwfouwxhpxotrwwxxre.supabase.co';
 const SUPA_KEY = 'sb_publishable_c-e_CeLKkPbZ0UzLfXNbug_fhwqjjGt';
-const COLS = ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog','pedidos','recebimentosPedido','despesasDiversas','pagamentosDiversos','receitasDiversas','recebimentosDiversos','tiposPagar'];
+const COLS = ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog','pedidos','recebimentosPedido','despesasDiversas','pagamentosDiversos','receitasDiversas','recebimentosDiversos','tiposPagar','fornecedores'];
 
 const CLOUD = {
   sessao: null,        // {access_token, refresh_token, expires_at}
@@ -1712,6 +1720,7 @@ function formPagamento(chassi){
       jurosAjuste: ajusteJ,
       jurosMotivo: (val('m-pjmotivo')||'').trim(),
       comprovantes: (typeof comprovantesDoForm==='function' ? comprovantesDoForm() : []),
+      criadoEm: new Date().toISOString(),
       usuario: (usuarioAtual()||{}).nome || '', criadoPor: (usuarioAtual()||{}).nome || ''};
 
     /* o ajuste passa a valer como juro do veículo, dali em diante */
@@ -1730,7 +1739,12 @@ function formPagamento(chassi){
     recalcPagFab(ch);
     logAcao('Pagamento à fábrica', 'veiculos', ch+' · '+brl(valor));
     save(); fechar(); renderAll();
-    if(novoPag.conc === 'pendente') alert('Pagamento lançado.\n\nEle está AGUARDANDO CONCILIAÇÃO: o master precisa confirmar a movimentação antes de entrar nos saldos.');
+    if(novoPag.conc === 'pendente'){
+      const restof = saldoFabrica(v);
+      alert('Pagamento efetivado.\n\n' + brl(valor) + ' ao veículo ' + ch +
+        (restof <= 0.005 ? '.\nVeículo quitado com a fábrica.' : '.\nFalta ' + brl(restof) + '.') +
+        '\n\nDisponível para a conciliação do master.');
+    }
   });
   document.getElementById('m-pvalor').value = saldoFabrica(alvo).toFixed(2);
   document.getElementById('m-pjuros').value = (juroApurado(alvo)||0).toFixed(2);
@@ -1819,6 +1833,7 @@ function gerirPagamentosFab(chassi){
 function editarPagFab(id, chassi){
   if(!precisaPermissao('pagamentos','edit')) return;
   const p = (DB.pagamentosFabrica||[]).find(x=>x.id===id); if(!p) return;
+  if(typeof exigirPermissaoAlteracao==='function' && !exigirPermissaoAlteracao(p)) return;
   const v = DB.veiculos.find(x=>x.chassi===chassi) || {};
   const calc = juroApurado(v);
 
@@ -1894,6 +1909,7 @@ function edPagPreview(chassi){
 function excluirPagFab(id, chassi){
   if(!precisaPermissao('pagamentos','del')) return;
   const p = (DB.pagamentosFabrica||[]).find(x=>x.id===id); if(!p) return;
+  if(typeof exigirPermissaoAlteracao==='function' && !exigirPermissaoAlteracao(p)) return;
   if(!confirm('Excluir o pagamento de '+brl(p.valor)+' de '+fmt(p.data)+'?')) return;
   DB.pagamentosFabrica = (DB.pagamentosFabrica||[]).filter(x=>x.id!==id);
   recalcPagFab(chassi);
@@ -2151,7 +2167,11 @@ function formPrazoFab(){
    Registro sem o campo "conc" é histórico e conta como conciliado.
    ============================================================ */
 
-const concOk = reg => !reg || reg.conc === undefined || reg.conc === 'conciliado';
+/* Regra (12/11/2026): o pagamento/recebimento EFETIVADO já baixa a conta.
+   A conciliação é a CONFERÊNCIA posterior do master — ela não segura mais
+   o saldo. Por isso 'pendente', 'conferido' e 'conciliado' contam igual
+   para efeito de saldo; só 'rejeitado' sai do cálculo. */
+const concOk = reg => !!reg && reg.conc !== 'rejeitado';
 const estaPendente   = reg => !!(reg && reg.conc === 'pendente');
 const estaConferido  = reg => !!(reg && reg.conc === 'conferido');
 const estaRejeitado  = reg => !!(reg && reg.conc === 'rejeitado');
@@ -2572,7 +2592,7 @@ const SEED_PAGADORES = [
 ].map((nome,i)=>({id:'p-'+(i+1), nome, tipo: i===0?'Cliente':(i>=9?'Fábrica':'Financeira')}));
 
 function normalize(){
-  ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog','pedidos','recebimentosPedido','despesasDiversas','pagamentosDiversos','receitasDiversas','recebimentosDiversos','tiposPagar'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k]=[]; });
+  ['vendas','titulos','recebimentos','veiculos','tipos','pagadores','clientes','vendedores','usuarios','log','pagamentosFabrica','concLog','pedidos','recebimentosPedido','despesasDiversas','pagamentosDiversos','receitasDiversas','recebimentosDiversos','tiposPagar','fornecedores'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k]=[]; });
   if(!DB.tipos.length) DB.tipos = SEED_TIPOS.map(x=>({...x}));
   if(typeof aplicarSeedTiposPagar === 'function') aplicarSeedTiposPagar();
   if(!DB.pagadores.length) DB.pagadores = SEED_PAGADORES.map(x=>({...x}));
@@ -3161,6 +3181,7 @@ function formBaixa(tituloId, vendaId){
     if(acrescimo > 0.005 && base > saldo + 0.01)
       return alert('Além dos juros/multa de '+brl(acrescimo)+', o valor abateria '+brl(base)+' do título, mas o saldo é '+brl(saldo)+'. Reduza o valor ou o acréscimo.');
     const novoRec = {id:uid(), tituloId:id, data:val('m-data'), valor:v, forma:val('m-forma'), conta:val('m-conta').trim(), obs:val('m-obs').trim(),
+      criadoEm: new Date().toISOString(),
       acrescimo: Math.round(acrescimo*100)/100, motivoAjuste: (val('m-motivo')||'').trim(),
       comprovantes: (typeof comprovantesDoForm==='function' ? comprovantesDoForm() : [])};
     if(Math.abs(acrescimo) > 0.005){
@@ -3172,7 +3193,12 @@ function formBaixa(tituloId, vendaId){
     if(novoRec.conc === 'conciliado'){ novoRec.concPor = novoRec.criadoPor; novoRec.concEm = new Date().toISOString(); }
     DB.recebimentos.push(novoRec);
     save(); fechar(); renderAll();
-    if(novoRec.conc === 'pendente') alert('Recebimento lançado.\n\nEle está AGUARDANDO CONCILIAÇÃO: o master precisa confirmar a movimentação antes de entrar nos saldos.');
+    if(novoRec.conc === 'pendente'){
+      const restoT = saldoTitulo(t);
+      alert('Recebimento efetivado.\n\n' + brl(v) + ' no título "' + (t.tipoNome||'') + '".' +
+        '\nO título foi baixado' + (restoT <= 0.005 ? ' e está quitado.' : '. Falta ' + brl(restoT) + '.') +
+        '\n\nDisponível para a conciliação do master.');
+    }
   });
   if(t) document.getElementById('m-valor').value = saldoTitulo(t).toFixed(2);
   else baixaSeleciona();
@@ -3222,6 +3248,7 @@ function gerirBaixas(tituloId){
 function formEditarBaixa(id){
   if(!precisaPermissao('titulos','edit')) return;
   const r = DB.recebimentos.find(x=>x.id===id); if(!r) return;
+  if(typeof exigirPermissaoAlteracao==='function' && !exigirPermissaoAlteracao(r)) return;
   const t = titulo(r.tituloId)||{};
   const vd = venda(t.vendaId)||{};
   const acAtual = +r.acrescimo || 0;
@@ -3284,6 +3311,8 @@ function edBaixaPreview(id){
 
 function excluirBaixa(id, tituloId){
   if(!precisaPermissao('titulos','del')) return;
+  const _r = DB.recebimentos.find(x=>x.id===id);
+  if(_r && typeof exigirPermissaoAlteracao==='function' && !exigirPermissaoAlteracao(_r)) return;
   const r = DB.recebimentos.find(x=>x.id===id); if(!r) return;
   if(!confirm('Excluir o recebimento de '+brl(r.valor)+' de '+fmt(r.data)+'?')) return;
   DB.recebimentos = DB.recebimentos.filter(x=>x.id!==id);
@@ -3808,6 +3837,7 @@ function renderAll(){
   if(typeof renderReceitas==='function') renderReceitas();
   if(typeof renderTiposReceber==='function') renderTiposReceber();
   if(typeof renderTiposPagar==='function') renderTiposPagar();
+  if(typeof renderFornecedores==='function') renderFornecedores();
   if(typeof renderConciliacao==='function'){ renderConciliacao(); atualizarBadgeConc(); }
   if(typeof renderUsuarios==='function') renderUsuarios();
   renderPeriodoHint();
@@ -5754,7 +5784,8 @@ function formVenderVeiculo(chassi){
       <div class="fld"><label>Valor total da venda (R$) *</label>
         <input id="vv-valor" type="number" step="0.01" value="${sugestao}" oninput="planoAjustarAoTotal()"></div>
       <div class="fld"><label>Cliente *</label><input id="vv-cliente" list="dl-vv-cli" placeholder="nome do cliente">
-        <datalist id="dl-vv-cli">${DB.clientes.map(c=>`<option value="${esc(c.nome)}">`).join('')}</datalist></div>
+        <datalist id="dl-vv-cli">${(typeof nomesClientes==='function'?nomesClientes():DB.clientes.map(c=>c.nome)).map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
+        ${typeof botaoCadastroRapido==='function'?botaoCadastroRapido('cliente','vv-cliente'):''}</div>
       <div class="fld"><label>CPF/CNPJ</label><input id="vv-doc"></div>
       <div class="fld"><label>Vendedor</label><input id="vv-vendedor" list="dl-vv-vend">
         <datalist id="dl-vv-vend">${DB.vendedores.map(x=>`<option value="${esc(x.nome)}">`).join('')}</datalist></div>
@@ -6054,7 +6085,8 @@ function formPedido(id){
       <div class="fld"><label>Data do pedido *</label><input id="pd-data" type="date" value="${n.data||hoje()}"></div>
       <div class="fld"><label>Nº do pedido / proposta</label><input id="pd-num" value="${esc(n.pedido||'')}" placeholder="opcional"></div>
       <div class="fld"><label>Cliente *</label><input id="pd-cliente" list="dl-pd-cli" value="${esc(n.cliente||'')}">
-        <datalist id="dl-pd-cli">${(DB.clientes||[]).map(c=>`<option value="${esc(c.nome)}">`).join('')}</datalist></div>
+        <datalist id="dl-pd-cli">${(typeof nomesClientes==='function'?nomesClientes():(DB.clientes||[]).map(c=>c.nome)).map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
+        ${typeof botaoCadastroRapido==='function'?botaoCadastroRapido('cliente','pd-cliente'):''}</div>
       <div class="fld"><label>CPF/CNPJ</label><input id="pd-doc" value="${esc(n.doc||'')}"></div>
       <div class="fld"><label>Veículo *</label><input id="pd-modelo" list="dl-pd-mod" value="${esc(n.modelo||'')}"
           placeholder="FIAT/ARGO DRIVE 1.0" style="text-transform:uppercase">
@@ -6146,7 +6178,12 @@ function formAntecipacao(pedidoId){
     save();
     logAcao('Antecipação de venda direta', 'vendas', p.cliente + ' · ' + brl(v));
     fechar(); renderAll();
-    if(novo.conc === 'pendente') alert('Antecipação lançada.\n\nEla está AGUARDANDO CONCILIAÇÃO antes de entrar nos saldos.');
+    if(novo.conc === 'pendente'){
+      const restoa = saldoPedido(p);
+      alert('Antecipação efetivada.\n\n' + brl(v) + ' recebido de ' + p.cliente + '.' +
+        '\nO pedido foi baixado' + (restoa <= 0.005 ? ' e está quitado.' : '. Falta ' + brl(restoa) + '.') +
+        '\n\nDisponível para a conciliação do master.');
+    }
   });
   const el = document.getElementById('an-prev');
   const inp = document.getElementById('an-valor');
@@ -6938,7 +6975,7 @@ function renderDiversos(){
         <td class="num">${brl(r.valor)}</td>
         <td class="num pos">${brl(pago)}${seloComprovante(r)||''}</td>
         <td class="num ${saldo>0.005?'amb':'pos'}"><b>${brl(saldo)}</b></td>
-        <td><span class="tag t-${s.k}">${s.l}</span></td>
+        <td><span class="tag t-${s.k}">${s.l}</span> ${typeof seloJanela==='function'?seloJanela(r):''}</td>
         <td style="white-space:nowrap">
           ${saldo>0.005 && pode('pagamentos','edit')?`<button class="b sm ok" onclick="formPagarDiverso('${r.id}')" title="Registrar pagamento">💸</button>`:''}
           ${pode('pagamentos','edit')?`<button class="b sm sec" onclick="formDespesaDiversa('${r.id}')" title="Alterar">✏️</button>`:''}
@@ -6970,7 +7007,8 @@ function formDespesaDiversa(id){
         <div class="hint" style="margin:2px 0 0">Cadastrados em Cadastros → Tipos a pagar.</div></div>
       <div class="fld full"><label>Fornecedor *</label>
         <input id="dv-forn" value="${esc(n.fornecedor||'')}" list="dl-dv-forn" placeholder="nome do fornecedor">
-        <datalist id="dl-dv-forn">${[...new Set((DB.despesasDiversas||[]).map(x=>x.fornecedor).filter(Boolean))].map(f=>`<option value="${esc(f)}">`).join('')}</datalist></div>
+        <datalist id="dl-dv-forn">${(typeof nomesFornecedores==='function'?nomesFornecedores():[]).map(f=>`<option value="${esc(f)}">`).join('')}</datalist>
+        ${typeof botaoCadastroRapido==='function'?botaoCadastroRapido('fornecedor','dv-forn'):''}</div>
       <div class="fld"><label>Valor (R$) *</label><input id="dv-valor" type="number" step="0.01" value="${n.valor||''}"></div>
       <div class="fld"><label>Vencimento</label><input id="dv-venc" type="date" value="${n.vencimento||''}"></div>
       <div class="fld"><label>Documento / NF / boleto</label><input id="dv-doc" value="${esc(n.documento||'')}"></div>
@@ -6994,7 +7032,8 @@ function formDespesaDiversa(id){
     if(id) Object.assign(r, dados);
     else {
       DB.despesasDiversas = DB.despesasDiversas || [];
-      DB.despesasDiversas.push(Object.assign({id:uid(), criadoEm:new Date().toISOString()}, dados));
+      DB.despesasDiversas.push(Object.assign({id:uid(), criadoEm:new Date().toISOString(),
+        criadoPor:(usuarioAtual()||{}).nome||''}, dados));
     }
     save(); logAcao(id?'Alterou conta a pagar':'Lançou conta a pagar','pagamentos',
       centroDe(dados.centro).l+' · '+forn+' · '+brl(valor));
@@ -7006,6 +7045,7 @@ function formDespesaDiversa(id){
 function formPagarDiverso(id){
   if(!precisaPermissao('pagamentos','edit')) return;
   const r = (DB.despesasDiversas||[]).find(x=>x.id===id); if(!r) return;
+  if(id && typeof exigirPermissaoAlteracao==='function' && !exigirPermissaoAlteracao(r)) return;
   const pago = pagoDiverso(r), saldo = saldoDiverso(r);
   COMPR_TMP = [];
   modal('Pagar conta · '+centroDe(r.centro).l, `
@@ -7030,12 +7070,17 @@ function formPagarDiverso(id){
       forma:val('dv-pforma'), conta:val('dv-pconta').trim(), obs:val('dv-pobs').trim(),
       comprovantes: (typeof comprovantesDoForm==='function' ? comprovantesDoForm() : []),
       criadoPor:(usuarioAtual()||{}).nome||''};
+    /* o pagamento é EFETIVADO agora: baixa a conta na hora.
+       O master confere depois, na conciliação. */
     novo.conc = isMaster() ? 'conciliado' : 'pendente';
     if(novo.conc === 'conciliado'){ novo.concPor = novo.criadoPor; novo.concEm = new Date().toISOString(); }
     DB.pagamentosDiversos.push(novo);
     save(); logAcao('Pagou conta diversa','pagamentos', r.fornecedor+' · '+brl(v));
     fechar(); renderAll();
-    if(novo.conc === 'pendente') alert('Pagamento lançado.\n\nAguardando conciliação do master.');
+    const restou = Math.max(0, saldo - v);
+    alert('Pagamento efetivado.\n\n' + brl(v) + ' em ' + r.fornecedor +
+      '\nA conta foi baixada' + (restou <= 0.005 ? ' e está quitada.' : '. Falta ' + brl(restou) + '.') +
+      '\n\nO comprovante e o lançamento estão disponíveis para a conciliação do master.');
   });
 }
 
@@ -7075,6 +7120,7 @@ function excluirPagDiverso(id, contaId){
 function excluirDespesaDiversa(id){
   if(!precisaPermissao('pagamentos','del')) return;
   const r = (DB.despesasDiversas||[]).find(x=>x.id===id); if(!r) return;
+  if(typeof exigirPermissaoAlteracao==='function' && !exigirPermissaoAlteracao(r)) return;
   const ps = (DB.pagamentosDiversos||[]).filter(p=>p.contaId===id);
   if(!confirm('Excluir a conta de '+esc(r.fornecedor)+' ('+brl(r.valor)+')?'+
     (ps.length?'\n\n'+ps.length+' pagamento(s) vinculados também serão apagados.':''))) return;
@@ -7191,7 +7237,7 @@ function renderReceitas(){
         <td class="num">${brl(r.valor)}</td>
         <td class="num pos">${brl(rec)}${seloComprovante(r)||''}</td>
         <td class="num ${saldo>0.005?'amb':'pos'}"><b>${brl(saldo)}</b></td>
-        <td><span class="tag t-${s.k}">${s.l}</span></td>
+        <td><span class="tag t-${s.k}">${s.l}</span> ${typeof seloJanela==='function'?seloJanela(r):''}</td>
         <td style="white-space:nowrap">
           ${saldo>0.005 && pode('diversos','edit')?`<button class="b sm ok" onclick="formReceberDiverso('${r.id}')" title="Registrar recebimento">💵</button>`:''}
           ${pode('diversos','edit')?`<button class="b sm sec" onclick="formReceitaDiversa('${r.id}')" title="Alterar">✏️</button>`:''}
@@ -7221,8 +7267,8 @@ function formReceitaDiversa(id){
         <div class="hint" style="margin:2px 0 0">Cadastrados em Cadastros → Tipos a receber.</div></div>
       <div class="fld full"><label>Cliente / pagador *</label>
         <input id="dr-cliente" value="${esc(n.cliente||'')}" list="dl-dr-cli" placeholder="quem vai pagar">
-        <datalist id="dl-dr-cli">${(DB.clientes||[]).map(c=>`<option value="${esc(c.nome)}">`).join('')}
-          ${[...new Set((DB.receitasDiversas||[]).map(x=>x.cliente).filter(Boolean))].slice(0,40).map(f=>`<option value="${esc(f)}">`).join('')}</datalist></div>
+        <datalist id="dl-dr-cli">${(typeof nomesClientes==='function'?nomesClientes():[]).map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
+        ${typeof botaoCadastroRapido==='function'?botaoCadastroRapido('cliente','dr-cliente'):''}</div>
       <div class="fld"><label>Valor (R$) *</label><input id="dr-valor" type="number" step="0.01" value="${n.valor||''}"></div>
       <div class="fld"><label>Vencimento</label><input id="dr-venc" type="date" value="${n.vencimento||''}"></div>
       <div class="fld"><label>Documento / NF</label><input id="dr-doc" value="${esc(n.documento||'')}"></div>
@@ -7246,7 +7292,8 @@ function formReceitaDiversa(id){
     if(id) Object.assign(r, dados);
     else {
       DB.receitasDiversas = DB.receitasDiversas || [];
-      DB.receitasDiversas.push(Object.assign({id:uid(), criadoEm:new Date().toISOString()}, dados));
+      DB.receitasDiversas.push(Object.assign({id:uid(), criadoEm:new Date().toISOString(),
+        criadoPor:(usuarioAtual()||{}).nome||''}, dados));
     }
     save(); logAcao(id?'Alterou conta a receber':'Lançou conta a receber','diversos',
       centroDe(dados.centro).l+' · '+cli+' · '+brl(valor));
@@ -7257,6 +7304,7 @@ function formReceitaDiversa(id){
 function formReceberDiverso(id){
   if(!precisaPermissao('diversos','edit')) return;
   const r = (DB.receitasDiversas||[]).find(x=>x.id===id); if(!r) return;
+  if(typeof exigirPermissaoAlteracao==='function' && !exigirPermissaoAlteracao(r)) return;
   const rec = recebidoDiverso(r), saldo = saldoReceita(r);
   COMPR_TMP = [];
   modal('Receber conta · '+centroDe(r.centro).l, `
@@ -7284,13 +7332,17 @@ function formReceberDiverso(id){
     DB.recebimentosDiversos.push(novo);
     save(); logAcao('Recebeu conta diversa','diversos', r.cliente+' · '+brl(v));
     fechar(); renderAll();
-    if(novo.conc === 'pendente') alert('Recebimento lançado.\n\nAguardando conciliação do master.');
+    const restou2 = Math.max(0, saldo - v);
+    alert('Recebimento efetivado.\n\n' + brl(v) + ' de ' + r.cliente +
+      '\nA conta foi baixada' + (restou2 <= 0.005 ? ' e está quitada.' : '. Falta ' + brl(restou2) + '.') +
+      '\n\nDisponível para a conciliação do master.');
   });
 }
 
 function excluirReceitaDiversa(id){
   if(!precisaPermissao('diversos','del')) return;
   const r = (DB.receitasDiversas||[]).find(x=>x.id===id); if(!r) return;
+  if(typeof exigirPermissaoAlteracao==='function' && !exigirPermissaoAlteracao(r)) return;
   const rs = (DB.recebimentosDiversos||[]).filter(p=>p.contaId===id);
   if(!confirm('Excluir a conta a receber de '+esc(r.cliente)+' ('+brl(r.valor)+')?'+
     (rs.length?'\n\n'+rs.length+' recebimento(s) também serão apagados.':''))) return;
@@ -7578,6 +7630,403 @@ function relTiposMovimento(){
     ${tabela(pag,'Contas a pagar por tipo')}
     <div class="hint" style="margin-top:12px">Os tipos vêm de Cadastros → Tipos a receber / Tipos a pagar.
     Para detalhar um tipo, use os relatórios 1 a 8.</div>`;
+}
+
+/* ============================================================
+   RELATÓRIOS DE CONSULTA POR PERÍODO E TIPO
+   14 · Pagamentos efetivados (tudo que saiu de caixa)
+   15 · Recebimentos efetivados (tudo que entrou)
+   Ambos juntam os três fluxos: veículo/fábrica, diversos e pedidos.
+   ============================================================ */
+
+let ULTIMO_REL = null;
+
+function relPagamentosEfetivados(){
+  const ini = val('rep-ini'), fim = val('rep-fim');
+  const tipoF = val('rel-tipo-pag') || '';
+  repHeader('Pagamentos efetivados', `Tudo que saiu do caixa · ${fmt(ini)} a ${fmt(fim)}`);
+
+  const linhas = [];
+  /* fábrica (veículos) */
+  (DB.pagamentosFabrica||[]).forEach(p=>{
+    if(!noPeriodo(p.data, ini, fim)) return;
+    const v = DB.veiculos.find(x=>x.chassi===p.chassi) || {};
+    linhas.push({data:p.data, fluxo:'Fábrica', tipo:'Veículo / fábrica',
+      desc:(v.modelo||'')+' · '+p.chassi, forn:'Fiat', valor:+p.valor||0,
+      forma:p.forma||'', conta:p.conta||'', quem:p.criadoPor||'', reg:p, area:'pagar'});
+  });
+  /* diversos */
+  (DB.pagamentosDiversos||[]).forEach(p=>{
+    if(!noPeriodo(p.data, ini, fim)) return;
+    const d = (DB.despesasDiversas||[]).find(x=>x.id===p.contaId) || {};
+    linhas.push({data:p.data, fluxo:'Diversos', tipo:d.categoria||'Outro',
+      desc:d.fornecedor||'', forn:centroDe(d.centro).l, valor:+p.valor||0,
+      forma:p.forma||'', conta:p.conta||'', quem:p.criadoPor||'', reg:p, area:'pagar'});
+  });
+
+  const tipos = [...new Set(linhas.map(l=>l.tipo))].sort();
+  const filtradas = tipoF ? linhas.filter(l=>l.tipo===tipoF) : linhas;
+  filtradas.sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+
+  REP_CSV = {nome:'pagamentos-efetivados', linhas:[
+    ['Data','Fluxo','Tipo','Descrição','Centro/Fornecedor','Forma','Conta','Valor','Quem lançou','Conciliação'],
+    ...filtradas.map(l=>[l.data,l.fluxo,l.tipo,l.desc,l.forn,l.forma,l.conta,
+      l.valor.toFixed(2),l.quem,l.reg.conc||'conciliado'])]};
+
+  const porTipo = {};
+  filtradas.forEach(l=>{ porTipo[l.tipo] = (porTipo[l.tipo]||0) + l.valor; });
+  const total = filtradas.reduce((s,l)=>s+l.valor,0);
+  const naoConc = filtradas.filter(l=>l.reg.conc==='pendente').length;
+
+  document.getElementById('rep-body').innerHTML = `
+    <div class="bar no-print" style="margin-bottom:12px">
+      <label class="hint" style="margin:0">Tipo</label>
+      <select id="rel-tipo-pag" onchange="relPagamentosEfetivados()">
+        <option value="">Todos os tipos</option>
+        ${tipos.map(t=>`<option ${tipoF===t?'selected':''}>${esc(t)}</option>`).join('')}
+      </select>
+      <span class="hint" style="margin:0">${filtradas.length} pagamento(s)</span>
+    </div>
+    <div class="cards">
+      <div class="kpi"><div class="l">Total pago no período</div><div class="v neg">${brl0(total)}</div>
+        <div class="s">${filtradas.length} pagamento(s)</div></div>
+      <div class="kpi"><div class="l">Fábrica</div><div class="v" style="font-size:17px">${brl0(filtradas.filter(l=>l.fluxo==='Fábrica').reduce((s,l)=>s+l.valor,0))}</div>
+        <div class="s">${filtradas.filter(l=>l.fluxo==='Fábrica').length} lançamento(s)</div></div>
+      <div class="kpi"><div class="l">Diversos</div><div class="v" style="font-size:17px">${brl0(filtradas.filter(l=>l.fluxo==='Diversos').reduce((s,l)=>s+l.valor,0))}</div>
+        <div class="s">${filtradas.filter(l=>l.fluxo==='Diversos').length} lançamento(s)</div></div>
+      <div class="kpi"><div class="l">Aguardando conferência</div><div class="v ${naoConc?'amb':'pos'}">${naoConc}</div>
+        <div class="s">do master</div></div>
+    </div>
+    ${Object.keys(porTipo).length ? `<h3 style="margin:14px 0 8px;font-size:12.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px">Por tipo de pagamento</h3>
+    <table class="tbl"><thead><tr><th>Tipo</th><th class="num">Lançamentos</th><th class="num">Valor</th><th class="num">%</th></tr></thead><tbody>
+      ${Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).map(([t,v])=>`<tr>
+        <td><b>${esc(t)}</b></td>
+        <td class="num">${filtradas.filter(l=>l.tipo===t).length}</td>
+        <td class="num">${brl(v)}</td>
+        <td class="num">${total?(100*v/total).toFixed(1):'0'}%</td></tr>`).join('')}
+      </tbody></table>`:''}
+    <h3 style="margin:18px 0 8px;font-size:12.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px">Detalhe dos pagamentos</h3>
+    ${filtradas.length ? `<div style="overflow-x:auto"><table class="tbl"><thead><tr>
+      <th>Data</th><th>Fluxo</th><th>Tipo</th><th>Descrição</th><th>Fornecedor / centro</th>
+      <th>Forma</th><th class="num">Valor</th><th>Conferência</th><th></th></tr></thead><tbody>
+      ${filtradas.map(l=>`<tr>
+        <td>${fmt(l.data)}</td>
+        <td><span class="tag t-div">${esc(l.fluxo)}</span></td>
+        <td>${esc(l.tipo)}</td>
+        <td>${esc(l.desc)}</td>
+        <td>${esc(l.forn)}</td>
+        <td>${esc(l.forma||'—')}</td>
+        <td class="num"><b>${brl(l.valor)}</b></td>
+        <td>${seloConc(l.reg)}</td>
+        <td>${seloComprovante(l.reg)? `<button class="b sm sec" onclick="verComprovantes('${l.reg.id}')">📎</button>`:''}</td>
+      </tr>`).join('')}
+      </tbody><tfoot><tr style="background:var(--panel2);font-weight:700"><td colspan="6">Total</td>
+        <td class="num">${brl(total)}</td><td colspan="2"></td></tr></tfoot></table></div>`
+      : '<div class="empty">Nenhum pagamento no período com esse filtro.</div>'}`;
+}
+
+function relRecebimentosEfetivados(){
+  const ini = val('rep-ini'), fim = val('rep-fim');
+  const tipoF = val('rel-tipo-rec') || '';
+  repHeader('Recebimentos efetivados', `Tudo que entrou no caixa · ${fmt(ini)} a ${fmt(fim)}`);
+
+  const linhas = [];
+  /* títulos de veículo */
+  (DB.recebimentos||[]).forEach(r=>{
+    if(!noPeriodo(r.data, ini, fim)) return;
+    const t = titulo(r.tituloId) || {};
+    const v = venda(t.vendaId) || {};
+    linhas.push({data:r.data, fluxo:'Veículo', tipo:t.tipoNome||'Outro',
+      desc:(v.cliente||'')+' · '+(v.chassi||''), forn:v.vendedor||'', valor:+r.valor||0,
+      forma:r.forma||'', conta:r.conta||'', quem:r.criadoPor||'', reg:r, area:'receber'});
+  });
+  /* antecipações de venda direta */
+  (DB.recebimentosPedido||[]).forEach(r=>{
+    if(!noPeriodo(r.data, ini, fim)) return;
+    const p = (DB.pedidos||[]).find(x=>x.id===r.pedidoId) || {};
+    linhas.push({data:r.data, fluxo:'Antecipação', tipo:'Venda direta (antecipação)',
+      desc:(p.cliente||'')+' · '+(p.modelo||''), forn:p.vendedor||'', valor:+r.valor||0,
+      forma:r.forma||'', conta:r.conta||'', quem:r.criadoPor||'', reg:r, area:'receber'});
+  });
+  /* diversos */
+  (DB.recebimentosDiversos||[]).forEach(r=>{
+    if(!noPeriodo(r.data, ini, fim)) return;
+    const d = (DB.receitasDiversas||[]).find(x=>x.id===r.contaId) || {};
+    linhas.push({data:r.data, fluxo:'Diversos', tipo:d.categoria||'Outro',
+      desc:d.cliente||'', forn:centroDe(d.centro).l, valor:+r.valor||0,
+      forma:r.forma||'', conta:r.conta||'', quem:r.criadoPor||'', reg:r, area:'receber'});
+  });
+
+  const tipos = [...new Set(linhas.map(l=>l.tipo))].sort();
+  const filtradas = tipoF ? linhas.filter(l=>l.tipo===tipoF) : linhas;
+  filtradas.sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+
+  REP_CSV = {nome:'recebimentos-efetivados', linhas:[
+    ['Data','Fluxo','Tipo','Descrição','Centro/Vendedor','Forma','Conta','Valor','Quem lançou','Conciliação'],
+    ...filtradas.map(l=>[l.data,l.fluxo,l.tipo,l.desc,l.forn,l.forma,l.conta,
+      l.valor.toFixed(2),l.quem,l.reg.conc||'conciliado'])]};
+
+  const porTipo = {};
+  filtradas.forEach(l=>{ porTipo[l.tipo] = (porTipo[l.tipo]||0) + l.valor; });
+  const total = filtradas.reduce((s,l)=>s+l.valor,0);
+  const naoConc = filtradas.filter(l=>l.reg.conc==='pendente').length;
+
+  document.getElementById('rep-body').innerHTML = `
+    <div class="bar no-print" style="margin-bottom:12px">
+      <label class="hint" style="margin:0">Tipo</label>
+      <select id="rel-tipo-rec" onchange="relRecebimentosEfetivados()">
+        <option value="">Todos os tipos</option>
+        ${tipos.map(t=>`<option ${tipoF===t?'selected':''}>${esc(t)}</option>`).join('')}
+      </select>
+      <span class="hint" style="margin:0">${filtradas.length} recebimento(s)</span>
+    </div>
+    <div class="cards">
+      <div class="kpi"><div class="l">Total recebido no período</div><div class="v pos">${brl0(total)}</div>
+        <div class="s">${filtradas.length} recebimento(s)</div></div>
+      <div class="kpi"><div class="l">Veículos</div><div class="v" style="font-size:17px">${brl0(filtradas.filter(l=>l.fluxo==='Veículo').reduce((s,l)=>s+l.valor,0))}</div>
+        <div class="s">${filtradas.filter(l=>l.fluxo==='Veículo').length} baixa(s)</div></div>
+      <div class="kpi"><div class="l">Antecipações</div><div class="v" style="font-size:17px">${brl0(filtradas.filter(l=>l.fluxo==='Antecipação').reduce((s,l)=>s+l.valor,0))}</div>
+        <div class="s">${filtradas.filter(l=>l.fluxo==='Antecipação').length} lançamento(s)</div></div>
+      <div class="kpi"><div class="l">Diversos</div><div class="v" style="font-size:17px">${brl0(filtradas.filter(l=>l.fluxo==='Diversos').reduce((s,l)=>s+l.valor,0))}</div>
+        <div class="s">${filtradas.filter(l=>l.fluxo==='Diversos').length} lançamento(s)</div></div>
+    </div>
+    ${Object.keys(porTipo).length ? `<h3 style="margin:14px 0 8px;font-size:12.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px">Por tipo de recebimento</h3>
+    <table class="tbl"><thead><tr><th>Tipo</th><th class="num">Lançamentos</th><th class="num">Valor</th><th class="num">%</th></tr></thead><tbody>
+      ${Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).map(([t,v])=>`<tr>
+        <td><b>${esc(t)}</b></td>
+        <td class="num">${filtradas.filter(l=>l.tipo===t).length}</td>
+        <td class="num">${brl(v)}</td>
+        <td class="num">${total?(100*v/total).toFixed(1):'0'}%</td></tr>`).join('')}
+      </tbody></table>`:''}
+    <h3 style="margin:18px 0 8px;font-size:12.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px">Detalhe dos recebimentos</h3>
+    ${filtradas.length ? `<div style="overflow-x:auto"><table class="tbl"><thead><tr>
+      <th>Data</th><th>Fluxo</th><th>Tipo</th><th>Cliente / descrição</th><th>Centro / vendedor</th>
+      <th>Forma</th><th class="num">Valor</th><th>Conferência</th><th></th></tr></thead><tbody>
+      ${filtradas.map(l=>`<tr>
+        <td>${fmt(l.data)}</td>
+        <td><span class="tag t-aberto">${esc(l.fluxo)}</span></td>
+        <td>${esc(l.tipo)}</td>
+        <td>${esc(l.desc)}</td>
+        <td>${esc(l.forn)}</td>
+        <td>${esc(l.forma||'—')}</td>
+        <td class="num"><b>${brl(l.valor)}</b></td>
+        <td>${seloConc(l.reg)}</td>
+        <td>${seloComprovante(l.reg)? `<button class="b sm sec" onclick="verComprovantes('${l.reg.id}')">📎</button>`:''}</td>
+      </tr>`).join('')}
+      </tbody><tfoot><tr style="background:var(--panel2);font-weight:700"><td colspan="6">Total</td>
+        <td class="num">${brl(total)}</td><td colspan="2"></td></tr></tfoot></table></div>`
+      : '<div class="empty">Nenhum recebimento no período com esse filtro.</div>'}`;
+}
+
+/* ============================================================
+   CADASTRO DE FORNECEDORES + REGRA DAS 48 HORAS
+   ============================================================ */
+
+/* ---------------- fornecedores ---------------- */
+const SEG_FORNECEDORES = [
+  'Autopeças','Combustível','Pneus','Funilaria / Pintura','Serviços terceirizados',
+  'Aluguel','Água / Energia','Telefonia / Internet','Contabilidade','Software / Sistemas',
+  'Seguros','Marketing','Fretes / Logística','Manutenção','Outros'
+];
+
+function renderFornecedores(){
+  const el = document.getElementById('tbl-fornecedores'); if(!el) return;
+  DB.fornecedores = DB.fornecedores || [];
+
+  const busca = (val('f-busca-fo')||'').toLowerCase();
+  let lista = DB.fornecedores.slice();
+  if(busca) lista = lista.filter(f=>[f.nome, f.doc, f.segmento, f.email].join(' ').toLowerCase().includes(busca));
+  lista.sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||'')));
+
+  const usa = f => (DB.despesasDiversas||[]).filter(d=>String(d.fornecedor||'').toLowerCase()===String(f.nome||'').toLowerCase());
+
+  if(!lista.length){
+    el.innerHTML = `<div class="empty">${DB.fornecedores.length
+      ? 'Nenhum fornecedor com essa busca.'
+      : 'Nenhum fornecedor cadastrado. Use “＋ Novo fornecedor” — eles aparecem nos lançamentos de contas a pagar.'}</div>`;
+    return;
+  }
+
+  el.innerHTML = `<div style="overflow-x:auto"><table class="tbl"><thead><tr>
+      <th>Fornecedor</th><th>CNPJ / CPF</th><th>Segmento</th><th>Contato</th>
+      <th class="num">Contas</th><th class="num">Em aberto</th><th></th></tr></thead><tbody>
+    ${lista.map(f=>{
+      const ds = usa(f);
+      const aberto = ds.reduce((s,d)=>s+saldoDiverso(d),0);
+      return `<tr>
+        <td><b>${esc(f.nome)}</b>${f.obs?`<div class="hint" style="margin:0">${esc(f.obs)}</div>`:''}</td>
+        <td>${esc(f.doc||'—')}</td>
+        <td>${esc(f.segmento||'—')}</td>
+        <td>${esc(f.tel||'—')}${f.email?`<div class="hint" style="margin:0">${esc(f.email)}</div>`:''}</td>
+        <td class="num">${ds.length}</td>
+        <td class="num ${aberto>0.005?'amb':'pos'}">${brl(aberto)}</td>
+        <td style="white-space:nowrap">
+          ${pode('cadastros','edit')?`<button class="b sm sec" onclick="formFornecedor('${f.id}')" title="Alterar">✏️</button>`:''}
+          ${pode('cadastros','del')?`<button class="b sm dang" onclick="excluirFornecedor('${f.id}')" title="Excluir">🗑</button>`:''}
+        </td></tr>`;}).join('')}
+    </tbody></table></div>
+    <div class="hint">${lista.length} fornecedor(es).</div>`;
+}
+
+function formFornecedor(id, aposSalvar){
+  if(!precisaPermissao('cadastros','edit')) return;
+  DB.fornecedores = DB.fornecedores || [];
+  const f = id ? DB.fornecedores.find(x=>x.id===id) : null;
+  const n = f || {};
+  modal(id?'Alterar fornecedor':'Novo fornecedor', `<div class="grid">
+    <div class="fld full"><label>Nome / razão social *</label>
+      <input id="m-nome" value="${esc(n.nome||'')}" placeholder="ex.: Auto Peças Campina Ltda"></div>
+    <div class="fld"><label>CNPJ / CPF</label><input id="m-doc" value="${esc(n.doc||'')}"></div>
+    <div class="fld"><label>Segmento</label>
+      <select id="m-seg">${SEG_FORNECEDORES.map(s=>`<option ${n.segmento===s?'selected':''}>${s}</option>`).join('')}</select></div>
+    <div class="fld"><label>Telefone</label><input id="m-tel" value="${esc(n.tel||'')}"></div>
+    <div class="fld"><label>E-mail</label><input id="m-email" value="${esc(n.email||'')}"></div>
+    <div class="fld full"><label>Observações</label><input id="m-obs" value="${esc(n.obs||'')}" placeholder="condições, prazo, contato…"></div>
+  </div>`, ()=>{
+    const nome = (val('m-nome')||'').trim();
+    if(!nome) return alert('Informe o nome do fornecedor.');
+    if(!id && DB.fornecedores.some(x=>String(x.nome).toLowerCase()===nome.toLowerCase()))
+      return alert('Já existe um fornecedor com esse nome.');
+    const dados = {nome, doc:(val('m-doc')||'').trim(), segmento:val('m-seg'),
+      tel:(val('m-tel')||'').trim(), email:(val('m-email')||'').trim(), obs:(val('m-obs')||'').trim()};
+    if(id) Object.assign(f, dados);
+    else DB.fornecedores.push(Object.assign({id:uid(), criadoEm:new Date().toISOString()}, dados));
+    save(); logAcao(id?'Alterou fornecedor':'Criou fornecedor','cadastros', nome);
+    fechar(); renderAll();
+    if(typeof aposSalvar === 'function') aposSalvar(nome);
+  });
+}
+
+function excluirFornecedor(id){
+  if(!precisaPermissao('cadastros','del')) return;
+  DB.fornecedores = DB.fornecedores || [];
+  const f = DB.fornecedores.find(x=>x.id===id); if(!f) return;
+  const usos = (DB.despesasDiversas||[]).filter(d=>String(d.fornecedor||'').toLowerCase()===String(f.nome||'').toLowerCase()).length;
+  if(usos) return alert('Este fornecedor está em '+usos+' conta(s) a pagar.\n\nEle não pode ser excluído enquanto houver lançamentos.');
+  if(!confirm('Excluir o fornecedor "'+f.nome+'"?')) return;
+  DB.fornecedores = DB.fornecedores.filter(x=>x.id!==id);
+  save(); logAcao('Excluiu fornecedor','cadastros', f.nome);
+  renderAll();
+}
+
+/* opções para os datalists */
+function nomesFornecedores(){
+  DB.fornecedores = DB.fornecedores || [];
+  return [...new Set([...DB.fornecedores.map(f=>f.nome),
+    ...(DB.despesasDiversas||[]).map(d=>d.fornecedor)].filter(Boolean))]
+    .sort((a,b)=>String(a).localeCompare(String(b)));
+}
+function nomesClientes(){
+  DB.clientes = DB.clientes || [];
+  return [...new Set([...DB.clientes.map(c=>c.nome),
+    ...(DB.vendas||[]).map(v=>v.cliente),
+    ...(DB.receitasDiversas||[]).map(r=>r.cliente),
+    ...(DB.pedidos||[]).map(p=>p.cliente)].filter(Boolean))]
+    .sort((a,b)=>String(a).localeCompare(String(b)));
+}
+
+/* botão de cadastro rápido ao lado do campo */
+function botaoCadastroRapido(tipo, campoId){
+  const rot = tipo === 'fornecedor' ? '＋ Fornecedor' : '＋ Cliente';
+  return `<button type="button" class="b sec sm" style="margin-top:6px;padding:3px 9px;font-size:11.5px"
+    onclick="cadastroRapido('${tipo}','${campoId}')" title="Cadastrar ${tipo}">${rot}</button>`;
+}
+function cadastroRapido(tipo, campoId){
+  const preencher = nome => {
+    const el = document.getElementById(campoId);
+    if(el){ el.value = nome; }
+  };
+  if(tipo === 'fornecedor'){
+    if(typeof formFornecedor === 'function') return formFornecedor(null, preencher);
+  }
+  /* cliente */
+  DB.clientes = DB.clientes || [];
+  const voltar = (nome)=>{ const el=document.getElementById(campoId); if(el) el.value=nome; };
+  modal('Novo cliente', `<div class="grid">
+    <div class="fld full"><label>Nome *</label><input id="m-nome" placeholder="nome completo"></div>
+    <div class="fld"><label>CPF/CNPJ</label><input id="m-doc"></div>
+    <div class="fld"><label>Telefone</label><input id="m-tel"></div>
+  </div>`, ()=>{
+    const nome = (val('m-nome')||'').trim();
+    if(!nome) return alert('Informe o nome do cliente.');
+    if(DB.clientes.some(c=>String(c.nome).toLowerCase()===nome.toLowerCase())) return alert('Já existe um cliente com esse nome.');
+    DB.clientes.push({id:uid(), nome, doc:(val('m-doc')||'').trim(), tel:(val('m-tel')||'').trim(), obs:''});
+    save(); fechar(); renderAll(); voltar(nome);
+    logAcao('Criou cliente','cadastros', nome);
+  });
+}
+
+/* ============================================================
+   REGRA DAS 48 HORAS
+   O lançamento pode ser alterado por quem digitou durante 48 horas.
+   Depois disso, só o master altera ou exclui.
+   ============================================================ */
+const JANELA_ALTERACAO_H = 48;
+
+function quandoFoiDigitado(reg){
+  if(!reg) return null;
+  const bruto = reg.criadoEm || reg.digitadoEm || '';
+  if(bruto){ const d = new Date(bruto); if(!isNaN(d.getTime())) return d; }
+  /* registros antigos sem carimbo: usa a data do movimento ao meio-dia */
+  const data = reg.data || reg.vencimento || '';
+  if(data && /^\d{4}-\d{2}-\d{2}$/.test(data)){
+    const d = new Date(data+'T12:00');
+    if(!isNaN(d.getTime())) return d;
+  }
+  return null;
+}
+
+/* devolve {pode, motivo, horas} */
+/* o usuario atual, nos dois modos (nuvem usa PERFIL; offline usa SESSAO) */
+function usuarioEhMaster(){
+  try{
+    if(typeof PERFIL !== 'undefined' && PERFIL) return !!PERFIL.master;
+  }catch(e){}
+  try{ if(typeof isMaster === 'function' && isMaster()) return true; }catch(e){}
+  try{
+    if(typeof usuarioAtual === 'function'){ const u = usuarioAtual(); if(u) return !!u.master; }
+  }catch(e){}
+  return false;
+}
+
+function podeAlterarLancamento(reg){
+  if(usuarioEhMaster()) return {pode:true, motivo:'', horas:null};
+  const quando = quandoFoiDigitado(reg);
+  if(!quando) return {pode:true, motivo:'', horas:null};      // sem carimbo: não bloqueia
+  const horas = (Date.now() - quando.getTime()) / 3600000;
+  if(horas <= JANELA_ALTERACAO_H) return {pode:true, motivo:'', horas};
+  return {
+    pode:false, horas,
+    motivo: 'Este lançamento foi digitado há ' + Math.floor(horas/24) + ' dia(s) (' +
+      quando.toLocaleString('pt-BR') + ').\n\nAlterações só são permitidas nas primeiras ' +
+      JANELA_ALTERACAO_H + ' horas. Depois disso, somente o master pode alterar.'
+  };
+}
+
+/* chamar antes de abrir qualquer formulário de alteração/exclusão */
+function exigirPermissaoAlteracao(reg){
+  const r = podeAlterarLancamento(reg);
+  if(r.pode) return true;
+  alert(r.motivo);
+  return false;
+}
+
+/* selo indicando a janela de alteração */
+function seloJanela(reg){
+  const r = podeAlterarLancamento(reg);
+  if(r.horas === null) return '';
+  if(r.pode){
+    const restam = Math.max(0, JANELA_ALTERACAO_H - r.horas);
+    return `<span class="tag t-aberto" title="Pode ser alterado nas primeiras 48 horas">⏱ ${restam.toFixed(0)}h p/ alterar</span>`;
+  }
+  return `<span class="tag t-vencido" title="Passou das 48 horas — só o master altera">🔒 48h expirou</span>`;
+}
+
+/* carimba o momento da digitação (chamar ao criar o registro) */
+function carimbarDigitacao(reg){
+  if(!reg) return reg;
+  if(!reg.criadoEm) reg.criadoEm = new Date().toISOString();
+  return reg;
 }
 
 </script>
