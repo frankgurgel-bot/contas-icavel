@@ -4151,7 +4151,7 @@ function renderEstoque(){
   }
   if(!lista.length){ el.innerHTML = '<div class="empty">Nenhum veículo. Use “Importar faturamento da fábrica” para carregar o relatório do dia.</div>'; return; }
   el.innerHTML = `<table class="tbl"><thead><tr>
-      <th>Chassi</th><th>Veículo</th><th>Natureza</th><th>Situação</th><th>Fábrica</th><th>Fotos</th><th class="num">Pé da NF</th><th class="num">Custo</th><th></th>
+      <th>Chassi</th><th>Veículo</th><th>Natureza</th><th>Situação</th><th>Faturamento fábrica</th><th>Fábrica</th><th>Fotos</th><th class="num">Pé da NF</th><th class="num">Custo</th><th></th>
     </tr></thead><tbody>
     ${lista.map(v=>{
       const st = statusPagamento(v);
@@ -4162,6 +4162,13 @@ function renderEstoque(){
         <td>${badgeNat(v)}</td>
         <td>${vend?'<span class="tag t-parcial">Vendido</span>':'<span class="tag t-quitado">Disponível</span>'}
           <div class="hint" style="margin:0">${vend ? esc((DB.vendas.find(x=>x.chassi===v.chassi)||{}).cliente||'') : (v.diasEstoque!=null? v.diasEstoque+' dia(s) em estoque':'')}</div></td>
+        <td>${(()=>{
+          const dt = v.dataFaturamento || v.dataCompra || '';
+          if(!dt) return '<span class="hint">—</span>';
+          const dias = (typeof diasAte==='function') ? -diasAte(dt) : null;
+          return `<b>${fmt(dt)}</b>` + (dias!==null && dias>=0
+            ? `<div class="hint" style="margin:0">há ${dias} dia(s)</div>` : '');
+        })()}</td>
         <td>${badgePag(st)}</td>
         <td>${galeriaMini(v.fotos)}</td>
         <td class="num">${brl(v.peNF)}</td>
