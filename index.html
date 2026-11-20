@@ -238,6 +238,7 @@
       </select>
       <select id="f-sit-e" onchange="renderEstoque()">
         <option value="disponivel">Disponíveis (no estoque)</option>
+        <option value="reservado">🔖 Reservados</option>
         <option value="aguardando">↩️ Aguardando NF do cliente</option>
         <option value="devolvido">Devolvidos à fábrica</option>
         <option value="vendido">Vendidos</option>
@@ -1013,10 +1014,15 @@ async function iniciarAppNuvem(){
   document.getElementById('topo-user').innerHTML =
     `<b>${esc(PERFIL.nome)}</b> ${PERFIL.master?'<span class="tag t-div">master</span>':''}`;
   await baixarTudo();
+  /* os cadastros-semente (tipos, pagadores) criados pelo normalize() NÃO
+     existem na nuvem ainda: envia antes de tirar o snapshot, senão o
+     próximo login os perde de novo. */
+  await enviarMudancas();
   tiraSnapshot();
   aplicarPermissoes();
   periodoPadrao();
   renderAll();
+  if(typeof iniciarControleReservas==='function') iniciarControleReservas();
   iniciarSyncAutomatico();
   const primeira = [...document.querySelectorAll('nav button[data-v]')].find(b=>b.style.display !== 'none');
   if(primeira) primeira.click();
@@ -2686,6 +2692,9 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   b.classList.add('on'); document.getElementById('v-'+b.dataset.v).classList.add('on');
   const t = document.getElementById('nav-titulo');
   if(t) t.textContent = b.textContent.trim();
+  /* telas que montam o próprio conteúdo ao abrir */
+  if(b.dataset.v === 'cadastros' && typeof renderVisaoCadastros==='function') renderVisaoCadastros();
+  if(b.dataset.v === 'fases' && typeof renderFasesVD==='function') renderFasesVD();
   renderAll();
 });
 /* abas da tela "Diversos" (a pagar / a receber) */
@@ -3350,7 +3359,10 @@ function excluirBaixa(id, tituloId){
 
 /* ================= CADASTROS ================= */
 function renderTipos(){
+  /* a aba antiga "Tipos de recebimento" virou "Tipos a receber" (cre-tipos.js);
+     esta função fica só como compatibilidade e não deve quebrar o render. */
   const el = document.getElementById('tbl-tipos');
+  if(!el) return;
   el.innerHTML = `<table class="tbl"><thead><tr><th></th><th>Tipo</th><th>Categoria</th><th class="num">Títulos</th><th class="num">Valor</th><th class="num">Em aberto</th><th></th></tr></thead><tbody>
     ${DB.tipos.map(t=>{
       const ts = DB.titulos.filter(x=>x.tipoId===t.id);
@@ -3905,7 +3917,8 @@ const badgeNat = v => { const n = NAT[natDe(v)]; return `<span class="tag" style
 
 /* veículo vendido? = existe venda com este chassi */
 const veicVendido = v => !!(v && DB.vendas.some(x=>x.chassi === v.chassi));
-const veicDisponivel = v => !veicVendido(v);
+const veicDisponivel = v => !veicVendido(v) &&
+  !(typeof reservaDoVeiculo==='function' && reservaDoVeiculo(v));
 
 /* ============================================================
    FOTOS — compressão no navegador, guardadas no próprio registro
@@ -4158,6 +4171,7 @@ function estoqueFiltrado(){
     /* carro devolvido à fábrica ou já com NF do cliente não é estoque */
     if(v.baixadoEstoque && sit !== 'todos') return false;
     if(sit === 'disponivel' && (!veicDisponivel(v) || v.devolvidoFabrica)) return false;
+    if(sit === 'reservado' && !(typeof reservaDoVeiculo==='function' && reservaDoVeiculo(v))) return false;
     if(sit === 'vendido' && !veicVendido(v)) return false;
     if(sit === 'aguardando' && !v.aguardandoNfCliente) return false;
     if(sit === 'devolvido' && !v.devolvidoFabrica) return false;
@@ -4181,6 +4195,8 @@ function renderEstoque(){
       <div class="kpi"><div class="l">Estoque</div><div class="v">${disp.filter(v=>natDe(v)==='estoque').length}</div><div class="s">Rede</div></div>
       <div class="kpi"><div class="l">Venda direta</div><div class="v" style="color:#a78bfa">${DB.veiculos.filter(v=>natDe(v)==='vendaDireta'&&veicDisponivel(v)).length}</div><div class="s">aguardando venda</div></div>
       <div class="kpi"><div class="l">Test-drive</div><div class="v pos">${disp.filter(v=>natDe(v)==='testDrive').length}</div><div class="s">frota da loja</div></div>
+      <div class="kpi"><div class="l">Reservados</div><div class="v amb">${DB.veiculos.filter(v=>typeof reservaDoVeiculo==='function' && reservaDoVeiculo(v)).length}</div>
+        <div class="s">validade de 36 h</div></div>
       <div class="kpi"><div class="l">Vendidos no mês</div><div class="v">${DB.vendas.filter(x=>String(x.data||'').slice(0,7)===hoje().slice(0,7)).length}</div>
         <div class="s">${brl0(DB.vendas.filter(x=>String(x.data||'').slice(0,7)===hoje().slice(0,7)).reduce((s,x)=>s+(+x.valorVenda||0),0))} em vendas</div></div>`;
   }
@@ -4196,8 +4212,8 @@ function renderEstoque(){
         <td>${esc(v.modelo||'—')}<div class="hint" style="margin:0">${esc(v.cor||'')}${v.diasEstoque!=null?'':' '}</div></td>
         <td>${badgeNat(v)}</td>
         <td>${vend?'<span class="tag t-parcial">Vendido</span>'
-          : (typeof veiculoReservado==='function' && veiculoReservado(v)
-              ? '<span class="tag t-parcial">🔒 Reservado VD</span>'
+          : ((typeof reservaDoVeiculo==='function' && reservaDoVeiculo(v))
+              ? seloReserva(v)
               : '<span class="tag t-quitado">Disponível</span>')}
           <div class="hint" style="margin:0">${vend ? esc((DB.vendas.find(x=>x.chassi===v.chassi)||{}).cliente||'') : (v.diasEstoque!=null? v.diasEstoque+' dia(s) em estoque':'')}</div></td>
         <td>${(()=>{
@@ -4212,7 +4228,9 @@ function renderEstoque(){
         <td class="num">${brl(v.peNF)}</td>
         <td class="num">${brl(custoFabrica(v))}${(typeof jurosFabrica==='function' && jurosFabrica(v)>0.005)?`<div class="hint amb" style="margin:0">+ ${brl(jurosFabrica(v))} juros</div>`:''}</td>
         <td style="white-space:nowrap">
-          ${(!vend && pode('vendas','edit'))?`<button class="b sm ok" onclick="formVenderVeiculo('${v.chassi}')" title="Vender este veículo">💰 Vender</button>`:''}
+          ${(!vend && pode('vendas','edit') && !(typeof reservaDoVeiculo==='function' && reservaDoVeiculo(v)))?`<button class="b sm ok" onclick="formVenderVeiculo('${v.chassi}')" title="Vender este veículo">💰 Vender</button>`:''}
+          ${(!vend && pode('vendas','edit'))?`<button class="b sm sec" onclick="formReservarVeiculo('${v.chassi}')" title="${(typeof reservaDoVeiculo==='function' && reservaDoVeiculo(v))?'Alterar a reserva':'Reservar para um cliente em negociação'}">🔖</button>`:''}
+          ${(typeof reservaDoVeiculo==='function' && reservaDoVeiculo(v) && reservaDoVeiculo(v).origem!=='vd' && pode('vendas','edit'))?`<button class="b sm dang" onclick="liberarReservaVeiculo('${v.chassi}')" title="Liberar a reserva">✕</button>`:''}
           ${vend?`<button class="b sm sec" onclick="dossie(DB.vendas.find(x=>x.chassi==='${v.chassi}').id)" title="Ver a venda">📄</button>`:''}
           ${pode('estoque','edit')?`<button class="b sm sec" onclick="formVeiculo('${v.chassi}')" title="Editar">✏️</button>`:''}
           ${pode('pagamentos','edit')?`<button class="b sm sec" onclick="gerirBoletos('${v.chassi}')" title="Boletos à fábrica">🏭</button>`:''}
@@ -7913,63 +7931,97 @@ function renderVisaoCadastros(){
   DB.pagadores = DB.pagadores || []; DB.vendedores = DB.vendedores || [];
   if(typeof aplicarSeedTiposPagar === 'function') aplicarSeedTiposPagar();
 
-  const usa = (arr, campo) => n => (arr||[]).filter(x=>String(x[campo]||'').toLowerCase()===String(n||'').toLowerCase()).length;
+  const usaFornecedor = n => (DB.despesasDiversas||[]).filter(x=>String(x.fornecedor||'').toLowerCase()===String(n||'').toLowerCase()).length;
+  const usaCliente = n => (DB.vendas||[]).filter(x=>x.cliente===n).length +
+                           (DB.pedidos||[]).filter(x=>x.cliente===n).length +
+                           (DB.receitasDiversas||[]).filter(x=>x.cliente===n).length;
 
   const grupos = [
-    {l:'🏷 Tipos a receber', itens:DB.tipos, cat: t=>t.categoria||'Outros',
+    {l:'Tipos a receber', ic:'🏷', aba:'tipos-receber', itens:DB.tipos,
+      cat: t=>t.categoria||'Outros', cor: t=>t.cor,
       uso: t=>DB.titulos.filter(x=>x.tipoId===t.id).length + (DB.receitasDiversas||[]).filter(x=>x.tipoId===t.id).length,
-      aba:'tipos-receber'},
-    {l:'🏷 Tipos a pagar', itens:DB.tiposPagar, cat: t=>t.categoria||'Outros',
+      essencial:'Todo título de veículo e toda conta a receber precisam de um tipo.'},
+    {l:'Tipos a pagar', ic:'🏷', aba:'tipos-pagar', itens:DB.tiposPagar,
+      cat: t=>t.categoria||'Outros', cor: t=>t.cor,
       uso: t=>(DB.despesasDiversas||[]).filter(x=>x.tipoId===t.id).length,
-      aba:'tipos-pagar'},
-    {l:'🏦 Pagadores', itens:DB.pagadores, cat: p=>p.tipo||'',
-      uso: p=>(DB.titulos||[]).filter(x=>x.pagador===p.nome).length +
-             (DB.recebimentos||[]).filter(x=>x.conta===p.nome).length,
-      aba:'pagadores'},
-    {l:'🏭 Fornecedores', itens:DB.fornecedores, cat: f=>f.segmento||'',
-      uso: usa(DB.despesasDiversas,'fornecedor'),
-      aba:'fornecedores'},
-    {l:'👥 Clientes', itens:DB.clientes, cat: c=>'',
-      uso: c=>(DB.vendas||[]).filter(x=>x.cliente===c.nome).length +
-             (DB.pedidos||[]).filter(x=>x.cliente===c.nome).length +
-             (DB.receitasDiversas||[]).filter(x=>x.cliente===c.nome).length,
-      aba:'clientes'},
-    {l:'🧑‍💼 Vendedores', itens:DB.vendedores, cat: v=>v.loja||'',
+      essencial:'Toda conta a pagar precisa de um tipo.'},
+    {l:'Fornecedores', ic:'🏭', aba:'fornecedores', itens:DB.fornecedores,
+      cat: f=>f.segmento||'', cor:()=>null,
+      uso: f=>usaFornecedor(f.nome),
+      essencial:'Quem recebe os pagamentos diversos (aluguel, peças, combustível…).'},
+    {l:'Clientes', ic:'👥', aba:'clientes', itens:DB.clientes,
+      cat: c=>c.doc?'com documento':'sem documento', cor:()=>null,
+      uso: c=>usaCliente(c.nome),
+      essencial:'Quem compra o carro ou paga uma conta a receber.'},
+    {l:'Pagadores', ic:'🏦', aba:'pagadores', itens:DB.pagadores,
+      cat: p=>p.tipo||'', cor:()=>null,
+      uso: p=>(DB.titulos||[]).filter(x=>x.pagador===p.nome).length,
+      essencial:'Bancos, financeiras e a fábrica que efetivamente pagam o título.'},
+    {l:'Vendedores', ic:'🧑‍💼', aba:'vendedores', itens:DB.vendedores,
+      cat: v=>v.loja==='M'?'Matriz':(v.loja==='F'?'Filial':''), cor:()=>null,
       uso: v=>(DB.vendas||[]).filter(x=>x.vendedor===v.nome).length +
-             (DB.pedidos||[]).filter(x=>x.vendedor===v.nome).length,
-      aba:'vendedores'}
+              (DB.pedidos||[]).filter(x=>x.vendedor===v.nome).length,
+      essencial:'Aparece no pedido e na venda.'}
   ];
 
   const total = grupos.reduce((s,g)=>s+g.itens.length,0);
-  const semUso = grupos.reduce((s,g)=>s+g.itens.filter(i=>g.uso(i)===0).length,0);
+  const faltando = grupos.filter(g=>!g.itens.length);
 
   el.innerHTML = `
     <div class="cards" style="margin-bottom:14px">
-      <div class="kpi"><div class="l">Itens cadastrados</div><div class="v">${total}</div>
+      <div class="kpi"><div class="l">Total cadastrado</div><div class="v">${total}</div>
         <div class="s">em ${grupos.length} cadastros</div></div>
-      ${grupos.map(g=>`<div class="kpi"><div class="l">${g.l.replace(/^[^ ]+ /,'')}</div>
-        <div class="v" style="font-size:17px">${g.itens.length}</div>
-        <div class="s">${g.itens.filter(i=>g.uso(i)>0).length} em uso</div></div>`).join('')}
+      ${grupos.map(g=>`<div class="kpi">
+        <div class="l">${g.ic} ${g.l}</div>
+        <div class="v ${g.itens.length?'':'neg'}" style="font-size:18px">${g.itens.length||'0'}</div>
+        <div class="s">${g.itens.length? g.itens.filter(i=>g.uso(i)>0).length+' em uso' : '⚠️ nada cadastrado'}</div>
+      </div>`).join('')}
     </div>
-    ${semUso ? `<div class="hint" style="margin:0 0 10px">${semUso} item(ns) cadastrado(s) ainda sem uso — aparece(m) na última coluna como “—”.</div>`:''}
+
+    ${faltando.length ? `<div class="card" style="border-color:#ef4444;margin-bottom:14px">
+      <b class="neg">⚠️ Falta cadastrar:</b> ${faltando.map(g=>g.l).join(', ')}.
+      <div class="hint" style="margin:4px 0 0">Sem estes cadastros os lançamentos ficam incompletos.</div>
+    </div>`:''}
+
     <div style="overflow-x:auto"><table class="tbl"><thead><tr>
-      <th>Cadastro</th><th>Item</th><th>Categoria / segmento</th><th class="num">Em uso</th><th></th>
+      <th style="width:26px"></th><th>Cadastro</th><th>O que já está cadastrado</th>
+      <th class="num">Qtde</th><th class="num">Em uso</th><th class="num">Sem uso</th>
+      <th>Situação</th><th></th>
     </tr></thead><tbody>
-    ${grupos.flatMap(g=>{
-      if(!g.itens.length) return [`<tr><td><b>${g.l}</b></td><td colspan="4" class="hint">nada cadastrado</td></tr>`];
-      return g.itens.slice().sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''))).map((it,i)=>{
-        const n = g.uso(it);
-        const cor = it.cor ? `<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${it.cor};margin-right:6px"></span>` : '';
+    ${grupos.map(g=>{
+      const semUso = g.itens.filter(i=>g.uso(i)===0).length;
+      const status = !g.itens.length
+        ? '<span class="tag t-vencido">vazio</span>'
+        : (semUso === g.itens.length
+            ? '<span class="tag t-parcial">nenhum em uso</span>'
+            : '<span class="tag t-quitado">ok</span>');
+      return `<tr style="background:var(--panel2)">
+        <td style="font-size:15px">${g.ic}</td>
+        <td colspan="4"><b>${esc(g.l)}</b><div class="hint" style="margin:0">${esc(g.essencial)}</div></td>
+        <td class="num"><b>${g.itens.length}</b></td>
+        <td class="num ${g.itens.length?'':'neg'}">${g.itens.length?g.itens.filter(i=>g.uso(i)>0).length:0}</td>
+        <td class="num ${semUso?'amb':''}">${semUso||0}</td>
+        <td>${status}</td>
+        <td><button class="b sm sec" onclick="irParaCadastro('${g.aba}')" title="Abrir este cadastro">↗ abrir</button></td>
+      </tr>
+      ${g.itens.length ? g.itens.slice().sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''))).map(it=>{
+        const n = g.uso(it), c = g.cor(it);
         return `<tr>
-          <td class="hint" style="white-space:nowrap">${i===0?g.l:''}</td>
-          <td>${cor}<b>${esc(it.nome||'—')}</b>${it.doc?`<div class="hint" style="margin:0">${esc(it.doc)}</div>`:''}</td>
-          <td>${esc(g.cat(it)||'—')}</td>
-          <td class="num ${n?'':'hint'}">${n||'—'}</td>
-          <td><button class="b sm sec" onclick="irParaCadastro('${g.aba}')" title="Abrir este cadastro">↗</button></td>
-        </tr>`;
-      });
-    }).join('')}
-    </tbody></table></div>`;
+          <td></td><td></td>
+          <td>${c?`<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${c};margin-right:6px"></span>`:''}
+              ${esc(it.nome||'—')}${it.doc?` <span class="hint" style="display:inline;margin:0">· ${esc(it.doc)}</span>`:''}</td>
+          <td class="hint">${esc(g.cat(it)||'—')}</td>
+          <td></td><td></td>
+          <td class="num">${n||'—'}</td>
+          <td>${n? '': '<span class="hint" style="margin:0">sem uso</span>'}</td>
+          <td></td><td></td>
+        </tr>`;}).join('')
+      : `<tr><td></td><td colspan="8" class="neg">
+          <b>Nada cadastrado.</b> Clique em <b>↗ abrir</b> ao lado e use o botão “＋ Novo”.
+        </td></tr>`}
+    `;}).join('')}
+    </tbody></table></div>
+    <div class="hint" style="margin-top:8px">“Em uso” = quantos lançamentos utilizam o item. “Sem uso” = cadastrado, mas ainda não aproveitado.</div>`;
 }
 
 function irParaCadastro(aba){
@@ -8699,7 +8751,13 @@ function pedidoReservadoDoVeiculo(chassi){
   return (DB.pedidos||[]).find(p=>p.situacao === 'pedido' &&
     p.chassi && mesmoChassiGlobal(p.chassi, chassi)) || null;
 }
-function veiculoReservado(v){ return !!pedidoReservadoDoVeiculo(v && v.chassi); }
+/* reservado por pedido de VD ou por reserva livre (cliente em negociação) */
+function veiculoReservado(v){
+  if(!v) return false;
+  if(pedidoReservadoDoVeiculo(v.chassi)) return true;
+  if(v.reserva) return true;
+  return false;
+}
 
 function veiculoDisponivelParaVenda(v){
   if(!v) return false;
@@ -9140,6 +9198,165 @@ function blocoFasesPedido(p){
         ? `<button class="b sm ok" onclick="formNfCliente('${p.id}')">${r.nfCliente?'✏️':'faturar'}</button>` : '')}
     </tbody></table>
     ${p.situacao==='faturado' ? '<div class="hint" style="margin-top:6px">Venda direta faturada — o veículo está em "Carros vendidos".</div>' : ''}`;
+}
+
+/* ============================================================
+   RESERVA DE VEÍCULO
+   Um carro do estoque pode ser reservado de duas formas:
+     · reserva livre  — cliente em negociação (não precisa de pedido)
+     · reserva VD     — ligado a um pedido de venda direta
+
+   Regra: TODA reserva dura no máximo 36 HORAS.
+   Vencida, o carro volta a ficar disponível automaticamente
+   (a checagem roda a cada abertura e a cada render).
+   ============================================================ */
+
+const RESERVA_HORAS = 36;
+
+/* ---------- situação de qualquer reserva ---------- */
+function reservaDoVeiculo(v){
+  if(!v) return null;
+
+  /* reserva livre (cliente em negociação) */
+  if(v.reserva){
+    const r = v.reserva;
+    return {origem:'livre', cliente:r.cliente||'', tel:r.tel||'', obs:r.obs||'',
+      desde:r.desde, ate:r.ate, pedidoId:null, vendedor:r.por||''};
+  }
+  /* reserva ligada a pedido de VD */
+  const p = (DB.pedidos||[]).find(x=>x.situacao==='pedido' &&
+    x.chassi && mesmoChassiGlobal(x.chassi, v.chassi));
+  if(p){
+    const desde = p.reservadoEm || new Date().toISOString();
+    return {origem:'vd', cliente:p.cliente||'', tel:'', obs:'Pedido de venda direta',
+      desde, ate: somarHoras(desde, RESERVA_HORAS), pedidoId:p.id, vendedor:p.vendedor||''};
+  }
+  return null;
+}
+
+function somarHoras(iso, h){
+  const d = new Date(iso); if(isNaN(d.getTime())) return iso;
+  return new Date(d.getTime() + h*3600000).toISOString();
+}
+function horasRestantes(ateIso){
+  const d = new Date(ateIso); if(isNaN(d.getTime())) return 0;
+  return (d.getTime() - Date.now()) / 3600000;
+}
+function reservaVencida(r){
+  if(!r) return false;
+  return horasRestantes(r.ate) <= 0;
+}
+
+/* ---------- limpeza automática das reservas vencidas ---------- */
+function limparReservasVencidas(silencioso){
+  let n = 0;
+  const avisos = [];
+  (DB.veiculos||[]).forEach(v=>{
+    if(v.reserva){
+      const r = {ate: v.reserva.ate};
+      if(reservaVencida(r)){
+        avisos.push((veicRotulo(v)||v.chassi) + ' — ' + (v.reserva.cliente||'sem cliente'));
+        delete v.reserva;
+        v.reservaVencidaEm = new Date().toISOString();
+        n++;
+      }
+    }
+  });
+  if(n){
+    save();
+    if(!silencioso){
+      logAcao('Liberou reserva(s) vencida(s)','estoque', n+' veículo(s) · '+avisos.join(' | '));
+    }
+  }
+  return n;
+}
+
+/* roda na abertura: libera o que passou de 36h */
+function iniciarControleReservas(){
+  try{ limparReservasVencidas(true); }catch(e){}
+  setInterval(()=>{ try{ limparReservasVencidas(true); if(typeof renderEstoque==='function') renderEstoque(); }catch(e){} }, 5*60*1000);
+}
+
+/* ---------- tela: reservar o veículo ---------- */
+function formReservarVeiculo(chassi){
+  if(!precisaPermissao('vendas','edit')) return;
+  const v = (DB.veiculos||[]).find(x=>x.chassi===chassi); if(!v) return;
+  if(typeof veicVendido==='function' && veicVendido(v)) return alert('Este veículo já está vendido.');
+  const atual = reservaDoVeiculo(v);
+  if(atual && atual.origem==='vd')
+    return alert('Este carro está reservado por um PEDIDO DE VENDA DIRETA de ' +
+      (atual.cliente||'—') + '.\n\nCancele ou altere o pedido para liberar.');
+
+  const ate = somarHoras(new Date().toISOString(), RESERVA_HORAS);
+  const dataLocal = iso => { const d=new Date(iso); return isNaN(d)? '': new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16); };
+
+  modal('Reservar veículo', `
+    <p class="hint" style="margin:0 0 12px">${esc(veicRotulo(v)||'')} · ${esc(v.chassi)}<br>
+      A reserva vale por <b>no máximo ${RESERVA_HORAS} horas</b>. Depois disso o carro volta
+      automaticamente a ficar disponível para venda.</p>
+    <div class="grid">
+      <div class="fld full"><label>Cliente em negociação *</label>
+        <input id="rs-cliente" list="dl-rs-cli" value="${esc(atual?atual.cliente:'')}" placeholder="nome do cliente">
+        <datalist id="dl-rs-cli">${(typeof nomesClientes==='function'?nomesClientes():(DB.clientes||[]).map(c=>c.nome)).map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
+        ${typeof botaoCadastroRapido==='function'?botaoCadastroRapido('cliente','rs-cliente'):''}</div>
+      <div class="fld"><label>Telefone</label><input id="rs-tel" value="${esc(atual?atual.tel:'')}" placeholder="(83) 9…"></div>
+      <div class="fld"><label>Reservado até *</label>
+        <input id="rs-ate" type="datetime-local" value="${dataLocal(ate)}" max="${dataLocal(ate)}">
+        <div class="hint" style="margin:2px 0 0">Máximo de ${RESERVA_HORAS} horas a partir de agora.</div></div>
+      <div class="fld full"><label>Observação</label>
+        <input id="rs-obs" value="${esc(atual?atual.obs:'')}" placeholder="ex.: aguardando aprovação do financiamento"></div>
+    </div>
+    <div class="hint" style="margin-top:10px">O carro sai da lista de disponíveis enquanto estiver reservado.
+      Você pode liberar antes do prazo a qualquer momento.</div>`, ()=>{
+    const cliente = (val('rs-cliente')||'').trim();
+    if(!cliente) return alert('Informe o cliente.');
+    const agora = new Date().toISOString();
+    let ateEscolhido = val('rs-ate');
+    let ateIso = ateEscolhido ? new Date(ateEscolhido).toISOString() : somarHoras(agora, RESERVA_HORAS);
+    const limite = somarHoras(agora, RESERVA_HORAS);
+    if(new Date(ateIso) > new Date(limite)){
+      ateIso = limite;
+      alert('A reserva não pode passar de ' + RESERVA_HORAS + ' horas.\n\nAjustei para o limite.');
+    }
+    if(new Date(ateIso) <= new Date()) return alert('A data final precisa ser no futuro.');
+
+    v.reserva = {cliente, tel:(val('rs-tel')||'').trim(), obs:(val('rs-obs')||'').trim(),
+      desde: agora, ate: ateIso, por: (usuarioAtual()||{}).nome||''};
+    delete v.reservaVencidaEm;
+    save();
+    logAcao('Reservou veículo','estoque', v.chassi+' · '+cliente+' · até '+new Date(ateIso).toLocaleString('pt-BR'));
+    fechar(); renderAll();
+    alert('Veículo reservado.\\n\\n' + (veicRotulo(v)||'') +
+      '\\nCliente: ' + cliente +
+      '\\nAté: ' + new Date(ateIso).toLocaleString('pt-BR') +
+      '\\n\\nO carro sai da venda normal e volta sozinho se a reserva vencer.');
+  });
+}
+
+/* ---------- liberar antes do prazo ---------- */
+function liberarReservaVeiculo(chassi){
+  if(!precisaPermissao('vendas','edit')) return;
+  const v = (DB.veiculos||[]).find(x=>x.chassi===chassi); if(!v) return;
+  const r = reservaDoVeiculo(v);
+  if(!r) return alert('Este veículo não está reservado.');
+  if(r.origem==='vd') return alert('A reserva vem de um pedido de venda direta.\n\nCancele ou altere o pedido.');
+  if(!confirm('Liberar a reserva de ' + (r.cliente||'—') + '?\\n\\nO carro volta a ficar disponível para venda.')) return;
+  delete v.reserva;
+  save(); logAcao('Liberou reserva','estoque', v.chassi+' · '+(r.cliente||''));
+  renderAll();
+}
+
+/* ---------- aviso na tela ---------- */
+function seloReserva(v){
+  const r = reservaDoVeiculo(v);
+  if(!r) return '';
+  const h = horasRestantes(r.ate);
+  const venc = h <= 0;
+  const txt = venc ? 'reserva vencida'
+    : (h < 1 ? Math.round(h*60)+' min' : Math.round(h)+' h');
+  const rot = r.origem === 'vd' ? '🔒 VD' : '🔖 Reservado';
+  return `<span class="tag ${venc?'t-vencido':'t-parcial'}" title="${esc(r.cliente)} · até ${new Date(r.ate).toLocaleString('pt-BR')}">
+    ${rot} · ${txt}</span>`;
 }
 
 </script>
