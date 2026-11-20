@@ -237,8 +237,10 @@
       </select>
       <select id="f-sit-e" onchange="renderEstoque()">
         <option value="disponivel">Disponíveis (no estoque)</option>
-        <option value="">Todos</option>
+        <option value="aguardando">↩️ Aguardando NF do cliente</option>
+        <option value="devolvido">Devolvidos à fábrica</option>
         <option value="vendido">Vendidos</option>
+        <option value="todos">Todos (inclui baixados)</option>
       </select>
       <button class="b ok" data-perm="vendas:edit" onclick="escolherVeiculoParaVender()">💰 Vender um carro</button>
     </div>
@@ -4125,8 +4127,12 @@ function estoqueFiltrado(){
   const nat = val('f-nat-e'), sit = val('f-sit-e');
   return DB.veiculos.filter(v=>{
     if(nat && natDe(v) !== nat) return false;
-    if(sit === 'disponivel' && !veicDisponivel(v)) return false;
+    /* carro devolvido à fábrica ou já com NF do cliente não é estoque */
+    if(v.baixadoEstoque && sit !== 'todos') return false;
+    if(sit === 'disponivel' && (!veicDisponivel(v) || v.devolvidoFabrica)) return false;
     if(sit === 'vendido' && !veicVendido(v)) return false;
+    if(sit === 'aguardando' && !v.aguardandoNfCliente) return false;
+    if(sit === 'devolvido' && !v.devolvidoFabrica) return false;
     if(q){
       const alvo = [v.chassi,v.modelo,v.cor,v.nf,v.anoModelo].join(' ').toLowerCase();
       if(!alvo.includes(q)) return false;
@@ -6274,6 +6280,17 @@ function gerirPedido(id){
       </tbody><tfoot><tr style="background:var(--panel2);font-weight:700"><td>Total antecipado</td>
         <td class="num">${brl(rs.reduce((s,r)=>s+(+r.valor||0),0))}</td><td colspan="4"></td></tr></tfoot></table>`
       : '<div class="empty" style="padding:18px">Nenhuma antecipação registrada ainda.</div>'}
+    ${p.chassi ? `<div class="bar" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
+      <span class="tag t-parcial">🔒 estoque · ${esc(p.chassi)}</span>
+      ${!(p.refat&&p.refat.nfOriginal) && pode('vendas','edit')
+        ? `<button class="b ok" onclick="formCancelamentoNF('${id}')">↩️ Cancelar NF e devolver à fábrica</button>`:''}
+      ${(p.refat&&p.refat.nfOriginal&&!p.refat.nfNova) && pode('vendas','edit')
+        ? `<button class="b ok" onclick="formNfFabricaCliente('${id}')">🏭 Registrar NF da fábrica (cliente)</button>`:''}
+      ${p.refat?`<button class="b sec" onclick="verHistoricoNf('${id}')">📑 Histórico das NFs</button>`:''}
+    </div>
+    ${p.refat?`<div class="hint" style="margin:0 0 10px">
+      ${p.refat.nfOriginal?`NF ${esc(p.refat.nfOriginal)} cancelada${p.refat.nfDevolucao?' · devolução '+esc(p.refat.nfDevolucao):''}`:''}${p.refat.nfNova?` · NF do cliente ${esc(p.refat.nfNova)} em ${fmt(p.refat.nfNovaEm)}`:' · aguardando a NF da fábrica no nome do cliente'}
+    </div>`:''}` : ''}
     <div class="bar" style="margin-top:12px">
       ${(p.documentos||[]).length ? `<button class="b sec" onclick="verDocumentosPedido('${id}')">📄 Documentos (${(p.documentos||[]).length})</button>` : ''}
       ${p.situacao==='pedido' && pode('vendas','edit')?`<button class="b sec" onclick="formPedido('${id}')">✏️ Alterar pedido</button>`:''}
@@ -8647,76 +8664,167 @@ function liberarReservaDoPedido(p){
   if(v && v.reservadoVD && v.reservadoVD.pedidoId === p.id) delete v.reservadoVD;
 }
 
-/* ---------- NF original cancelada + NF nova da VD ---------- */
-function formRefaturamento(pedidoId){
+/* ---------- PASSO 1: cancelamento da NF + NF de devolução ---------- */
+function formCancelamentoNF(pedidoId){
   if(!precisaPermissao('vendas','edit')) return;
   const p = (DB.pedidos||[]).find(x=>x.id===pedidoId); if(!p) return;
   if(!p.chassi) return alert('Este pedido não tem chassi ligado.\n\nUse "🔍 Buscar no estoque" para ligar o carro que será refaturado.');
   const v = (DB.veiculos||[]).find(x=>mesmoChassiGlobal(x.chassi, p.chassi)) || {};
   const r = p.refat || {};
+  const jaCancel = !!r.nfOriginal;
 
-  modal('Refaturamento · '+esc(p.chassi), `
-    <p class="hint" style="margin:0 0 12px">A fábrica <b>cancela a NF original</b> (que estava em nome da concessionária)
-    e emite uma <b>nova NF em nome do cliente</b>. Registre as duas notas aqui.</p>
+  modal(jaCancel ? 'Cancelamento já registrado' : 'Cancelar a NF e devolver o carro à fábrica', `
+    <p class="hint" style="margin:0 0 12px">
+      A NF original estava em nome da concessionária. Para a fábrica refaturar em nome do cliente,
+      <b>esta NF é cancelada</b> e o carro <b>volta para a fábrica</b> com uma <b>NF de devolução</b>.
+      Depois disso o carro sai do seu estoque.</p>
     <div class="grid">
       <div class="fld full"><label>Veículo</label>
         <input value="${esc(veicRotulo(v)||p.modelo||'')} · ${esc(p.chassi)}" disabled></div>
-      <div class="fld"><label>NF original (cancelada) *</label>
-        <input id="rf-nfantiga" value="${esc(r.nfOriginal || v.nf || '')}" placeholder="número da NF da concessionária"></div>
-      <div class="fld"><label>Data do cancelamento</label>
-        <input id="rf-data" type="date" value="${esc(r.canceladaEm || hoje())}"></div>
-      <div class="fld"><label>NF nova (venda direta) *</label>
-        <input id="rf-nfnova" value="${esc(r.nfNova || '')}" placeholder="número da NF em nome do cliente"></div>
-      <div class="fld"><label>Data da nova NF</label>
-        <input id="rf-datanova" type="date" value="${esc(r.nfNovaEm || hoje())}"></div>
-      <div class="fld full"><label>Observação</label>
-        <input id="rf-obs" value="${esc(r.obs||'')}" placeholder="ex.: refaturamento autorizado pela fábrica em…"></div>
-    </div>`, ()=>{
-    const nfAntiga = (val('rf-nfantiga')||'').trim();
-    const nfNova   = (val('rf-nfnova')||'').trim();
+      <div class="fld"><label>NF original (a cancelar) *</label>
+        <input id="cn-nfantiga" value="${esc(r.nfOriginal || v.nf || '')}" placeholder="número da NF da concessionária"></div>
+      <div class="fld"><label>Data do cancelamento *</label>
+        <input id="cn-data" type="date" value="${esc(r.canceladaEm || hoje())}"></div>
+      <div class="fld"><label>NF de devolução à fábrica *</label>
+        <input id="cn-devolucao" value="${esc(r.nfDevolucao || '')}" placeholder="número da NF de devolução"></div>
+      <div class="fld"><label>Data da devolução</label>
+        <input id="cn-datadev" type="date" value="${esc(r.devolucaoEm || hoje())}"></div>
+      <div class="fld full"><label>Motivo / observação</label>
+        <input id="cn-obs" value="${esc(r.obsCancelamento||'')}" placeholder="ex.: refaturamento em venda direta para o cliente…"></div>
+    </div>
+    <div class="hint" style="margin-top:10px">⚠️ Ao confirmar, o veículo deixa de aparecer no estoque e fica
+    <b>aguardando a NF da fábrica no nome do cliente</b>. Ele continua rastreável pelo filtro “Aguardando NF do cliente”.</div>`, ()=>{
+    const nfAntiga = (val('cn-nfantiga')||'').trim();
+    const nfDev    = (val('cn-devolucao')||'').trim();
     if(!nfAntiga) return alert('Informe o número da NF original.');
-    if(!nfNova) return alert('Informe o número da NF nova (venda direta).');
+    if(!nfDev) return alert('Informe o número da NF de devolução à fábrica.');
 
-    p.refat = {
+    p.refat = Object.assign({}, p.refat, {
       nfOriginal: nfAntiga,
-      canceladaEm: val('rf-data') || hoje(),
-      nfNova, nfNovaEm: val('rf-datanova') || hoje(),
-      obs: (val('rf-obs')||'').trim(),
-      registradoPor: (usuarioAtual()||{}).nome || '',
-      registradoEm: new Date().toISOString()
-    };
-    p.situacao = 'faturado';
-    p.faturadoEm = p.refat.nfNovaEm;
-    p.nf = nfNova;
+      canceladaEm: val('cn-data') || hoje(),
+      nfDevolucao: nfDev,
+      devolucaoEm: val('cn-datadev') || hoje(),
+      obsCancelamento: (val('cn-obs')||'').trim(),
+      canceladoPor: (usuarioAtual()||{}).nome || '',
+      canceladoRegistroEm: new Date().toISOString()
+    });
 
-    /* o veículo passa a ter a NF nova e o histórico da antiga */
+    /* o veículo sai do estoque: fica aguardando a NF do cliente */
     const vv = (DB.veiculos||[]).find(x=>mesmoChassiGlobal(x.chassi, p.chassi));
     if(vv){
-      vv.nfOriginal = nfAntiga;
+      vv.nfOriginalCancelada = nfAntiga;
       vv.nfOriginalCanceladaEm = p.refat.canceladaEm;
-      vv.nf = nfNova;
+      vv.nfDevolucao = nfDev;
+      vv.nfDevolucaoEm = p.refat.devolucaoEm;
+      vv.devolvidoFabrica = true;
+      vv.aguardandoNfCliente = true;
+      if(vv.reservadoVD) delete vv.reservadoVD;
+    }
+    save();
+    logAcao('Cancelou NF e devolveu o veículo à fábrica','vendas',
+      p.chassi + ' · NF '+nfAntiga+' cancelada · devolução NF '+nfDev);
+    fechar(); renderAll();
+    alert('Cancelamento registrado.\n\nNF ' + nfAntiga + ' cancelada.\nNF de devolução ' + nfDev + ' arquivada.\n\n' +
+      'O veículo saiu do estoque e está aguardando a NF da fábrica no nome de ' + (p.cliente||'o cliente') + '.');
+  });
+}
+
+/* ---------- PASSO 2: NF da fábrica direto para o cliente ---------- */
+function formNfFabricaCliente(pedidoId){
+  if(!precisaPermissao('vendas','edit')) return;
+  const p = (DB.pedidos||[]).find(x=>x.id===pedidoId); if(!p) return;
+  if(!p.chassi) return alert('Este pedido não tem chassi ligado.');
+  if(!(p.refat && p.refat.nfOriginal))
+    return alert('Primeiro registre o cancelamento da NF original.\n\n' +
+      'A fábrica só fatura no nome do cliente depois de cancelar a NF da concessionária.');
+  const v = (DB.veiculos||[]).find(x=>mesmoChassiGlobal(x.chassi, p.chassi)) || {};
+  const r = p.refat || {};
+
+  modal('NF da fábrica em nome do cliente', `
+    <p class="hint" style="margin:0 0 12px">Registre a <b>NF emitida pela fábrica no nome do cliente</b>.
+    Com ela, o carro é <b>baixado do estoque</b> e passa a <b>vendido</b>.</p>
+    <div class="grid">
+      <div class="fld full"><label>Veículo</label>
+        <input value="${esc(veicRotulo(v)||p.modelo||'')} · ${esc(p.chassi)}" disabled></div>
+      <div class="fld full"><label>Situação atual</label>
+        <input value="NF ${esc(r.nfOriginal||'')} cancelada · devolução ${esc(r.nfDevolucao||'')} em ${fmt(r.devolucaoEm||'')}" disabled></div>
+      <div class="fld"><label>NF da fábrica (cliente) *</label>
+        <input id="nf-nf" value="${esc(r.nfNova || '')}" placeholder="número da NF em nome do cliente"></div>
+      <div class="fld"><label>Data da NF *</label>
+        <input id="nf-data" type="date" value="${esc(r.nfNovaEm || hoje())}"></div>
+      <div class="fld"><label>Chave de acesso (opcional)</label>
+        <input id="nf-chave" value="${esc(r.chaveNf||'')}" placeholder="44 dígitos"></div>
+      <div class="fld"><label>Valor da venda (R$)</label>
+        <input id="nf-valor" type="number" step="0.01" value="${(+p.valorVenda||0).toFixed(2)}"></div>
+      <div class="fld full"><label>Observação</label>
+        <input id="nf-obs" value="${esc(r.obsNf||'')}"></div>
+    </div>`, ()=>{
+    const nf = (val('nf-nf')||'').trim();
+    if(!nf) return alert('Informe o número da NF da fábrica.');
+
+    p.refat = Object.assign({}, p.refat, {
+      nfNova: nf, nfNovaEm: val('nf-data') || hoje(),
+      chaveNf: (val('nf-chave')||'').trim(),
+      obsNf: (val('nf-obs')||'').trim(),
+      nfRegistradaPor: (usuarioAtual()||{}).nome || '',
+      nfRegistradaEm: new Date().toISOString()
+    });
+    p.situacao = 'faturado';
+    p.faturadoEm = p.refat.nfNovaEm;
+    p.nf = nf;
+
+    const vv = (DB.veiculos||[]).find(x=>mesmoChassiGlobal(x.chassi, p.chassi));
+    if(vv){
+      vv.nf = nf;
       vv.nfEm = p.refat.nfNovaEm;
+      vv.chaveNf = p.refat.chaveNf;
       vv.natureza = 'vendaDireta';
       vv.refaturado = true;
+      vv.aguardandoNfCliente = false;
+      /* baixa do estoque: com a NF do cliente o carro não está mais disponível */
+      vv.baixadoEstoque = true;
+      vv.baixadoEm = p.refat.nfNovaEm;
       if(vv.reservadoVD) delete vv.reservadoVD;
     }
 
-    /* cria a venda, se ainda não existir, com os dados do pedido */
+    const valorNf = +val('nf-valor') || (+p.valorVenda||0);
     if(!(DB.vendas||[]).some(x=>mesmoChassiGlobal(x.chassi, p.chassi))){
       DB.vendas = DB.vendas || [];
       DB.vendas.push({id:uid(), chassi: p.chassi, veiculo: p.modelo,
-        data: p.refat.nfNovaEm, valorVenda: +p.valorVenda||0,
+        data: p.refat.nfNovaEm, valorVenda: valorNf,
         cliente: p.cliente||'', doc: p.doc||'', vendedor: p.vendedor||'',
-        nf: nfNova, pedidoId: p.id, origemPedido: true, refaturado: true,
-        obs: 'Venda direta por refaturamento — NF '+nfAntiga+' cancelada, NF '+nfNova+' em nome do cliente'});
+        nf: nf, pedidoId: p.id, origemPedido: true, refaturado: true,
+        obs: 'Venda direta — NF da fábrica '+nf+' direto no nome do cliente · NF '+p.refat.nfOriginal+' cancelada · devolução '+p.refat.nfDevolucao});
     }
     save();
-    logAcao('Refaturou veículo para venda direta','vendas',
-      p.chassi + ' · NF '+nfAntiga+' → '+nfNova+' · '+p.cliente);
+    logAcao('Registrou NF da fábrica para o cliente','vendas',
+      p.chassi + ' · NF '+nf+' · '+p.cliente);
     fechar(); renderAll();
-    alert('Refaturamento registrado.\n\nNF '+nfAntiga+' marcada como cancelada.\nNF '+nfNova+' em nome de ' +
-      (p.cliente||'o cliente') + '.\n\nO veículo saiu do estoque e a venda está em "Carros vendidos".');
+    alert('NF registrada.\n\nO veículo ' + p.chassi + ' foi baixado do estoque e está em "Carros vendidos".\n\n' +
+      'Histórico completo:\nNF '+p.refat.nfOriginal+' cancelada\nNF de devolução '+p.refat.nfDevolucao+
+      '\nNF da fábrica no cliente '+nf);
   });
+}
+
+/* ---------- histórico das NFs do veículo ---------- */
+function verHistoricoNf(pedidoId){
+  const p = (DB.pedidos||[]).find(x=>x.id===pedidoId); if(!p) return;
+  const v = (DB.veiculos||[]).find(x=>mesmoChassiGlobal(x.chassi, p.chassi)) || {};
+  const r = p.refat || {};
+  const linha = (rot, valor, data) => valor
+    ? `<tr><td>${rot}</td><td><b>${esc(valor)}</b></td><td>${data?fmt(data):'—'}</td></tr>` : '';
+  document.getElementById('mbox-in').className = 'modal wide';
+  document.getElementById('mbox-body').innerHTML = `<h2>Histórico das notas fiscais</h2>
+    <p class="hint" style="margin:0 0 12px"><b>${esc(p.cliente||'')}</b> · ${esc(veicRotulo(v)||p.modelo||'')} · ${esc(p.chassi)}</p>
+    <table class="tbl"><thead><tr><th>Documento</th><th>Número</th><th>Data</th></tr></thead><tbody>
+      ${linha('NF original da concessionária', r.nfOriginal || v.nfOriginal, r.canceladaEm)}
+      ${linha('NF de devolução à fábrica', r.nfDevolucao, r.devolucaoEm)}
+      ${linha('NF da fábrica — cliente', r.nfNova || (v.aguardandoNfCliente?'':'') , r.nfNovaEm)}
+    </tbody></table>
+    ${r.chaveNf?`<div class="hint" style="margin-top:8px">Chave de acesso: ${esc(r.chaveNf)}</div>`:''}
+    ${r.obsCancelamento?`<div class="hint">Cancelamento: ${esc(r.obsCancelamento)}</div>`:''}
+    <div class="mfoot"><button class="b sec" onclick="fechar()">Fechar</button></div>`;
+  document.getElementById('mbox').classList.add('on');
 }
 
 /* ---------- aviso nas telas ---------- */
