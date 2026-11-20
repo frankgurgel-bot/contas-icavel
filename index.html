@@ -165,6 +165,7 @@
   <button data-v="dash">📊 Dashboard</button>
   <button data-v="estoque">🏷 Estoque de veículos</button>
   <button data-v="pedidos">📝 Pedidos de venda direta</button>
+  <button data-v="fases">🔄 Fases da venda direta</button>
   <button data-v="vendas">🚗 Carros vendidos</button>
   <button data-v="titulos">🧾 Títulos a receber</button>
   <button data-v="pagar">🏭 Pagamento à fábrica</button>
@@ -265,6 +266,25 @@
       <button class="b sec" onclick="window.print()">🖨 PDF</button>
     </div>
     <div id="tbl-pedidos"></div>
+  </section>
+
+  <section class="view" id="v-fases">
+    <h1>Fases da venda direta</h1>
+    <p class="sub">Acompanhe em qual fase está cada pedido de VD — inclusive os que <b>não</b> são de veículo do estoque.
+    Visível ao gerente de vendas e ao master.</p>
+    <div class="cards" id="fases-kpis"></div>
+    <div class="bar">
+      <input id="f-busca-vd" placeholder="Buscar cliente, chassi, veículo, vendedor…" oninput="renderFasesVD()" style="flex:1;min-width:190px">
+      <select id="f-fase-vd" onchange="renderFasesVD()">
+        <option value="todas">Todas as fases</option>
+        <option value="1">1 · Reservado</option>
+        <option value="2">2 · Pedido + NF concessionária</option>
+        <option value="3">3 · Devolução à fábrica</option>
+        <option value="4">4 · NF do cliente (faturado)</option>
+      </select>
+      <button class="b sec" onclick="window.print()">🖨 PDF</button>
+    </div>
+    <div id="tbl-fases"></div>
   </section>
 
   <section class="view" id="v-vendas">
@@ -445,6 +465,10 @@
   </section>
 
   <section class="view" id="v-cadastros">
+    <div class="sect" style="margin:4px 0 8px">Tudo o que já está cadastrado</div>
+    <div id="cad-visao" style="margin-bottom:20px"></div>
+
+    <div class="sect" style="margin:4px 0 8px">Opções de cadastro</div>
     <h1>Cadastros</h1>
     <p class="sub">O <b>tipo</b> classifica cada movimentação: os de <b>receber</b> (entrada, financiamento, bônus, serviços) e os de <b>pagar</b>
     (aluguel, peças, combustível, salários…). Os tipos aparecem em todos os lançamentos e relatórios. Pagadores são bancos, financeiras, fábrica e clientes que efetivamente pagam.</p>
@@ -536,6 +560,8 @@ const PERMS = [
   {k:'dash',       l:'Dashboard',              d:'Indicadores da carteira, aging e situação dos carros'},
   {k:'estoque',    l:'Estoque de veículos',   d:'Veículos faturados, natureza, fotos, custo e condição'},
   {k:'vendas',     l:'Carros vendidos',         d:'Cadastro de vendas, dossiê e situação de cada carro'},
+  {k:'fases',      l:'Fases da venda direta',   d:'Acompanhar em que fase está cada pedido de VD (do estoque e direto)'},
+  {k:'nfconcessao',l:'NF fábrica → concessionária', d:'Nota restrita: só o gerente de vendas e o master veem esta NF'},
   {k:'titulos',    l:'Títulos a receber',       d:'Criar títulos, lançar recebimentos, editar e excluir'},
   {k:'pagamentos', l:'Pagamento à fábrica',     d:'Custo do veículo, condição, juros e pagamentos ao fornecedor'},
   {k:'diversos',   l:'Pagamentos diversos',     d:'Despesas por centro de custo: oficina, funilaria, peças, novos, usados e F&I'},
@@ -820,7 +846,7 @@ function aplicarPermissoes(){
      Alguns itens têm nome de tela diferente do módulo (ex.: 'pagar' usa
      'pagamentos', 'pedidos' e 'diversos' também usam 'pagamentos'/'vendas'). */
   const MOD_DO_MENU = {
-    dash:'dash', estoque:'estoque', pedidos:'vendas', vendas:'vendas',
+    dash:'dash', estoque:'estoque', pedidos:'vendas', fases:'fases', vendas:'vendas',
     titulos:'titulos', pagar:'pagamentos', diversos:'diversos',
     conciliacao:'conciliacao', relatorios:'relatorios', cadastros:'cadastros',
     dados:'dados'
@@ -3841,6 +3867,8 @@ function renderAll(){
   if(typeof renderTiposReceber==='function') renderTiposReceber();
   if(typeof renderTiposPagar==='function') renderTiposPagar();
   if(typeof renderFornecedores==='function') renderFornecedores();
+  if(typeof renderFasesVD==='function') renderFasesVD();
+  if(typeof renderVisaoCadastros==='function') renderVisaoCadastros();
   if(typeof renderConciliacao==='function'){ renderConciliacao(); atualizarBadgeConc(); }
   if(typeof renderUsuarios==='function') renderUsuarios();
   renderPeriodoHint();
@@ -6280,17 +6308,7 @@ function gerirPedido(id){
       </tbody><tfoot><tr style="background:var(--panel2);font-weight:700"><td>Total antecipado</td>
         <td class="num">${brl(rs.reduce((s,r)=>s+(+r.valor||0),0))}</td><td colspan="4"></td></tr></tfoot></table>`
       : '<div class="empty" style="padding:18px">Nenhuma antecipação registrada ainda.</div>'}
-    ${p.chassi ? `<div class="bar" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
-      <span class="tag t-parcial">🔒 estoque · ${esc(p.chassi)}</span>
-      ${!(p.refat&&p.refat.nfOriginal) && pode('vendas','edit')
-        ? `<button class="b ok" onclick="formCancelamentoNF('${id}')">↩️ Cancelar NF e devolver à fábrica</button>`:''}
-      ${(p.refat&&p.refat.nfOriginal&&!p.refat.nfNova) && pode('vendas','edit')
-        ? `<button class="b ok" onclick="formNfFabricaCliente('${id}')">🏭 Registrar NF da fábrica (cliente)</button>`:''}
-      ${p.refat?`<button class="b sec" onclick="verHistoricoNf('${id}')">📑 Histórico das NFs</button>`:''}
-    </div>
-    ${p.refat?`<div class="hint" style="margin:0 0 10px">
-      ${p.refat.nfOriginal?`NF ${esc(p.refat.nfOriginal)} cancelada${p.refat.nfDevolucao?' · devolução '+esc(p.refat.nfDevolucao):''}`:''}${p.refat.nfNova?` · NF do cliente ${esc(p.refat.nfNova)} em ${fmt(p.refat.nfNovaEm)}`:' · aguardando a NF da fábrica no nome do cliente'}
-    </div>`:''}` : ''}
+    ${typeof blocoFasesPedido==='function' ? blocoFasesPedido(p) : ''}
     <div class="bar" style="margin-top:12px">
       ${(p.documentos||[]).length ? `<button class="b sec" onclick="verDocumentosPedido('${id}')">📄 Documentos (${(p.documentos||[]).length})</button>` : ''}
       ${p.situacao==='pedido' && pode('vendas','edit')?`<button class="b sec" onclick="formPedido('${id}')">✏️ Alterar pedido</button>`:''}
@@ -7884,6 +7902,83 @@ function relRecebimentosEfetivados(){
 }
 
 /* ============================================================
+   VISÃO GERAL DOS CADASTROS
+   Uma tabela única, no topo de Cadastros, mostrando tudo o que
+   já está cadastrado e quanto cada item está em uso.
+   ============================================================ */
+function renderVisaoCadastros(){
+  const el = document.getElementById('cad-visao'); if(!el) return;
+  DB.tipos = DB.tipos || []; DB.tiposPagar = DB.tiposPagar || [];
+  DB.clientes = DB.clientes || []; DB.fornecedores = DB.fornecedores || [];
+  DB.pagadores = DB.pagadores || []; DB.vendedores = DB.vendedores || [];
+  if(typeof aplicarSeedTiposPagar === 'function') aplicarSeedTiposPagar();
+
+  const usa = (arr, campo) => n => (arr||[]).filter(x=>String(x[campo]||'').toLowerCase()===String(n||'').toLowerCase()).length;
+
+  const grupos = [
+    {l:'🏷 Tipos a receber', itens:DB.tipos, cat: t=>t.categoria||'Outros',
+      uso: t=>DB.titulos.filter(x=>x.tipoId===t.id).length + (DB.receitasDiversas||[]).filter(x=>x.tipoId===t.id).length,
+      aba:'tipos-receber'},
+    {l:'🏷 Tipos a pagar', itens:DB.tiposPagar, cat: t=>t.categoria||'Outros',
+      uso: t=>(DB.despesasDiversas||[]).filter(x=>x.tipoId===t.id).length,
+      aba:'tipos-pagar'},
+    {l:'🏦 Pagadores', itens:DB.pagadores, cat: p=>p.tipo||'',
+      uso: p=>(DB.titulos||[]).filter(x=>x.pagador===p.nome).length +
+             (DB.recebimentos||[]).filter(x=>x.conta===p.nome).length,
+      aba:'pagadores'},
+    {l:'🏭 Fornecedores', itens:DB.fornecedores, cat: f=>f.segmento||'',
+      uso: usa(DB.despesasDiversas,'fornecedor'),
+      aba:'fornecedores'},
+    {l:'👥 Clientes', itens:DB.clientes, cat: c=>'',
+      uso: c=>(DB.vendas||[]).filter(x=>x.cliente===c.nome).length +
+             (DB.pedidos||[]).filter(x=>x.cliente===c.nome).length +
+             (DB.receitasDiversas||[]).filter(x=>x.cliente===c.nome).length,
+      aba:'clientes'},
+    {l:'🧑‍💼 Vendedores', itens:DB.vendedores, cat: v=>v.loja||'',
+      uso: v=>(DB.vendas||[]).filter(x=>x.vendedor===v.nome).length +
+             (DB.pedidos||[]).filter(x=>x.vendedor===v.nome).length,
+      aba:'vendedores'}
+  ];
+
+  const total = grupos.reduce((s,g)=>s+g.itens.length,0);
+  const semUso = grupos.reduce((s,g)=>s+g.itens.filter(i=>g.uso(i)===0).length,0);
+
+  el.innerHTML = `
+    <div class="cards" style="margin-bottom:14px">
+      <div class="kpi"><div class="l">Itens cadastrados</div><div class="v">${total}</div>
+        <div class="s">em ${grupos.length} cadastros</div></div>
+      ${grupos.map(g=>`<div class="kpi"><div class="l">${g.l.replace(/^[^ ]+ /,'')}</div>
+        <div class="v" style="font-size:17px">${g.itens.length}</div>
+        <div class="s">${g.itens.filter(i=>g.uso(i)>0).length} em uso</div></div>`).join('')}
+    </div>
+    ${semUso ? `<div class="hint" style="margin:0 0 10px">${semUso} item(ns) cadastrado(s) ainda sem uso — aparece(m) na última coluna como “—”.</div>`:''}
+    <div style="overflow-x:auto"><table class="tbl"><thead><tr>
+      <th>Cadastro</th><th>Item</th><th>Categoria / segmento</th><th class="num">Em uso</th><th></th>
+    </tr></thead><tbody>
+    ${grupos.flatMap(g=>{
+      if(!g.itens.length) return [`<tr><td><b>${g.l}</b></td><td colspan="4" class="hint">nada cadastrado</td></tr>`];
+      return g.itens.slice().sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''))).map((it,i)=>{
+        const n = g.uso(it);
+        const cor = it.cor ? `<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${it.cor};margin-right:6px"></span>` : '';
+        return `<tr>
+          <td class="hint" style="white-space:nowrap">${i===0?g.l:''}</td>
+          <td>${cor}<b>${esc(it.nome||'—')}</b>${it.doc?`<div class="hint" style="margin:0">${esc(it.doc)}</div>`:''}</td>
+          <td>${esc(g.cat(it)||'—')}</td>
+          <td class="num ${n?'':'hint'}">${n||'—'}</td>
+          <td><button class="b sm sec" onclick="irParaCadastro('${g.aba}')" title="Abrir este cadastro">↗</button></td>
+        </tr>`;
+      });
+    }).join('')}
+    </tbody></table></div>`;
+}
+
+function irParaCadastro(aba){
+  document.querySelector('nav button[data-v=cadastros]').click();
+  const b = document.querySelector(`.ctabs button[data-c="${aba}"]`);
+  if(b) b.click();
+}
+
+/* ============================================================
    CADASTRO DE FORNECEDORES + REGRA DAS 48 HORAS
    ============================================================ */
 
@@ -8523,43 +8618,102 @@ function dveExcluir(i){
 }
 
 /* ============================================================
-   REFATURAMENTO: CARRO DO ESTOQUE → VENDA DIRETA
-   A fábrica pode refaturar um carro que já está no estoque em
-   nome de um cliente (venda direta / VD).
+   REFATURAMENTO DE VEÍCULO DO ESTOQUE PARA VENDA DIRETA
+   ============================================================
+   O carro já faturado para a concessionária é transferido para
+   um cliente (VD). A fábrica cancela a NF da concessionária e
+   emite outra no nome do cliente.
 
-   Fluxo:
-     1. o vendedor faz o pedido normalmente (venda direta)
-     2. na entrada do pedido, usa o botão "🔍 Buscar no estoque"
-        e liga o chassi de um carro disponível ao pedido
-     3. o carro fica RESERVADO para venda direta e sai da venda
-     4. a fábrica cancela a NF original e fatura uma nova no nome
-        do cliente — o sistema registra as duas NFs
+   AS 4 FASES
+   ----------
+   FASE 1 · RESERVA
+     O vendedor liga um chassi do estoque ao pedido de VD.
+     O carro sai da venda normal e fica reservado.
+
+   FASE 2 · PEDIDO + NF FÁBRICA → CONCESSIONÁRIA
+     O pedido é salvo e a NF que a fábrica emitiu para a
+     concessionária é registrada.
+     ⚠️ Perfil restrito: o VENDEDOR não vê esta NF.
+
+   FASE 3 · DEVOLUÇÃO À FÁBRICA
+     A concessionária emite a NF de devolução do carro à fábrica.
+
+   FASE 4 · NF FÁBRICA → CLIENTE
+     Com a NF no nome do cliente, o veículo vai para VENDIDOS e
+     a comissão de fábrica entra em contas a receber.
+
+   Pedido de VD SEM carro do estoque só passa pelas fases 2 e 4.
    ============================================================ */
 
-const RESERVA_MOTIVO = 'Reservado para venda direta';
+/* ---------- fases ---------- */
+const FASES_VD = [
+  {k:1, id:'reserva',  l:'Reservado',            d:'Chassi do estoque ligado ao pedido',           cor:'#f59e0b'},
+  {k:2, id:'pedido',   l:'Pedido + NF concessionária', d:'Pedido salvo e NF da fábrica registrada', cor:'#3b82f6'},
+  {k:3, id:'devolucao',l:'Devolução à fábrica',   d:'NF de devolução emitida pela concessionária', cor:'#a78bfa'},
+  {k:4, id:'cliente',  l:'NF do cliente',         d:'Faturado para o cliente — vendido',           cor:'#22c55e'}
+];
+const faseDe = id => FASES_VD.find(f=>f.id===id) || FASES_VD[0];
 
-/* o veículo está reservado por um pedido de VD? */
+/* fase atual de um pedido */
+function faseDoPedido(p){
+  const r = p.refat || {};
+  /* nomes atuais (nfCliente/devolucao/nfConcessionaria) + os antigos por compatibilidade */
+  if(r.nfCliente || r.nfNova) return 4;
+  if(r.devolucao || r.nfDevolucao) return 3;
+  if(r.nfConcessionaria || r.nfOriginal) return 2;
+  if(p.chassi) return 1;
+  return 2;   // VD sem carro do estoque: já nasce como pedido
+}
+function badgeFase(p){
+  const n = faseDoPedido(p), f = FASES_VD[n-1] || FASES_VD[0];
+  return `<span class="tag" style="background:${f.cor}22;color:${f.cor}" title="${esc(f.d)}">${n} · ${esc(f.l)}</span>`;
+}
+
+/* ---------- permissões do fluxo ---------- */
+/* A NF que a fábrica emitiu para a CONCESSIONÁRIA é restrita.
+   A NF de VD no nome do CLIENTE é do vendedor. */
+/* o perfil do usuário logado, nos dois modos */
+function perfilLogado(){
+  try{ if(typeof PERFIL !== 'undefined' && PERFIL) return PERFIL; }catch(e){}
+  try{ if(typeof usuarioAtual === 'function') return usuarioAtual(); }catch(e){}
+  return null;
+}
+function temPermissao(mod, acao){
+  const u = perfilLogado();
+  if(!u) return false;
+  if(u.master) return true;
+  /* usa o perfil logado PRIMEIRO; só cai no pode() se o perfil não trouxer permissões */
+  const perm = u.permissoes || null;
+  if(perm && perm[mod]) return !!perm[mod][acao];
+  try{ if(typeof pode === 'function') return !!pode(mod, acao); }catch(e){}
+  return false;
+}
+function podeVerNfConcessionaria(){ return temPermissao('nfconcessao','ver'); }
+function podeEditarNfConcessionaria(){ return temPermissao('nfconcessao','edit'); }
+function podeVerFases(){ return temPermissao('fases','ver'); }
+
+/* ============================================================
+   RESERVA (fase 1)
+   ============================================================ */
 function pedidoReservadoDoVeiculo(chassi){
   return (DB.pedidos||[]).find(p=>p.situacao === 'pedido' &&
-    p.refaturamento && mesmoChassiGlobal(p.chassi, chassi)) || null;
+    p.chassi && mesmoChassiGlobal(p.chassi, chassi)) || null;
 }
-function veiculoReservado(v){
-  return !!pedidoReservadoDoVeiculo(v && v.chassi);
-}
+function veiculoReservado(v){ return !!pedidoReservadoDoVeiculo(v && v.chassi); }
 
-/* disponível para venda normal: no estoque, não vendido e não reservado */
 function veiculoDisponivelParaVenda(v){
   if(!v) return false;
   if(typeof veicVendido === 'function' && veicVendido(v)) return false;
   if(veiculoReservado(v)) return false;
+  if(v.devolvidoFabrica || v.baixadoEstoque) return false;
   return true;
 }
 
-/* ---------- busca de veículo no estoque ---------- */
 function abrirBuscaEstoquePedido(){
   const busca = (window.__PD_BUSCA || '').toLowerCase();
   let lista = (DB.veiculos||[]).filter(v=>{
     if(typeof veicVendido === 'function' && veicVendido(v)) return false;
+    if(v.devolvidoFabrica || v.baixadoEstoque) return false;
     return true;
   });
   if(busca) lista = lista.filter(v=>[v.chassi, veicRotulo(v), v.cor, v.anoModelo, v.mvs]
@@ -8567,8 +8721,8 @@ function abrirBuscaEstoquePedido(){
   lista.sort((a,b)=>String(veicRotulo(a)||'').localeCompare(String(veicRotulo(b)||'')));
 
   const corpo = `
-    <p class="hint" style="margin:0 0 12px">Escolha o carro do estoque que a fábrica vai <b>refaturar</b> em nome do cliente.
-    O carro sai da venda normal e fica <b>reservado</b> para esta venda direta.</p>
+    <p class="hint" style="margin:0 0 12px">Escolha o carro do estoque que vai para venda direta.
+    Ao salvar o pedido, ele fica <b>reservado</b> e sai da venda normal.</p>
     <div class="bar" style="margin-bottom:10px">
       <input id="bs-busca" placeholder="Buscar chassi, modelo, cor, MVS…" value="${esc(window.__PD_BUSCA||'')}"
         oninput="window.__PD_BUSCA=this.value;abrirBuscaEstoquePedido()" style="flex:1;min-width:200px">
@@ -8598,17 +8752,12 @@ function abrirBuscaEstoquePedido(){
   document.getElementById('mbox').classList.add('on');
 }
 
-/* liga o chassi escolhido ao pedido que está sendo digitado */
 function ligarChassiAoPedido(chassi){
   const v = (DB.veiculos||[]).find(x=>x.chassi===chassi);
   if(!v) return alert('Veículo não encontrado.');
   window.__PD_CHASSI = {
-    chassi: v.chassi,
-    modelo: veicRotulo(v) || '',
-    cor: v.cor || '',
-    opcionais: v.opcionais || '',
-    anoModelo: v.anoModelo || '',
-    mvs: v.mvs || ''
+    chassi: v.chassi, modelo: veicRotulo(v) || '', cor: v.cor || '',
+    opcionais: v.opcionais || '', anoModelo: v.anoModelo || '', mvs: v.mvs || ''
   };
   voltarAoPedido();
 }
@@ -8620,10 +8769,8 @@ function voltarAoPedido(){
     const c = window.__PD_CHASSI;
     if(!c) return;
     const set = (id,v)=>{ const el=document.getElementById(id); if(el && v) el.value = v; };
-    set('pd-chassi', c.chassi);
-    set('pd-modelo', c.modelo);
-    set('pd-cor', c.cor);
-    set('pd-opc', c.opcionais);
+    set('pd-chassi', c.chassi); set('pd-modelo', c.modelo);
+    set('pd-cor', c.cor);       set('pd-opc', c.opcionais);
     const info = document.getElementById('pd-chassi-info');
     if(info) info.innerHTML = `<div class="tag t-parcial">${esc(c.chassi)}</div>
       ${esc(c.modelo)} ${esc(c.cor||'')} · ${esc(c.anoModelo||'')}${c.mvs?' · MVS '+esc(c.mvs):''}
@@ -8632,206 +8779,367 @@ function voltarAoPedido(){
   }, 60);
 }
 
-/* ---------- registra o refaturamento no pedido ---------- */
 function aplicarReservaDoPedido(p, chassiAnterior){
   if(!p) return;
-  /* soltou o chassi que estava ligado */
   const soltou = chassiAnterior && chassiAnterior !== p.chassi;
   if(soltou){
     const outro = (DB.pedidos||[]).find(x=>x!==p && x.situacao==='pedido' && mesmoChassiGlobal(x.chassi, chassiAnterior));
     if(!outro) delete p.reservadoEm;
   }
   if(!p.chassi) return;
-
-  /* marca a reserva no pedido */
   p.reservadoEm = p.reservadoEm || new Date().toISOString();
-  p.refaturamento = true;
-
-  /* marca no veículo que ele está reservado */
   const v = (DB.veiculos||[]).find(x=>mesmoChassiGlobal(x.chassi, p.chassi));
-  if(v){
-    v.reservadoVD = {pedidoId: p.id, cliente: p.cliente||'', desde: p.reservadoEm,
-      por: (usuarioAtual()||{}).nome||''};
-  }
+  if(v) v.reservadoVD = {pedidoId: p.id, cliente: p.cliente||'', desde: p.reservadoEm,
+    por: (usuarioAtual()||{}).nome||''};
 }
-
-/* tira a reserva (quando o pedido é cancelado) */
 function liberarReservaDoPedido(p){
   if(!p || !p.chassi) return;
   const outro = (DB.pedidos||[]).find(x=>x!==p && x.situacao==='pedido' && mesmoChassiGlobal(x.chassi, p.chassi));
-  if(outro) return;                      // ainda há outro pedido com esse chassi
+  if(outro) return;
   const v = (DB.veiculos||[]).find(x=>mesmoChassiGlobal(x.chassi, p.chassi));
   if(v && v.reservadoVD && v.reservadoVD.pedidoId === p.id) delete v.reservadoVD;
 }
 
-/* ---------- PASSO 1: cancelamento da NF + NF de devolução ---------- */
-function formCancelamentoNF(pedidoId){
-  if(!precisaPermissao('vendas','edit')) return;
+/* ============================================================
+   FASE 2 · NF DA FÁBRICA PARA A CONCESSIONÁRIA (restrito)
+   ============================================================ */
+function formNfConcessionaria(pedidoId){
+  if(!podeEditarNfConcessionaria())
+    return alert('A NF que a fábrica emitiu para a concessionária é de acesso restrito.\n\n' +
+      'Somente o gerente de vendas e o master registram ou consultam esta nota.');
   const p = (DB.pedidos||[]).find(x=>x.id===pedidoId); if(!p) return;
-  if(!p.chassi) return alert('Este pedido não tem chassi ligado.\n\nUse "🔍 Buscar no estoque" para ligar o carro que será refaturado.');
   const v = (DB.veiculos||[]).find(x=>mesmoChassiGlobal(x.chassi, p.chassi)) || {};
-  const r = p.refat || {};
-  const jaCancel = !!r.nfOriginal;
+  const r = (p.refat && p.refat.nfConcessionaria) || {};
 
-  modal(jaCancel ? 'Cancelamento já registrado' : 'Cancelar a NF e devolver o carro à fábrica', `
-    <p class="hint" style="margin:0 0 12px">
-      A NF original estava em nome da concessionária. Para a fábrica refaturar em nome do cliente,
-      <b>esta NF é cancelada</b> e o carro <b>volta para a fábrica</b> com uma <b>NF de devolução</b>.
-      Depois disso o carro sai do seu estoque.</p>
+  modal('NF da fábrica → concessionária', `
+    <p class="hint" style="margin:0 0 12px">Registre a <b>1ª NF</b>, que a fábrica emitiu para a concessionária
+    quando o carro entrou no estoque. Esta informação é <b>restrita ao gerente de vendas e ao master</b>.</p>
     <div class="grid">
       <div class="fld full"><label>Veículo</label>
-        <input value="${esc(veicRotulo(v)||p.modelo||'')} · ${esc(p.chassi)}" disabled></div>
-      <div class="fld"><label>NF original (a cancelar) *</label>
-        <input id="cn-nfantiga" value="${esc(r.nfOriginal || v.nf || '')}" placeholder="número da NF da concessionária"></div>
-      <div class="fld"><label>Data do cancelamento *</label>
-        <input id="cn-data" type="date" value="${esc(r.canceladaEm || hoje())}"></div>
-      <div class="fld"><label>NF de devolução à fábrica *</label>
-        <input id="cn-devolucao" value="${esc(r.nfDevolucao || '')}" placeholder="número da NF de devolução"></div>
-      <div class="fld"><label>Data da devolução</label>
-        <input id="cn-datadev" type="date" value="${esc(r.devolucaoEm || hoje())}"></div>
-      <div class="fld full"><label>Motivo / observação</label>
-        <input id="cn-obs" value="${esc(r.obsCancelamento||'')}" placeholder="ex.: refaturamento em venda direta para o cliente…"></div>
-    </div>
-    <div class="hint" style="margin-top:10px">⚠️ Ao confirmar, o veículo deixa de aparecer no estoque e fica
-    <b>aguardando a NF da fábrica no nome do cliente</b>. Ele continua rastreável pelo filtro “Aguardando NF do cliente”.</div>`, ()=>{
-    const nfAntiga = (val('cn-nfantiga')||'').trim();
-    const nfDev    = (val('cn-devolucao')||'').trim();
-    if(!nfAntiga) return alert('Informe o número da NF original.');
-    if(!nfDev) return alert('Informe o número da NF de devolução à fábrica.');
-
-    p.refat = Object.assign({}, p.refat, {
-      nfOriginal: nfAntiga,
-      canceladaEm: val('cn-data') || hoje(),
-      nfDevolucao: nfDev,
-      devolucaoEm: val('cn-datadev') || hoje(),
-      obsCancelamento: (val('cn-obs')||'').trim(),
-      canceladoPor: (usuarioAtual()||{}).nome || '',
-      canceladoRegistroEm: new Date().toISOString()
-    });
-
-    /* o veículo sai do estoque: fica aguardando a NF do cliente */
-    const vv = (DB.veiculos||[]).find(x=>mesmoChassiGlobal(x.chassi, p.chassi));
-    if(vv){
-      vv.nfOriginalCancelada = nfAntiga;
-      vv.nfOriginalCanceladaEm = p.refat.canceladaEm;
-      vv.nfDevolucao = nfDev;
-      vv.nfDevolucaoEm = p.refat.devolucaoEm;
-      vv.devolvidoFabrica = true;
-      vv.aguardandoNfCliente = true;
-      if(vv.reservadoVD) delete vv.reservadoVD;
-    }
+        <input value="${esc(veicRotulo(v)||p.modelo||'')} · ${esc(p.chassi||'—')}" disabled></div>
+      <div class="fld"><label>Nº da NF da fábrica *</label>
+        <input id="nc-nf" value="${esc(r.nf || v.nf || '')}" placeholder="nota em nome da concessionária"></div>
+      <div class="fld"><label>Data da NF</label>
+        <input id="nc-data" type="date" value="${esc(r.data || v.dataFaturamento || hoje())}"></div>
+      <div class="fld"><label>Valor da NF (R$)</label>
+        <input id="nc-valor" type="number" step="0.01" value="${r.valor || v.peNF || ''}"></div>
+      <div class="fld"><label>Chave de acesso</label>
+        <input id="nc-chave" value="${esc(r.chave||'')}" placeholder="opcional"></div>
+      <div class="fld full"><label>Observação</label>
+        <input id="nc-obs" value="${esc(r.obs||'')}"></div>
+    </div>`, ()=>{
+    const nf = (val('nc-nf')||'').trim();
+    if(!nf) return alert('Informe o número da NF.');
+    p.refat = p.refat || {};
+    p.refat.nfConcessionaria = {nf, data: val('nc-data')||hoje(),
+      valor: +val('nc-valor')||0, chave: (val('nc-chave')||'').trim(),
+      obs: (val('nc-obs')||'').trim(),
+      por: (usuarioAtual()||{}).nome||'', em: new Date().toISOString()};
     save();
-    logAcao('Cancelou NF e devolveu o veículo à fábrica','vendas',
-      p.chassi + ' · NF '+nfAntiga+' cancelada · devolução NF '+nfDev);
+    logAcao('Registrou NF da fábrica (concessionária)','vendas', p.chassi+' · NF '+nf);
     fechar(); renderAll();
-    alert('Cancelamento registrado.\n\nNF ' + nfAntiga + ' cancelada.\nNF de devolução ' + nfDev + ' arquivada.\n\n' +
-      'O veículo saiu do estoque e está aguardando a NF da fábrica no nome de ' + (p.cliente||'o cliente') + '.');
+    alert('NF registrada.\\n\\nPróxima fase: a concessionária emite a NF de devolução à fábrica.');
   });
 }
 
-/* ---------- PASSO 2: NF da fábrica direto para o cliente ---------- */
-function formNfFabricaCliente(pedidoId){
+/* ============================================================
+   FASE 3 · DEVOLUÇÃO DA NF À FÁBRICA (concessionária)
+   ============================================================ */
+function formDevolucaoFabrica(pedidoId){
   if(!precisaPermissao('vendas','edit')) return;
   const p = (DB.pedidos||[]).find(x=>x.id===pedidoId); if(!p) return;
-  if(!p.chassi) return alert('Este pedido não tem chassi ligado.');
-  if(!(p.refat && p.refat.nfOriginal))
-    return alert('Primeiro registre o cancelamento da NF original.\n\n' +
-      'A fábrica só fatura no nome do cliente depois de cancelar a NF da concessionária.');
+  if(!(p.refat && p.refat.nfConcessionaria) && !podeVerNfConcessionaria())
+    return alert('Antes da devolução é preciso registrar a NF da fábrica para a concessionária.\n\n' +
+      'Peça ao gerente de vendas ou ao master.');
   const v = (DB.veiculos||[]).find(x=>mesmoChassiGlobal(x.chassi, p.chassi)) || {};
   const r = p.refat || {};
 
-  modal('NF da fábrica em nome do cliente', `
-    <p class="hint" style="margin:0 0 12px">Registre a <b>NF emitida pela fábrica no nome do cliente</b>.
-    Com ela, o carro é <b>baixado do estoque</b> e passa a <b>vendido</b>.</p>
+  modal('Devolução da NF à fábrica', `
+    <p class="hint" style="margin:0 0 12px">A concessionária devolve o carro à fábrica emitindo uma <b>NF de devolução</b>.
+    Depois disso o carro sai do estoque e aguarda a NF no nome do cliente.</p>
     <div class="grid">
       <div class="fld full"><label>Veículo</label>
-        <input value="${esc(veicRotulo(v)||p.modelo||'')} · ${esc(p.chassi)}" disabled></div>
-      <div class="fld full"><label>Situação atual</label>
-        <input value="NF ${esc(r.nfOriginal||'')} cancelada · devolução ${esc(r.nfDevolucao||'')} em ${fmt(r.devolucaoEm||'')}" disabled></div>
-      <div class="fld"><label>NF da fábrica (cliente) *</label>
-        <input id="nf-nf" value="${esc(r.nfNova || '')}" placeholder="número da NF em nome do cliente"></div>
-      <div class="fld"><label>Data da NF *</label>
-        <input id="nf-data" type="date" value="${esc(r.nfNovaEm || hoje())}"></div>
-      <div class="fld"><label>Chave de acesso (opcional)</label>
-        <input id="nf-chave" value="${esc(r.chaveNf||'')}" placeholder="44 dígitos"></div>
-      <div class="fld"><label>Valor da venda (R$)</label>
-        <input id="nf-valor" type="number" step="0.01" value="${(+p.valorVenda||0).toFixed(2)}"></div>
-      <div class="fld full"><label>Observação</label>
-        <input id="nf-obs" value="${esc(r.obsNf||'')}"></div>
+        <input value="${esc(veicRotulo(v)||p.modelo||'')} · ${esc(p.chassi||'—')}" disabled></div>
+      <div class="fld full"><label>Situação</label>
+        <input value="${r.nfConcessionaria? 'NF fábrica/concessionária '+esc(r.nfConcessionaria.nf)+' registrada' : 'NF da concessionária ainda não registrada'}" disabled></div>
+      <div class="fld"><label>NF de devolução *</label>
+        <input id="dv-nf" value="${esc((r.devolucao&&r.devolucao.nf)||'')}" placeholder="nota de devolução à fábrica"></div>
+      <div class="fld"><label>Data da devolução *</label>
+        <input id="dv-data" type="date" value="${esc((r.devolucao&&r.devolucao.data)||hoje())}"></div>
+      <div class="fld"><label>Valor (R$)</label>
+        <input id="dv-valor" type="number" step="0.01" value="${(r.devolucao&&r.devolucao.valor) || v.peNF || ''}"></div>
+      <div class="fld"><label>Chave de acesso</label>
+        <input id="dv-chave" value="${esc((r.devolucao&&r.devolucao.chave)||'')}" placeholder="opcional"></div>
+      <div class="fld full"><label>Motivo</label>
+        <input id="dv-obs" value="${esc((r.devolucao&&r.devolucao.obs)||'Refaturamento em venda direta para o cliente')}"></div>
     </div>`, ()=>{
-    const nf = (val('nf-nf')||'').trim();
-    if(!nf) return alert('Informe o número da NF da fábrica.');
+    const nf = (val('dv-nf')||'').trim();
+    if(!nf) return alert('Informe o número da NF de devolução.');
+    p.refat = p.refat || {};
+    p.refat.devolucao = {nf, data: val('dv-data')||hoje(),
+      valor: +val('dv-valor')||0, chave: (val('dv-chave')||'').trim(),
+      obs: (val('dv-obs')||'').trim(),
+      por: (usuarioAtual()||{}).nome||'', em: new Date().toISOString()};
 
-    p.refat = Object.assign({}, p.refat, {
-      nfNova: nf, nfNovaEm: val('nf-data') || hoje(),
-      chaveNf: (val('nf-chave')||'').trim(),
-      obsNf: (val('nf-obs')||'').trim(),
-      nfRegistradaPor: (usuarioAtual()||{}).nome || '',
-      nfRegistradaEm: new Date().toISOString()
-    });
+    const vv = (DB.veiculos||[]).find(x=>mesmoChassiGlobal(x.chassi, p.chassi));
+    if(vv){
+      vv.nfDevolucao = nf; vv.nfDevolucaoEm = p.refat.devolucao.data;
+      vv.devolvidoFabrica = true; vv.aguardandoNfCliente = true;
+      if(vv.reservadoVD) delete vv.reservadoVD;
+    }
+    save();
+    logAcao('Registrou NF de devolução à fábrica','vendas', p.chassi+' · NF '+nf);
+    fechar(); renderAll();
+    alert('Devolução registrada.\\n\\nNF '+nf+' arquivada. O carro saiu do estoque e aguarda a NF da fábrica no nome do cliente.');
+  });
+}
+
+/* ============================================================
+   FASE 4 · NF DA FÁBRICA PARA O CLIENTE + COMISSÃO
+   ============================================================ */
+function formNfCliente(pedidoId){
+  if(!precisaPermissao('vendas','edit')) return;
+  const p = (DB.pedidos||[]).find(x=>x.id===pedidoId); if(!p) return;
+  const doEstoque = !!p.chassi;
+  if(doEstoque && !(p.refat && p.refat.devolucao))
+    return alert('Antes de faturar para o cliente é preciso registrar a NF de devolução à fábrica.\n\n' +
+      'A fábrica só refatura em nome do cliente depois que a concessionária devolve o carro.');
+  const v = (DB.veiculos||[]).find(x=>mesmoChassiGlobal(x.chassi, p.chassi)) || {};
+  const r = p.refat || {};
+  const valorVenda = +p.valorVenda || 0;
+
+  /* comissão de fábrica: percentual sugerido, valor ajustável */
+  const pctSug = +(r.pctComissao || 2);
+  const comissaoSug = r.valorComissao != null ? +r.valorComissao : Math.round(valorVenda * pctSug) / 100;
+
+  modal('NF da fábrica → cliente', `
+    <p class="hint" style="margin:0 0 12px">Com a NF no nome do cliente, o carro vai para <b>Carros vendidos</b> e a
+    <b>comissão de fábrica</b> entra em contas a receber.</p>
+    <div class="grid">
+      <div class="fld full"><label>Veículo</label>
+        <input value="${esc(veicRotulo(v)||p.modelo||'')}${p.chassi?' · '+esc(p.chassi):''}" disabled></div>
+      ${doEstoque?`<div class="fld full"><label>Histórico</label>
+        <input value="${r.nfConcessionaria?'NF fab./concess. '+esc(r.nfConcessionaria.nf):'—'} · devolução ${esc(r.devolucao?r.devolucao.nf:'—')}" disabled></div>`:''}
+      <div class="fld"><label>NF da fábrica (cliente) *</label>
+        <input id="fc-nf" value="${esc(r.nfCliente?r.nfCliente.nf:'')}" placeholder="nota em nome do cliente"></div>
+      <div class="fld"><label>Data da NF *</label>
+        <input id="fc-data" type="date" value="${esc((r.nfCliente&&r.nfCliente.data)||hoje())}"></div>
+      <div class="fld"><label>Valor da venda (R$)</label>
+        <input id="fc-valor" type="number" step="0.01" value="${valorVenda.toFixed(2)}" oninput="calcComissao()"></div>
+      <div class="fld"><label>Chave de acesso</label>
+        <input id="fc-chave" value="${esc((r.nfCliente&&r.nfCliente.chave)||'')}" placeholder="opcional"></div>
+
+      <div class="fld full" style="border-top:1px solid var(--line);padding-top:12px">
+        <label>Comissão de fábrica</label>
+        <div class="bar" style="margin:0">
+          <label class="hint" style="margin:0">% sobre a venda</label>
+          <input id="fc-pct" type="number" step="0.01" value="${pctSug}" style="width:90px" oninput="calcComissao()">
+          <label class="hint" style="margin:0">valor (R$)</label>
+          <input id="fc-comissao" type="number" step="0.01" value="${comissaoSug.toFixed(2)}" style="width:150px" oninput="marcarComissaoManual()">
+        </div>
+        <div class="hint" style="margin:4px 0 0" id="fc-comissao-hint">
+          Calculada sobre a venda. Você pode ajustar o valor — o sistema usa o que estiver no campo.</div>
+      </div>
+      <div class="fld full"><label>Observação</label>
+        <input id="fc-obs" value="${esc((r.nfCliente&&r.nfCliente.obs)||'')}"></div>
+    </div>`, ()=>{
+    const nf = (val('fc-nf')||'').trim();
+    if(!nf) return alert('Informe o número da NF da fábrica.');
+    const valorNf = +val('fc-valor') || valorVenda;
+    const pct = +val('fc-pct') || 0;
+    const comissao = +val('fc-comissao') || 0;
+
+    p.refat = p.refat || {};
+    p.refat.nfCliente = {nf, data: val('fc-data')||hoje(), valor: valorNf,
+      chave: (val('fc-chave')||'').trim(), obs: (val('fc-obs')||'').trim(),
+      por: (usuarioAtual()||{}).nome||'', em: new Date().toISOString()};
+    p.refat.pctComissao = pct;
+    p.refat.valorComissao = comissao;
     p.situacao = 'faturado';
-    p.faturadoEm = p.refat.nfNovaEm;
+    p.faturadoEm = p.refat.nfCliente.data;
     p.nf = nf;
 
     const vv = (DB.veiculos||[]).find(x=>mesmoChassiGlobal(x.chassi, p.chassi));
     if(vv){
-      vv.nf = nf;
-      vv.nfEm = p.refat.nfNovaEm;
-      vv.chaveNf = p.refat.chaveNf;
+      vv.nf = nf; vv.nfEm = p.refat.nfCliente.data;
+      vv.chaveNf = p.refat.nfCliente.chave;
       vv.natureza = 'vendaDireta';
-      vv.refaturado = true;
-      vv.aguardandoNfCliente = false;
-      /* baixa do estoque: com a NF do cliente o carro não está mais disponível */
-      vv.baixadoEstoque = true;
-      vv.baixadoEm = p.refat.nfNovaEm;
+      vv.refaturado = true; vv.aguardandoNfCliente = false;
+      vv.baixadoEstoque = true; vv.baixadoEm = p.refat.nfCliente.data;
       if(vv.reservadoVD) delete vv.reservadoVD;
     }
 
-    const valorNf = +val('nf-valor') || (+p.valorVenda||0);
+    /* venda em "Carros vendidos" */
     if(!(DB.vendas||[]).some(x=>mesmoChassiGlobal(x.chassi, p.chassi))){
       DB.vendas = DB.vendas || [];
-      DB.vendas.push({id:uid(), chassi: p.chassi, veiculo: p.modelo,
-        data: p.refat.nfNovaEm, valorVenda: valorNf,
+      DB.vendas.push({id:uid(), chassi: p.chassi||'', veiculo: p.modelo,
+        data: p.refat.nfCliente.data, valorVenda: valorNf,
         cliente: p.cliente||'', doc: p.doc||'', vendedor: p.vendedor||'',
-        nf: nf, pedidoId: p.id, origemPedido: true, refaturado: true,
-        obs: 'Venda direta — NF da fábrica '+nf+' direto no nome do cliente · NF '+p.refat.nfOriginal+' cancelada · devolução '+p.refat.nfDevolucao});
+        nf: nf, pedidoId: p.id, origemPedido: true, refaturado: doEstoque,
+        obs: doEstoque
+          ? 'Venda direta por refaturamento · NF fábrica/cliente '+nf
+            + (p.refat.nfConcessionaria? ' · NF concessionária '+p.refat.nfConcessionaria.nf:'')
+            + (p.refat.devolucao? ' · devolução '+p.refat.devolucao.nf:'')
+          : 'Venda direta · NF '+nf});
     }
+
+    /* comissão de fábrica em contas a receber */
+    let criouComissao = false;
+    if(comissao > 0.005){
+      DB.receitasDiversas = DB.receitasDiversas || [];
+      const jaTem = DB.receitasDiversas.some(r=>r.pedidoId===p.id && r.origem==='comissaoVD');
+      if(!jaTem){
+        const tipo = (typeof tipoReceberPorNome==='function') ? tipoReceberPorNome('Comissão de venda direta') : null;
+        DB.receitasDiversas.push({
+          id: uid(), centro: 'novos',
+          categoria: 'Comissão de venda direta',
+          tipoId: tipo ? tipo.id : 't-comissao-vd',
+          cliente: 'Fábrica (comissão VD)',
+          valor: Math.round(comissao*100)/100,
+          vencimento: somarDias(p.refat.nfCliente.data, 30),
+          competencia: p.refat.nfCliente.data.slice(0,7)+'-01',
+          documento: 'NF '+nf,
+          descricao: 'Comissão de fábrica — venda direta '+p.cliente+' · '+p.modelo,
+          origem: 'comissaoVD', pedidoId: p.id, chassi: p.chassi||'',
+          criadoEm: new Date().toISOString(),
+          criadoPor: (usuarioAtual()||{}).nome||''
+        });
+        criouComissao = true;
+      }
+    }
+
     save();
-    logAcao('Registrou NF da fábrica para o cliente','vendas',
-      p.chassi + ' · NF '+nf+' · '+p.cliente);
+    logAcao('Faturou VD para o cliente','vendas',
+      (p.chassi||'') + ' · NF '+nf + ' · ' + p.cliente + (comissao>0.005? ' · comissão '+brl(comissao):''));
     fechar(); renderAll();
-    alert('NF registrada.\n\nO veículo ' + p.chassi + ' foi baixado do estoque e está em "Carros vendidos".\n\n' +
-      'Histórico completo:\nNF '+p.refat.nfOriginal+' cancelada\nNF de devolução '+p.refat.nfDevolucao+
-      '\nNF da fábrica no cliente '+nf);
+
+    alert('Venda direta faturada.\\n\\nNF ' + nf + ' em nome de ' + (p.cliente||'cliente') + '.' +
+      (doEstoque ? '\\nO veículo foi baixado do estoque e está em "Carros vendidos".' : '\\nA venda está em "Carros vendidos".') +
+      (criouComissao ? '\\n\\nComissão de fábrica de ' + brl(comissao) + ' lançada em contas a receber (centro Veículos Novos).' : '') +
+      (comissao > 0.005 && !criouComissao ? '\\n\\nA comissão já estava lançada — não dupliquei.' : ''));
   });
+
+  setTimeout(()=>{
+    const pct = document.getElementById('fc-pct');
+    const val = document.getElementById('fc-valor');
+    if(pct && val) calcComissao();
+  }, 50);
 }
 
-/* ---------- histórico das NFs do veículo ---------- */
-function verHistoricoNf(pedidoId){
-  const p = (DB.pedidos||[]).find(x=>x.id===pedidoId); if(!p) return;
-  const v = (DB.veiculos||[]).find(x=>mesmoChassiGlobal(x.chassi, p.chassi)) || {};
-  const r = p.refat || {};
-  const linha = (rot, valor, data) => valor
-    ? `<tr><td>${rot}</td><td><b>${esc(valor)}</b></td><td>${data?fmt(data):'—'}</td></tr>` : '';
-  document.getElementById('mbox-in').className = 'modal wide';
-  document.getElementById('mbox-body').innerHTML = `<h2>Histórico das notas fiscais</h2>
-    <p class="hint" style="margin:0 0 12px"><b>${esc(p.cliente||'')}</b> · ${esc(veicRotulo(v)||p.modelo||'')} · ${esc(p.chassi)}</p>
-    <table class="tbl"><thead><tr><th>Documento</th><th>Número</th><th>Data</th></tr></thead><tbody>
-      ${linha('NF original da concessionária', r.nfOriginal || v.nfOriginal, r.canceladaEm)}
-      ${linha('NF de devolução à fábrica', r.nfDevolucao, r.devolucaoEm)}
-      ${linha('NF da fábrica — cliente', r.nfNova || (v.aguardandoNfCliente?'':'') , r.nfNovaEm)}
-    </tbody></table>
-    ${r.chaveNf?`<div class="hint" style="margin-top:8px">Chave de acesso: ${esc(r.chaveNf)}</div>`:''}
-    ${r.obsCancelamento?`<div class="hint">Cancelamento: ${esc(r.obsCancelamento)}</div>`:''}
-    <div class="mfoot"><button class="b sec" onclick="fechar()">Fechar</button></div>`;
-  document.getElementById('mbox').classList.add('on');
+/* recalcula a comissão ao mexer no % ou no valor da venda */
+let COMISSAO_MANUAL = false;
+function marcarComissaoManual(){ COMISSAO_MANUAL = true; }
+function calcComissao(){
+  if(COMISSAO_MANUAL) return;
+  const pct = +val('fc-pct') || 0;
+  const valor = +val('fc-valor') || 0;
+  const campo = document.getElementById('fc-comissao');
+  if(campo) campo.value = (Math.round(valor*pct)/100).toFixed(2);
+  const hint = document.getElementById('fc-comissao-hint');
+  if(hint) hint.innerHTML = `${pct}% de ${brl(valor)} = <b>${brl(Math.round(valor*pct)/100)}</b>. Pode ajustar o valor.`;
 }
 
-/* ---------- aviso nas telas ---------- */
-function seloReservaVD(v){
-  const p = pedidoReservadoDoVeiculo(v && v.chassi);
+/* ============================================================
+   CONSULTA DAS FASES (gerente de vendas + master)
+   ============================================================ */
+function renderFasesVD(){
+  const el = document.getElementById('tbl-fases'); if(!el) return;
+  if(!podeVerFases()){
+    el.innerHTML = '<div class="empty">A consulta das fases dos pedidos é do gerente de vendas e do master.</div>';
+    return;
+  }
+  DB.pedidos = DB.pedidos || [];
+  const filtro = val('f-fase-vd') || 'todas';
+  const busca = (val('f-busca-vd')||'').toLowerCase();
+
+  let lista = DB.pedidos.filter(p=>p.situacao !== 'cancelado' || filtro === 'todas');
+  if(busca) lista = lista.filter(p=>[p.cliente, p.doc, p.modelo, p.chassi, p.pedido, p.vendedor]
+    .join(' ').toLowerCase().includes(busca));
+  if(filtro !== 'todas') lista = lista.filter(p=>String(faseDoPedido(p)) === String(filtro));
+  lista.sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+
+  /* KPIs por fase */
+  const k = document.getElementById('fases-kpis');
+  if(k){
+    const ativos = DB.pedidos.filter(p=>p.situacao !== 'cancelado');
+    const cont = {};
+    FASES_VD.forEach(f=>{ cont[f.k] = ativos.filter(p=>faseDoPedido(p) === f.k).length; });
+    k.innerHTML = FASES_VD.map(f=>`
+      <div class="kpi"><div class="l">Fase ${f.k} · ${esc(f.l)}</div>
+        <div class="v" style="color:${f.cor}">${cont[f.k]}</div>
+        <div class="s">${esc(f.d)}</div></div>`).join('');
+  }
+
+  if(!lista.length){
+    el.innerHTML = '<div class="empty">Nenhum pedido de venda direta com esse filtro.</div>';
+    return;
+  }
+
+  el.innerHTML = `<div style="overflow-x:auto"><table class="tbl"><thead><tr>
+      <th>Fase</th><th>Pedido</th><th>Cliente</th><th>Veículo</th>
+      <th>Origem</th><th>NF fábrica/concess.</th><th>Devolução</th><th>NF cliente</th><th></th>
+    </tr></thead><tbody>
+    ${lista.map(p=>{
+      const f = faseDoPedido(p), r = p.refat || {};
+      const doEstoque = !!p.chassi;
+      const podeVerNfC = podeVerNfConcessionaria();
+      return `<tr>
+        <td>${badgeFase(p)}</td>
+        <td>${fmt(p.data)}<div class="hint" style="margin:0">${esc(p.vendedor||'')}</div></td>
+        <td><b>${esc(p.cliente||'—')}</b><div class="hint" style="margin:0">${esc(p.doc||'')}</div></td>
+        <td>${esc(p.modelo||'—')}<div class="hint" style="margin:0">${doEstoque?esc(p.chassi):'—'}</div></td>
+        <td>${doEstoque?'<span class="tag t-parcial">estoque</span>':'<span class="tag t-aberto">VD direta</span>'}</td>
+        <td>${podeVerNfC
+          ? (r.nfConcessionaria ? `<b>${esc(r.nfConcessionaria.nf)}</b><div class="hint" style="margin:0">${fmt(r.nfConcessionaria.data)}</div>` : '<span class="hint">—</span>')
+          : '<span class="hint" title="Acesso restrito">🔒</span>'}</td>
+        <td>${r.devolucao ? `<b>${esc(r.devolucao.nf)}</b><div class="hint" style="margin:0">${fmt(r.devolucao.data)}</div>` : '<span class="hint">—</span>'}</td>
+        <td>${r.nfCliente ? `<b>${esc(r.nfCliente.nf)}</b><div class="hint" style="margin:0">${fmt(r.nfCliente.data)}</div>` : '<span class="hint">—</span>'}</td>
+        <td><button class="b sm sec" onclick="gerirPedido('${p.id}')">📄</button></td>
+      </tr>`;}).join('')}
+    </tbody></table></div>
+    <div class="hint">${lista.length} pedido(s) · ${DB.pedidos.filter(p=>!!p.chassi).length} de veículos do estoque</div>`;
+}
+
+/* ---------- bloco das fases dentro do detalhe do pedido ---------- */
+function blocoFasesPedido(p){
   if(!p) return '';
-  return `<span class="tag t-parcial" title="Reservado para venda direta — pedido de ${esc(p.cliente||'')}">🔒 VD</span>`;
+  const fase = faseDoPedido(p), r = p.refat || {};
+  const doEstoque = !!p.chassi;
+  const podeVerNfC = podeVerNfConcessionaria();
+  const podeEditarNfC = podeEditarNfConcessionaria();
+  const editavel = p.situacao === 'pedido';
+
+  const item = (n, ok, titulo, detalhe, botao) => `
+    <tr>
+      <td style="width:34px"><b style="color:${n<=fase?'#22c55e':'var(--mut)'}">${n<=fase?'✔':n}</b></td>
+      <td><b>${titulo}</b><div class="hint" style="margin:0">${detalhe}</div></td>
+      <td style="text-align:right">${botao||''}</td>
+    </tr>`;
+
+  return `<div class="sect" style="margin:14px 0 8px">Fases do refaturamento</div>
+    <table class="tbl"><tbody>
+    ${item(1, !!p.chassi, 'Reserva do veículo',
+      doEstoque ? `Chassi ${esc(p.chassi)} reservado para venda direta` : 'Venda direta sem carro do estoque', '')}
+
+    ${item(2, !!r.nfConcessionaria, 'NF da fábrica → concessionária',
+      podeVerNfC
+        ? (r.nfConcessionaria ? `NF ${esc(r.nfConcessionaria.nf)} de ${fmt(r.nfConcessionaria.data)}` : 'não registrada')
+        : '<span class="hint">🔒 acesso restrito (gerente de vendas / master)</span>',
+      (editavel && podeEditarNfC)
+        ? `<button class="b sm sec" onclick="formNfConcessionaria('${p.id}')">${r.nfConcessionaria?'✏️':'registrar'}</button>`
+        : (editavel && !podeVerNfC ? '<span class="hint">pedir ao gerente</span>' : ''))}
+
+    ${item(3, !!r.devolucao, 'Devolução da NF à fábrica',
+      r.devolucao ? `NF ${esc(r.devolucao.nf)} de ${fmt(r.devolucao.data)}` : 'não registrada',
+      (doEstoque && editavel && (r.nfConcessionaria || podeVerNfC))
+        ? `<button class="b sm sec" onclick="formDevolucaoFabrica('${p.id}')">${r.devolucao?'✏️':'registrar'}</button>` : '')}
+
+    ${item(4, !!r.nfCliente, 'NF da fábrica → cliente',
+      r.nfCliente ? `NF ${esc(r.nfCliente.nf)} de ${fmt(r.nfCliente.data)}${(r.valorComissao>0)?' · comissão '+brl(r.valorComissao):''}` : 'não registrada',
+      (editavel && (!doEstoque || r.devolucao))
+        ? `<button class="b sm ok" onclick="formNfCliente('${p.id}')">${r.nfCliente?'✏️':'faturar'}</button>` : '')}
+    </tbody></table>
+    ${p.situacao==='faturado' ? '<div class="hint" style="margin-top:6px">Venda direta faturada — o veículo está em "Carros vendidos".</div>' : ''}`;
 }
 
 </script>
