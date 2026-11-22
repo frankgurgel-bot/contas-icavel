@@ -2662,6 +2662,18 @@ function normalize(){
 function carregar(){
   normalize();
 }
+
+/* redesenha a aba de cadastro que está aberta (usado após incluir/editar/excluir) */
+function renderAbaCadastroAtiva(){
+  const ativa = document.querySelector('.ctabs button[data-c].on');
+  if(!ativa) return;
+  const R = {'todos':'renderTodosItens','tipos-receber':'renderTiposReceber','tipos-pagar':'renderTiposPagar',
+    'fornecedores':'renderFornecedores','pagadores':'renderPagadores','clientes':'renderClientes',
+    'vendedores':'renderVendedores','juros':'renderJuros','prazo':'renderPrazoFab'};
+  const f = R[ativa.dataset.c];
+  if(f && typeof window[f]==='function'){ try{ window[f](); }catch(e){ console.warn(f, e.message); } }
+  if(typeof renderVisaoCadastros==='function'){ try{ renderVisaoCadastros(); }catch(e){} }
+}
 /* save(): grava no navegador (rascunho) e envia a diferença para a nuvem */
 const save = () => {
   try{ localStorage.setItem(KEY, JSON.stringify(DB)); }catch(e){}
@@ -3457,14 +3469,14 @@ function formPagador(id){
     if(id){ const old = p.nome; Object.assign(p, {nome, tipo:val('m-tipo')});
       if(old!==nome) DB.titulos.forEach(t=>{ if(t.pagador===old) t.pagador = nome; }); }
     else DB.pagadores.push({id:uid(), nome, tipo:val('m-tipo')});
-    save(); fechar(); renderAll();
+    save(); fechar(); renderAll(); renderAbaCadastroAtiva(); renderAbaCadastroAtiva();
   });
 }
 function excluirPagador(id){
   if(!precisaPermissao('cadastros','del')) return;
   const p = DB.pagadores.find(x=>x.id===id); if(!p) return;
   if(!confirm('Excluir o pagador “'+p.nome+'”?')) return;
-  DB.pagadores = DB.pagadores.filter(x=>x.id!==id); save(); renderAll();
+  DB.pagadores = DB.pagadores.filter(x=>x.id!==id); save(); renderAll(); renderAbaCadastroAtiva();
 }
 function renderClientes(){
   const el = document.getElementById('tbl-clientes');
@@ -3487,13 +3499,13 @@ function formCliente(i){
     const nome = val('m-nome').trim(); if(!nome) return alert('Informe o nome.');
     if(i!=null && i>=0) Object.assign(DB.clientes[i], {nome, doc:val('m-doc'), tel:val('m-tel')});
     else DB.clientes.push({id:uid(), nome, doc:val('m-doc'), tel:val('m-tel')});
-    save(); fechar(); renderAll();
+    save(); fechar(); renderAll(); renderAbaCadastroAtiva(); renderAbaCadastroAtiva();
   });
 }
 function excluirCliente(i){
   if(!precisaPermissao('cadastros','del')) return;
   if(!confirm('Excluir o cliente “'+DB.clientes[i].nome+'”?')) return;
-  DB.clientes.splice(i,1); save(); renderAll();
+  DB.clientes.splice(i,1); save(); renderAll(); renderAbaCadastroAtiva();
 }
 function renderVendedores(){
   const el = document.getElementById('tbl-vendedores');
@@ -3526,12 +3538,12 @@ function formVendedor(i){
       return alert('Já existe um vendedor com esse nome.');
     if(editando) Object.assign(DB.vendedores[i], {nome, loja});
     else DB.vendedores.push({id:uid(), nome, loja});
-    save(); renderAll();
+    save(); renderAll(); renderAbaCadastroAtiva();
   });
 }
 function excluirVendedor(i){
   if(!precisaPermissao('cadastros','del')) return;
-  DB.vendedores.splice(i,1); save(); renderAll();
+  DB.vendedores.splice(i,1); save(); renderAll(); renderAbaCadastroAtiva();
 }
 
 /* ================= RELATÓRIOS ================= */
@@ -3938,6 +3950,7 @@ function renderAll(){
   if(typeof renderFornecedores==='function') renderFornecedores();
   if(typeof renderFasesVD==='function') renderFasesVD();
   if(typeof renderVisaoCadastros==='function') renderVisaoCadastros();
+  if(typeof renderTodosItens==='function') renderTodosItens();
   if(typeof renderConciliacao==='function'){ renderConciliacao(); atualizarBadgeConc(); }
   if(typeof renderUsuarios==='function') renderUsuarios();
   renderPeriodoHint();
@@ -7600,7 +7613,12 @@ function formTipoReceber(id){
     if(id) Object.assign(t, dados);
     else { DB.tipos = DB.tipos || []; DB.tipos.push(Object.assign({id:uid()}, dados)); }
     save(); logAcao(id?'Alterou tipo a receber':'Criou tipo a receber','cadastros', nome);
-    fechar(); renderAll();
+    fechar();
+    try{ renderTiposReceber(); }catch(e){}
+    try{ if(typeof renderTodosItens==='function') renderTodosItens(); }catch(e){}
+    try{ if(typeof renderVisaoCadastros==='function') renderVisaoCadastros(); }catch(e){}
+    try{ renderAll(); }catch(e){ console.warn(e.message); }
+    try{ if(typeof renderAbaCadastroAtiva==='function') renderAbaCadastroAtiva(); }catch(e){}
   });
 }
 
@@ -7612,7 +7630,10 @@ function excluirTipoReceber(id){
   if(!confirm('Excluir o tipo "'+t.nome+'"?')) return;
   DB.tipos = DB.tipos.filter(x=>x.id!==id);
   save(); logAcao('Excluiu tipo a receber','cadastros', t.nome);
-  renderAll();
+  try{ renderTiposReceber(); }catch(e){}
+  try{ if(typeof renderTodosItens==='function') renderTodosItens(); }catch(e){}
+  try{ renderAll(); }catch(e){}
+  try{ if(typeof renderAbaCadastroAtiva==='function') renderAbaCadastroAtiva(); }catch(e){}
 }
 
 /* ---------------- tela: tipos a pagar ---------------- */
@@ -7699,7 +7720,12 @@ function formTipoPagar(id){
     if(id) Object.assign(t, dados);
     else DB.tiposPagar.push(Object.assign({id:uid()}, dados));
     save(); logAcao(id?'Alterou tipo a pagar':'Criou tipo a pagar','cadastros', nome);
-    fechar(); renderAll();
+    fechar();
+    try{ renderTiposPagar(); }catch(e){}
+    try{ if(typeof renderTodosItens==='function') renderTodosItens(); }catch(e){}
+    try{ if(typeof renderVisaoCadastros==='function') renderVisaoCadastros(); }catch(e){}
+    try{ renderAll(); }catch(e){ console.warn(e.message); }
+    try{ if(typeof renderAbaCadastroAtiva==='function') renderAbaCadastroAtiva(); }catch(e){}
   });
 }
 
@@ -7712,7 +7738,10 @@ function excluirTipoPagar(id){
   if(!confirm('Excluir o tipo "'+t.nome+'"?')) return;
   DB.tiposPagar = DB.tiposPagar.filter(x=>x.id!==id);
   save(); logAcao('Excluiu tipo a pagar','cadastros', t.nome);
-  renderAll();
+  try{ renderTiposPagar(); }catch(e){}
+  try{ if(typeof renderTodosItens==='function') renderTodosItens(); }catch(e){}
+  try{ renderAll(); }catch(e){}
+  try{ if(typeof renderAbaCadastroAtiva==='function') renderAbaCadastroAtiva(); }catch(e){}
 }
 
 /* ---------------- relatório: movimentação por tipo ---------------- */
@@ -8189,7 +8218,12 @@ function formFornecedor(id, aposSalvar){
     if(id) Object.assign(f, dados);
     else DB.fornecedores.push(Object.assign({id:uid(), criadoEm:new Date().toISOString()}, dados));
     save(); logAcao(id?'Alterou fornecedor':'Criou fornecedor','cadastros', nome);
-    fechar(); renderAll();
+    fechar();
+    try{ renderFornecedores(); }catch(e){}
+    try{ if(typeof renderTodosItens==='function') renderTodosItens(); }catch(e){}
+    try{ if(typeof renderVisaoCadastros==='function') renderVisaoCadastros(); }catch(e){}
+    try{ renderAll(); }catch(e){ console.warn(e.message); }
+    try{ if(typeof renderAbaCadastroAtiva==='function') renderAbaCadastroAtiva(); }catch(e){}
     if(typeof aposSalvar === 'function') aposSalvar(nome);
   });
 }
@@ -8203,7 +8237,10 @@ function excluirFornecedor(id){
   if(!confirm('Excluir o fornecedor "'+f.nome+'"?')) return;
   DB.fornecedores = DB.fornecedores.filter(x=>x.id!==id);
   save(); logAcao('Excluiu fornecedor','cadastros', f.nome);
-  renderAll();
+  try{ renderFornecedores(); }catch(e){}
+  try{ if(typeof renderTodosItens==='function') renderTodosItens(); }catch(e){}
+  try{ renderAll(); }catch(e){}
+  try{ if(typeof renderAbaCadastroAtiva==='function') renderAbaCadastroAtiva(); }catch(e){}
 }
 
 /* opções para os datalists */
@@ -8248,7 +8285,7 @@ function cadastroRapido(tipo, campoId){
     if(!nome) return alert('Informe o nome do cliente.');
     if(DB.clientes.some(c=>String(c.nome).toLowerCase()===nome.toLowerCase())) return alert('Já existe um cliente com esse nome.');
     DB.clientes.push({id:uid(), nome, doc:(val('m-doc')||'').trim(), tel:(val('m-tel')||'').trim(), obs:''});
-    save(); fechar(); renderAll(); voltar(nome);
+    save(); fechar(); renderAll(); renderAbaCadastroAtiva(); renderAbaCadastroAtiva(); voltar(nome);
     logAcao('Criou cliente','cadastros', nome);
   });
 }
