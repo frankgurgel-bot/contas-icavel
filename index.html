@@ -466,15 +466,16 @@
   </section>
 
   <section class="view" id="v-cadastros">
-    <div class="sect" style="margin:4px 0 8px">Tudo o que já está cadastrado</div>
+    <div class="sect" style="margin:4px 0 8px">Resumo dos cadastros</div>
     <div id="cad-visao" style="margin-bottom:20px"></div>
 
-    <div class="sect" style="margin:4px 0 8px">Opções de cadastro</div>
+    <div class="sect" style="margin:4px 0 8px">Itens cadastrados</div>
     <h1>Cadastros</h1>
     <p class="sub">O <b>tipo</b> classifica cada movimentação: os de <b>receber</b> (entrada, financiamento, bônus, serviços) e os de <b>pagar</b>
     (aluguel, peças, combustível, salários…). Os tipos aparecem em todos os lançamentos e relatórios. Pagadores são bancos, financeiras, fábrica e clientes que efetivamente pagam.</p>
     <div class="ctabs">
-      <button data-c="tipos-receber" class="on">🏷 Tipos a receber</button>
+      <button data-c="todos" class="on">📋 Todos os itens</button>
+      <button data-c="tipos-receber">🏷 Tipos a receber</button>
       <button data-c="tipos-pagar">🏷 Tipos a pagar</button>
       <button data-c="pagadores">🏦 Pagadores / Financeiras</button>
       <button data-c="fornecedores">🏭 Fornecedores</button>
@@ -483,7 +484,24 @@
       <button data-c="juros">％ Juros Floor Plan / FDIC</button>
       <button data-c="prazo">📅 Prazo da fábrica</button>
     </div>
-    <div class="ctab on" id="c-tipos-receber">
+    <div class="ctab on" id="c-todos">
+      <div class="bar">
+        <button class="b" data-perm="cadastros:edit" onclick="formNovoItemGeral()">＋ Incluir item</button>
+        <input id="f-busca-geral" placeholder="Buscar em todos os cadastros…" oninput="renderTodosItens()" style="flex:1;min-width:200px">
+        <select id="f-grupo-geral" onchange="renderTodosItens()">
+          <option value="">Todos os cadastros</option>
+          <option value="tipos-receber">Tipos a receber</option>
+          <option value="tipos-pagar">Tipos a pagar</option>
+          <option value="fornecedores">Fornecedores</option>
+          <option value="clientes">Clientes</option>
+          <option value="pagadores">Pagadores</option>
+          <option value="vendedores">Vendedores</option>
+        </select>
+      </div>
+      <div id="tbl-todos"></div>
+    </div>
+
+    <div class="ctab" id="c-tipos-receber">
       <div class="bar"><button class="b" data-perm="cadastros:edit" onclick="formTipoReceber()">＋ Novo tipo a receber</button></div>
       <div id="tbl-tipos-receber"></div>
     </div>
@@ -2693,7 +2711,16 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   const t = document.getElementById('nav-titulo');
   if(t) t.textContent = b.textContent.trim();
   /* telas que montam o próprio conteúdo ao abrir */
-  if(b.dataset.v === 'cadastros' && typeof renderVisaoCadastros==='function') renderVisaoCadastros();
+  if(b.dataset.v === 'cadastros'){
+    if(typeof renderVisaoCadastros==='function') renderVisaoCadastros();
+  if(typeof renderTodosItens==='function') renderTodosItens();
+    const ativa = document.querySelector('.ctabs button[data-c].on');
+    const R0 = {'todos':'renderTodosItens','tipos-receber':'renderTiposReceber','tipos-pagar':'renderTiposPagar',
+      'fornecedores':'renderFornecedores','pagadores':'renderPagadores','clientes':'renderClientes',
+      'vendedores':'renderVendedores','juros':'renderJuros','prazo':'renderPrazoFab'};
+    const f0 = ativa ? R0[ativa.dataset.c] : null;
+    if(f0 && typeof window[f0]==='function'){ try{ window[f0](); }catch(e){} }
+  }
   if(b.dataset.v === 'fases' && typeof renderFasesVD==='function') renderFasesVD();
   renderAll();
 });
@@ -2712,6 +2739,19 @@ document.querySelectorAll('.ctabs button').forEach(b=>{
       document.querySelectorAll('.ctab').forEach(x=>x.classList.remove('on'));
       const alvo = document.getElementById('c-'+b.dataset.c);
       if(alvo) alvo.classList.add('on');
+      /* cada aba monta a sua tabela ao abrir */
+      const R = {
+        'tipos-receber': 'renderTiposReceber',
+        'tipos-pagar':   'renderTiposPagar',
+        'fornecedores':  'renderFornecedores',
+        'pagadores':     'renderPagadores',
+        'clientes':      'renderClientes',
+        'vendedores':    'renderVendedores',
+        'juros':         'renderJuros',
+        'prazo':         'renderPrazoFab',
+        'todos':         'renderTodosItens'
+      }[b.dataset.c];
+      if(R && typeof window[R] === 'function'){ try{ window[R](); }catch(e){ console.warn(R, e.message); } }
     }
     if(b.dataset.dvt){
       document.querySelectorAll('.dvtab').forEach(x=>x.classList.remove('on'));
@@ -3462,14 +3502,31 @@ function renderVendedores(){
       return `<tr><td><b>${esc(x.nome)}</b></td><td class="num">${vs.length}</td>
       <td class="num">${brl(vs.reduce((s,v)=>s+v.valorVenda,0))}</td>
       <td class="num">${brl(vs.reduce((s,v)=>s+saldoVenda(v.id),0))}</td>
-      <td>${pode('cadastros','del')?`<button class="b sm dang" onclick="excluirVendedor(${i})">🗑</button>`:''}</td></tr>`;}).join('')}</tbody></table>`
+      <td style="white-space:nowrap">
+        ${pode('cadastros','edit')?`<button class="b sm sec" onclick="formVendedor(${i})" title="Alterar">✏️</button>`:''}
+        ${pode('cadastros','del')?`<button class="b sm dang" onclick="excluirVendedor(${i})" title="Excluir">🗑</button>`:''}</td></tr>`;}).join('')}</tbody></table>`
     : '<div class="empty">Nenhum vendedor cadastrado.</div>';
 }
-function formVendedor(){
+function formVendedor(i){
   if(!precisaPermissao('cadastros','edit')) return;
-  modal('Novo vendedor', `<div class="fld"><label>Nome *</label><input id="m-nome"></div>`, ()=>{
-    const nome = val('m-nome').trim(); if(!nome) return alert('Informe o nome.');
-    DB.vendedores.push({id:uid(), nome}); save(); fechar(); renderAll();
+  const editando = (i!=null && i>=0);
+  const x = editando ? DB.vendedores[i]||{} : {};
+  modal(editando?'Alterar vendedor':'Novo vendedor', `<div class="grid">
+    <div class="fld full"><label>Nome *</label><input id="m-nome" value="${esc(x.nome||'')}"></div>
+    <div class="fld"><label>Loja</label>
+      <select id="m-loja">
+        <option value="" ${!x.loja?'selected':''}>—</option>
+        <option value="M" ${x.loja==='M'?'selected':''}>Matriz</option>
+        <option value="F" ${x.loja==='F'?'selected':''}>Filial</option>
+      </select></div>
+  </div>`, ()=>{
+    const nome = (val('m-nome')||'').trim(); if(!nome) return alert('Informe o nome.');
+    const loja = val('m-loja')||'';
+    if(!editando && DB.vendedores.some(v=>String(v.nome).toLowerCase()===nome.toLowerCase()))
+      return alert('Já existe um vendedor com esse nome.');
+    if(editando) Object.assign(DB.vendedores[i], {nome, loja});
+    else DB.vendedores.push({id:uid(), nome, loja});
+    save(); renderAll();
   });
 }
 function excluirVendedor(i){
@@ -7931,103 +7988,131 @@ function renderVisaoCadastros(){
   DB.pagadores = DB.pagadores || []; DB.vendedores = DB.vendedores || [];
   if(typeof aplicarSeedTiposPagar === 'function') aplicarSeedTiposPagar();
 
-  const usaFornecedor = n => (DB.despesasDiversas||[]).filter(x=>String(x.fornecedor||'').toLowerCase()===String(n||'').toLowerCase()).length;
-  const usaCliente = n => (DB.vendas||[]).filter(x=>x.cliente===n).length +
-                           (DB.pedidos||[]).filter(x=>x.cliente===n).length +
-                           (DB.receitasDiversas||[]).filter(x=>x.cliente===n).length;
-
-  const grupos = [
-    {l:'Tipos a receber', ic:'🏷', aba:'tipos-receber', itens:DB.tipos,
-      cat: t=>t.categoria||'Outros', cor: t=>t.cor,
-      uso: t=>DB.titulos.filter(x=>x.tipoId===t.id).length + (DB.receitasDiversas||[]).filter(x=>x.tipoId===t.id).length,
-      essencial:'Todo título de veículo e toda conta a receber precisam de um tipo.'},
-    {l:'Tipos a pagar', ic:'🏷', aba:'tipos-pagar', itens:DB.tiposPagar,
-      cat: t=>t.categoria||'Outros', cor: t=>t.cor,
-      uso: t=>(DB.despesasDiversas||[]).filter(x=>x.tipoId===t.id).length,
-      essencial:'Toda conta a pagar precisa de um tipo.'},
-    {l:'Fornecedores', ic:'🏭', aba:'fornecedores', itens:DB.fornecedores,
-      cat: f=>f.segmento||'', cor:()=>null,
-      uso: f=>usaFornecedor(f.nome),
-      essencial:'Quem recebe os pagamentos diversos (aluguel, peças, combustível…).'},
-    {l:'Clientes', ic:'👥', aba:'clientes', itens:DB.clientes,
-      cat: c=>c.doc?'com documento':'sem documento', cor:()=>null,
-      uso: c=>usaCliente(c.nome),
-      essencial:'Quem compra o carro ou paga uma conta a receber.'},
-    {l:'Pagadores', ic:'🏦', aba:'pagadores', itens:DB.pagadores,
-      cat: p=>p.tipo||'', cor:()=>null,
-      uso: p=>(DB.titulos||[]).filter(x=>x.pagador===p.nome).length,
-      essencial:'Bancos, financeiras e a fábrica que efetivamente pagam o título.'},
-    {l:'Vendedores', ic:'🧑‍💼', aba:'vendedores', itens:DB.vendedores,
-      cat: v=>v.loja==='M'?'Matriz':(v.loja==='F'?'Filial':''), cor:()=>null,
-      uso: v=>(DB.vendas||[]).filter(x=>x.vendedor===v.nome).length +
-              (DB.pedidos||[]).filter(x=>x.vendedor===v.nome).length,
-      essencial:'Aparece no pedido e na venda.'}
+  const g = [
+    {l:'Tipos a receber', ic:'🏷', c:'tipos-receber', n:DB.tipos.length},
+    {l:'Tipos a pagar',   ic:'🏷', c:'tipos-pagar',   n:DB.tiposPagar.length},
+    {l:'Fornecedores',    ic:'🏭', c:'fornecedores',  n:DB.fornecedores.length},
+    {l:'Clientes',        ic:'👥', c:'clientes',      n:DB.clientes.length},
+    {l:'Pagadores',       ic:'🏦', c:'pagadores',     n:DB.pagadores.length},
+    {l:'Vendedores',      ic:'🧑‍💼', c:'vendedores',    n:DB.vendedores.length}
   ];
+  const total = g.reduce((s,x)=>s+x.n,0);
+  const vazios = g.filter(x=>!x.n);
 
-  const total = grupos.reduce((s,g)=>s+g.itens.length,0);
-  const faltando = grupos.filter(g=>!g.itens.length);
-
+  /* resumo compacto: as abas ficam logo abaixo, sem empurrar */
   el.innerHTML = `
-    <div class="cards" style="margin-bottom:14px">
-      <div class="kpi"><div class="l">Total cadastrado</div><div class="v">${total}</div>
-        <div class="s">em ${grupos.length} cadastros</div></div>
-      ${grupos.map(g=>`<div class="kpi">
-        <div class="l">${g.ic} ${g.l}</div>
-        <div class="v ${g.itens.length?'':'neg'}" style="font-size:18px">${g.itens.length||'0'}</div>
-        <div class="s">${g.itens.length? g.itens.filter(i=>g.uso(i)>0).length+' em uso' : '⚠️ nada cadastrado'}</div>
-      </div>`).join('')}
+    <div class="bar" style="margin:0 0 10px;gap:8px;flex-wrap:wrap">
+      <span class="tag t-div" style="padding:6px 10px"><b>${total}</b> itens cadastrados</span>
+      ${g.map(x=>`<button class="b sm ${x.n?'sec':'dang'}" onclick="irParaCadastro('${x.c}')"
+        title="Abrir ${x.l}">${x.ic} ${x.l} <b>${x.n}</b></button>`).join('')}
     </div>
-
-    ${faltando.length ? `<div class="card" style="border-color:#ef4444;margin-bottom:14px">
-      <b class="neg">⚠️ Falta cadastrar:</b> ${faltando.map(g=>g.l).join(', ')}.
-      <div class="hint" style="margin:4px 0 0">Sem estes cadastros os lançamentos ficam incompletos.</div>
-    </div>`:''}
-
-    <div style="overflow-x:auto"><table class="tbl"><thead><tr>
-      <th style="width:26px"></th><th>Cadastro</th><th>O que já está cadastrado</th>
-      <th class="num">Qtde</th><th class="num">Em uso</th><th class="num">Sem uso</th>
-      <th>Situação</th><th></th>
-    </tr></thead><tbody>
-    ${grupos.map(g=>{
-      const semUso = g.itens.filter(i=>g.uso(i)===0).length;
-      const status = !g.itens.length
-        ? '<span class="tag t-vencido">vazio</span>'
-        : (semUso === g.itens.length
-            ? '<span class="tag t-parcial">nenhum em uso</span>'
-            : '<span class="tag t-quitado">ok</span>');
-      return `<tr style="background:var(--panel2)">
-        <td style="font-size:15px">${g.ic}</td>
-        <td colspan="4"><b>${esc(g.l)}</b><div class="hint" style="margin:0">${esc(g.essencial)}</div></td>
-        <td class="num"><b>${g.itens.length}</b></td>
-        <td class="num ${g.itens.length?'':'neg'}">${g.itens.length?g.itens.filter(i=>g.uso(i)>0).length:0}</td>
-        <td class="num ${semUso?'amb':''}">${semUso||0}</td>
-        <td>${status}</td>
-        <td><button class="b sm sec" onclick="irParaCadastro('${g.aba}')" title="Abrir este cadastro">↗ abrir</button></td>
-      </tr>
-      ${g.itens.length ? g.itens.slice().sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''))).map(it=>{
-        const n = g.uso(it), c = g.cor(it);
-        return `<tr>
-          <td></td><td></td>
-          <td>${c?`<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${c};margin-right:6px"></span>`:''}
-              ${esc(it.nome||'—')}${it.doc?` <span class="hint" style="display:inline;margin:0">· ${esc(it.doc)}</span>`:''}</td>
-          <td class="hint">${esc(g.cat(it)||'—')}</td>
-          <td></td><td></td>
-          <td class="num">${n||'—'}</td>
-          <td>${n? '': '<span class="hint" style="margin:0">sem uso</span>'}</td>
-          <td></td><td></td>
-        </tr>`;}).join('')
-      : `<tr><td></td><td colspan="8" class="neg">
-          <b>Nada cadastrado.</b> Clique em <b>↗ abrir</b> ao lado e use o botão “＋ Novo”.
-        </td></tr>`}
-    `;}).join('')}
-    </tbody></table></div>
-    <div class="hint" style="margin-top:8px">“Em uso” = quantos lançamentos utilizam o item. “Sem uso” = cadastrado, mas ainda não aproveitado.</div>`;
+    ${vazios.length ? `<div class="hint neg" style="margin:0 0 8px">
+      ⚠️ Falta cadastrar: <b>${vazios.map(x=>x.l).join(', ')}</b>.</div>`:''}`;
 }
 
 function irParaCadastro(aba){
   document.querySelector('nav button[data-v=cadastros]').click();
   const b = document.querySelector(`.ctabs button[data-c="${aba}"]`);
   if(b) b.click();
+}
+
+/* ============================================================
+   ABA "TODOS OS ITENS" — lista única com editar e excluir
+   ============================================================ */
+function renderTodosItens(){
+  const el = document.getElementById('tbl-todos'); if(!el) return;
+  DB.tipos = DB.tipos || []; DB.tiposPagar = DB.tiposPagar || [];
+  DB.clientes = DB.clientes || []; DB.fornecedores = DB.fornecedores || [];
+  DB.pagadores = DB.pagadores || []; DB.vendedores = DB.vendedores || [];
+  if(typeof aplicarSeedTiposPagar === 'function') aplicarSeedTiposPagar();
+
+  const grupos = [
+    {c:'tipos-receber', l:'Tipos a receber', ic:'🏷', itens:DB.tipos,
+     cat:t=>t.categoria||'', cor:t=>t.cor,
+     ed:t=>`formTipoReceber('${t.id}')`, del:t=>`excluirTipoReceber('${t.id}')`,
+     novo:'formTipoReceber()', rotulo:'tipo a receber'},
+    {c:'tipos-pagar', l:'Tipos a pagar', ic:'🏷', itens:DB.tiposPagar,
+     cat:t=>t.categoria||'', cor:t=>t.cor,
+     ed:t=>`formTipoPagar('${t.id}')`, del:t=>`excluirTipoPagar('${t.id}')`,
+     novo:'formTipoPagar()', rotulo:'tipo a pagar'},
+    {c:'fornecedores', l:'Fornecedores', ic:'🏭', itens:DB.fornecedores,
+     cat:f=>f.segmento||'', cor:()=>null,
+     ed:f=>`formFornecedor('${f.id}')`, del:f=>`excluirFornecedor('${f.id}')`,
+     novo:'formFornecedor()', rotulo:'fornecedor'},
+    {c:'clientes', l:'Clientes', ic:'👥', itens:DB.clientes,
+     cat:c=>c.doc||'', cor:()=>null,
+     ed:c=>{ const i=DB.clientes.indexOf(c); return `formCliente(${i})`; },
+     del:c=>{ const i=DB.clientes.indexOf(c); return `excluirCliente(${i})`; },
+     novo:'formCliente()', rotulo:'cliente'},
+    {c:'pagadores', l:'Pagadores', ic:'🏦', itens:DB.pagadores,
+     cat:p=>p.tipo||'', cor:()=>null,
+     ed:p=>{ const i=DB.pagadores.indexOf(p); return `formPagador(${i})`; },
+     del:p=>{ const i=DB.pagadores.indexOf(p); return `excluirPagador(${i})`; },
+     novo:'formPagador()', rotulo:'pagador'},
+    {c:'vendedores', l:'Vendedores', ic:'🧑‍💼', itens:DB.vendedores,
+     cat:v=>v.loja==='M'?'Matriz':(v.loja==='F'?'Filial':''), cor:()=>null,
+     ed:v=>{ const i=DB.vendedores.indexOf(v); return `formVendedor(${i})`; },
+     del:v=>{ const i=DB.vendedores.indexOf(v); return `excluirVendedor(${i})`; },
+     novo:'formVendedor()', rotulo:'vendedor'}
+  ];
+
+  const busca = (val('f-busca-geral')||'').toLowerCase();
+  const soGrupo = val('f-grupo-geral')||'';
+  const podeEd = pode('cadastros','edit'), podeDel = pode('cadastros','del');
+
+  let linhas = [];
+  grupos.forEach(g=>{
+    if(soGrupo && soGrupo !== g.c) return;
+    g.itens.forEach(it=>{
+      const txt = [it.nome, g.cat(it), it.doc].join(' ').toLowerCase();
+      if(busca && txt.indexOf(busca) < 0) return;
+      linhas.push({g, it});
+    });
+  });
+
+  const totalGeral = grupos.reduce((s,g)=>s+g.itens.length,0);
+
+  if(!linhas.length){
+    el.innerHTML = `<div class="empty">${totalGeral
+      ? 'Nenhum item com essa busca.'
+      : 'Nenhum item cadastrado ainda. Use “＋ Incluir item”.'}</div>`;
+    return;
+  }
+
+  el.innerHTML = `<div style="overflow-x:auto;max-height:60vh"><table class="tbl"><thead><tr>
+      <th>Cadastro</th><th>Item</th><th>Categoria / complemento</th><th></th>
+    </tr></thead><tbody>
+    ${linhas.map(({g,it})=>{
+      const c = g.cor(it);
+      return `<tr>
+        <td class="hint" style="white-space:nowrap">${g.ic} ${esc(g.l)}</td>
+        <td>${c?`<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${c};margin-right:6px"></span>`:''}
+            <b>${esc(it.nome||'—')}</b>${it.doc && g.c!=='clientes' && g.c!=='fornecedores'
+              ? ` <span class="hint" style="display:inline;margin:0">· ${esc(it.doc)}</span>`:''}</td>
+        <td class="hint">${esc(g.cat(it)||'—')}</td>
+        <td style="white-space:nowrap">
+          ${podeEd?`<button class="b sm sec" onclick="${g.ed(it)}" title="Editar">✏️</button>`:''}
+          ${podeDel?`<button class="b sm dang" onclick="${g.del(it)}" title="Excluir">🗑</button>`:''}
+        </td></tr>`;}).join('')}
+    </tbody></table></div>
+    <div class="hint">${linhas.length} de ${totalGeral} item(ns) · edite ou exclua por aqui mesmo.</div>`;
+}
+
+/* botão "incluir" da aba geral: pergunta o que cadastrar */
+function formNovoItemGeral(){
+  if(!precisaPermissao('cadastros','edit')) return;
+  const ops = [
+    {v:'formTipoReceber()',   l:'🏷 Tipo a receber'},
+    {v:'formTipoPagar()',     l:'🏷 Tipo a pagar'},
+    {v:'formFornecedor()',    l:'🏭 Fornecedor'},
+    {v:'formCliente()',       l:'👥 Cliente'},
+    {v:'formPagador()',       l:'🏦 Pagador'},
+    {v:'formVendedor()',      l:'🧑‍💼 Vendedor'}
+  ];
+  modal('O que você quer cadastrar?', `<p class="hint" style="margin:0 0 12px">Escolha o tipo de cadastro.</p>
+    <div class="bar" style="flex-direction:column;align-items:stretch">
+      ${ops.map(o=>`<button class="b sec" style="text-align:left;padding:12px 14px" onclick="fechar();setTimeout(()=>${o.v},80)">${o.l}</button>`).join('')}
+    </div>`, null);
 }
 
 /* ============================================================
