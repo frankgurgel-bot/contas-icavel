@@ -4489,7 +4489,21 @@ function renderEstoque(){
               && (!(typeof podeVenderReservado==='function' && reservaDoVeiculo&&reservaDoVeiculo(v)) || podeVenderReservado(v).pode))
             ?`<button class="b sm ok" onclick="formVenderVeiculo('${v.chassi}')" title="Vender este veículo">💰 Vender</button>`:''}
           ${(!vend && pode('vendas','edit'))?`<button class="b sm sec" onclick="formReservarVeiculo('${v.chassi}')" title="${(typeof reservaDoVeiculo==='function' && reservaDoVeiculo(v))?'Alterar a reserva':'Reservar para um cliente em negociação'}">🔖</button>`:''}
-          ${(typeof reservaDoVeiculo==='function' && reservaDoVeiculo(v) && reservaDoVeiculo(v).origem!=='vd' && pode('vendas','edit'))?`<button class="b sm dang" onclick="liberarReservaVeiculo('${v.chassi}')" title="Liberar a reserva">✕</button>`:''}
+          ${(()=>{
+            if(typeof reservaDoVeiculo!=='function') return '';
+            const r = reservaDoVeiculo(v); if(!r) return '';
+            /* reserva simples: quem reservou, o gerente ou o master.
+               reserva de VD: só gerente de vendas / master (desliga o chassi do pedido). */
+            if(r.origem === 'vd'){
+              const gestor = (typeof ehGestorDeVendas==='function') && ehGestorDeVendas();
+              return gestor
+                ? `<button class="b sm dang" onclick="liberarReservaVeiculo('${v.chassi}')" title="Derrubar a reserva da venda direta">✕</button>`
+                : '';
+            }
+            return pode('vendas','edit')
+              ? `<button class="b sm dang" onclick="liberarReservaVeiculo('${v.chassi}')" title="Cancelar a reserva">✕</button>`
+              : '';
+          })()}
           ${(v.reservaVencida && typeof liberarTravaReserva==='function' && typeof ehGestorDeVendas==='function' && ehGestorDeVendas())?`<button class="b sm sec" onclick="liberarTravaReserva('${v.chassi}')" title="Liberar a trava para qualquer vendedor">🔓</button>`:''}
           ${vend?`<button class="b sm sec" onclick="dossie(DB.vendas.find(x=>x.chassi==='${v.chassi}').id)" title="Ver a venda">📄</button>`:''}
           ${pode('estoque','edit')?`<button class="b sm sec" onclick="formVeiculo('${v.chassi}')" title="Editar">✏️</button>`:''}
